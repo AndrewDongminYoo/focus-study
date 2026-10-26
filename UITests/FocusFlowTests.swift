@@ -31,5 +31,8 @@ final class FocusFlowTests: XCTestCase {
     func testRegistrationFailureNeverShowsActiveAndCanRetry() {
         let app = app("registration-failure"); app.buttons["start"].tap()
         XCTAssertTrue(app.staticTexts["startError"].waitForExistence(timeout: 5)); XCTAssertFalse(app.buttons["end"].exists)
+        XCTAssertFalse(app.buttons["selection"].isEnabled)
+        app.buttons["retry"].tap()
+        XCTAssertTrue(app.buttons["start"].isEnabled)
     }
 }

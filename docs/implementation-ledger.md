@@ -23,3 +23,8 @@ Ruling: ceil the schedule end to whole seconds (less than 1s overhead) — other
 UI run 1: 4/5 passed; denied test failed because settings Link/report row were offscreen or queried as buttons. Adjusted test to scroll and find settings by identifier without assuming its accessibility role.
 
 Task 1/2/3/4 integration: unsigned Simulator build succeeded. swift test GREEN 37/37 (28 core + 5 SwiftData + 4 report). iOS Simulator GREEN 10/10 (5 SDK/repository + 5 UI); actual Screen Time requests/restrictions were not run. Two-process race helper PASS. All four implementation tasks have executable coverage; device acceptance remains blocked.
+
+Regression RED: testRegistrationFailureNeverShowsActiveAndCanRetry failed its new selection-disabled assertion. Fixed UI to block editing while state is uncertain; softened error text so it does not claim an unverified cleanup. SwiftData explicitly disables CloudKit.
+
+Regression GREEN: full iOS Simulator suite 10/10 passed, 0 failures, including error-state selection lock and retry. Unsigned Release generic iOS build succeeded; no fixture implementation in Release. Added supported orientations to address iPad packaging warning.
+Task 5: automated acceptance complete; physical-device acceptance blocked on agreed identifiers/Team/development signing and device-owner consent. No actual restrictions were applied.

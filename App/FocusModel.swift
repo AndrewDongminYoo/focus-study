@@ -57,7 +57,7 @@ import Observation
             refresh()
         } catch {
             refresh()
-            errorMessage = "세션을 시작하지 못했습니다. 제한을 정리했습니다. 다시 확인해 주세요."
+            errorMessage = "세션을 시작하지 못했습니다. 상태를 다시 확인해 주세요."
         }
     }
     func end() {

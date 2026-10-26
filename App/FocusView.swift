@@ -27,7 +27,7 @@ struct FocusView: View {
                 Section("제한할 항목") {
                     Button { sheet = .editor } label: {
                         HStack { Label("앱과 웹사이트 선택", systemImage: "hand.raised"); Spacer(); Text("앱 \(model.counts.apps) · 웹 \(model.counts.websites)").foregroundStyle(.secondary) }
-                    }.disabled(model.access != .approved || model.isActive || model.isStarting).accessibilityIdentifier("selection")
+                    }.disabled(model.access != .approved || model.isActive || model.isStarting || model.errorMessage != nil).accessibilityIdentifier("selection")
                     Text("웹사이트는 도메인 단위로 제한합니다. 경로별 차단이나 모든 브라우저의 우회 방지를 보장하지 않습니다.").font(.footnote).foregroundStyle(.secondary)
                 }
                 if let error = model.errorMessage {

@@ -26,7 +26,7 @@ private struct FocusBootstrap: View {
                 #else
                 services = try .real()
                 #endif
-                let created = try ModelContainer(for: SessionRecord.self, configurations: ModelConfiguration(isStoredInMemoryOnly: inMemory))
+                let created = try ModelContainer(for: SessionRecord.self, configurations: ModelConfiguration(isStoredInMemoryOnly: inMemory, cloudKitDatabase: .none))
                 container = created
                 model = FocusModel(services: services, context: ModelContext(created))
             } catch { failed = true }
