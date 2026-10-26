@@ -1,0 +1,56 @@
+import XCTest
+final class FocusFlowTests: XCTestCase {
+    func app(_ mode: String = "approved", selected: Bool = true) -> XCUIApplication {
+        let app = XCUIApplication(); app.launchArguments = ["--ui-testing", mode] + (selected ? ["--selected"] : []); app.launch(); return app
+    }
+    func testStartupStorageFailureAllowsSafeEndAndRetry() {
+        let app = app("startup-failure")
+        XCTAssertTrue(app.buttons["startupEnd"].waitForExistence(timeout: 8))
+        app.buttons["startupEnd"].tap(); app.buttons["startupRetry"].tap()
+        XCTAssertTrue(app.staticTexts["중도 종료"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.buttons["start"].isEnabled)
+    }
+    func testReloadRecreatesReportContentWithinSameDay() {
+        let app = app()
+        app.buttons["report"].tap()
+        let generation = app.staticTexts["reportGeneration"]
+        XCTAssertTrue(generation.waitForExistence(timeout: 8))
+        let firstInstance = generation.label
+        app.buttons["reportReload"].tap()
+        let changed = NSPredicate(format: "label != %@", firstInstance)
+        expectation(for: changed, evaluatedWith: generation)
+        waitForExpectations(timeout: 5)
+    }
+    func testDeniedPermissionShowsSettingsAndDisablesStartAndReport() {
+        let app = app("denied")
+        XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.buttons["start"].isEnabled)
+        app.swipeUp()
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "settings").firstMatch.waitForExistence(timeout: 5))
+        app.swipeUp()
+        XCTAssertFalse(app.buttons["report"].isEnabled)
+    }
+    func testActiveSessionLocksSelectionAndEarlyExitCreatesHistory() {
+        let app = app(); app.buttons["start"].tap()
+        XCTAssertTrue(app.buttons["end"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["selection"].isEnabled)
+        app.buttons["end"].tap()
+        XCTAssertTrue(app.staticTexts["중도 종료"].waitForExistence(timeout: 5)); XCTAssertTrue(app.buttons["selection"].isEnabled)
+    }
+    func testPickerCancelKeepsExistingSelection() {
+        let app = app(); app.buttons["selection"].tap(); app.buttons["fixtureClear"].tap(); app.buttons["pickerCancel"].tap()
+        XCTAssertTrue(app.buttons["start"].isEnabled)
+    }
+    func testEmptySelectionCannotStartAndMockSelectionCanBeSaved() {
+        let app = app(selected: false); XCTAssertFalse(app.buttons["start"].isEnabled)
+        app.buttons["selection"].tap(); app.buttons["fixtureSelect"].tap(); app.buttons["pickerSave"].tap()
+        XCTAssertTrue(app.buttons["start"].isEnabled)
+    }
+    func testRegistrationFailureNeverShowsActiveAndCanRetry() {
+        let app = app("registration-failure"); app.buttons["start"].tap()
+        XCTAssertTrue(app.staticTexts["startError"].waitForExistence(timeout: 5)); XCTAssertFalse(app.buttons["end"].exists)
+        XCTAssertFalse(app.buttons["selection"].isEnabled)
+        app.buttons["retry"].tap()
+        XCTAssertTrue(app.buttons["start"].isEnabled)
+    }
+}

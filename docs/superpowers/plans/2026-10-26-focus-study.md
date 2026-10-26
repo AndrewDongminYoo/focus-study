@@ -17,8 +17,8 @@
 - 앱 본체와 Monitor 및 Report 확장의 3개 제품 타깃을 사용하고 기본 시스템 shield를 사용한다. 테스트 번들은 제품 타깃 수에 포함하지 않는다.
 - 보호자 관리, Android, 계정, 서버, AI, 카페, 리워드는 제외한다.
 - 사용 보고서 민감 데이터를 앱 저장소로 내보내지 않는다.
-- 정식 앱 이름과 프로젝트 경로는 미정이다. FocusStudy는 문서의 임시 식별자일 뿐이다.
-- 이번 턴은 문서 작성까지만 한다. 아래 명령·코드·커밋은 향후 구현용이며 실행하지 않았다. 프로젝트/저장소 생성, push, 계정 변경, entitlement 신청은 하지 않는다.
+- 정식 앱 이름은 미정이며 FocusStudy는 임시 식별자이다. 승인된 프로젝트 루트는 `/Volumes/dongminyu/Development/01_personal/focus-study`이다.
+- 문서 전용 제한은 후속 구현 승인으로 해제되었다. 로컬 프로젝트·저장소·feature 브랜치와 의미 단위 커밋은 허용한다. push·계정 변경·entitlement 신청은 하지 않는다.
 
 ## Review Focus
 
@@ -30,7 +30,7 @@
 
 ## 파일 구조와 공통 실행 규칙
 
-아래 경로는 **추후 확정할 프로젝트 루트 기준**이다. 지금 작업 공간을 앱 프로젝트 경로로 확정하지 않는다.
+아래는 계획 당시 파일 분해이며, 승인된 프로젝트 루트를 기준으로 한다. 실행 시 인터페이스·파일 배치 수정은 `docs/implementation-ledger.md`에 기록했다.
 
 ```text
 App/FocusStudyApp.swift                    # SwiftData 컨테이너와 화면 진입
@@ -137,9 +137,14 @@ docs/qa/screen-time-device-matrix.md
 
 2026-10-26 문서 자체 검토를 완료했다. 선택·인증은 Task 1/3, ID·동시성·롤백·멱등·만료는 Task 2, 오늘 기록·시간 변경은 Task 3, 민감 데이터 경계는 Task 4, 필수 실기기 항목과 서명·배포 구분은 Task 5에 대응한다. Review Focus 5개 모두 해당 RED 단계나 실기기 검증에 연결했다. 공개 타입과 메서드 이름을 대조했고, 보고서 테스트는 App 테스트와 분리했다.
 
-현재 수행한 것은 환경 읽기와 이 두 문서의 작성·검토뿐이다. 구현·프로젝트/저장소 생성·커밋·push·계정 변경·entitlement 신청·테스트 빌드·실기기 검증은 실행하지 않았다. 다음 단계는 문서 검토와 이름·프로젝트 경로·서명 환경 확정이며, 구현은 별도 요청 후 시작한다.
+계획 작성 당시에는 환경 읽기와 두 문서 작성만 수행했다. 이후의 로컬 순차 구현 승인을 반영한 현재 상태는 아래 실행 결과와 구현 기록을 따른다. push·계정 변경·entitlement 신청·실기기 검증은 수행하지 않았다.
 
 
 ## 구현 승인 후 경로 전제 (2026-10-26)
 
 로컬 순차 구현과 새 프로젝트·로컬 버전 관리 초기화가 승인되었다. 프로젝트 루트는 `/Volumes/dongminyu/Development/01_personal/focus-study`이다. 기존의 이번 턴 문서만 작성한다는 제한은 이 승인으로 해제되었다. FocusStudy는 여전히 임시 제품명이며 bundle ID와 App Group ID는 로컬 컴파일용 placeholder를 사용한다. 계정·서명 설정 변경, entitlement 신청, GitHub 생성·push·배포는 승인 범위 밖이다.
+
+
+## 실행 결과 추적
+
+Task 1~4의 로컬 구현을 완료하고 Task 5의 자동 검증을 수행했다. 실제 기기 인수 항목은 미실행이다. 순차 구현 뒤 독립 전체 검토 한 번을 수행했으며, 두 Important 복구 문제를 새 실패 테스트로 재현한 뒤 한 번의 수정 단계에서 처리했다. 실행 명령과 최종 결과는 README, `docs/implementation-ledger.md`, `docs/qa/screen-time-device-matrix.md`를 기준으로 한다. 원래 계획의 명령 U는 실제 구현에서 macOS SwiftPM 테스트와 iOS `FocusSDKTests`/`FocusUITests`로 나뉘었다.
