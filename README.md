@@ -3,7 +3,7 @@
 학생이 자신의 앱·웹사이트 사용을 돌아보고 25분 집중 시간을 정하는 iOS 17+ SwiftUI/SwiftData 앱입니다. 정식 제품명은 미정입니다.
 
 프로젝트: `/Volumes/dongminyu/Development/01_personal/focus-study/FocusStudy.xcodeproj`  
-로컬 브랜치: `feature/focus-study`. GitHub remote, CI, push, 배포는 구성하지 않았습니다.
+기본 브랜치: `main`; 구현 브랜치: `feature/focus-study`. 저장소는 [GitHub](https://github.com/AndrewDongminYoo/focus-study)에 게시되어 있으며 PR 검증 CI를 포함합니다. 배포는 구성하지 않았습니다.
 
 ## 실행과 검증
 
@@ -40,3 +40,9 @@ Simulator UUID는 이 Mac의 iPhone 18 Pro/iOS 27.0입니다. 다른 환경에�
 - 기록된 시간은 실제 공부나 연속 차단 성공의 증거가 아닙니다. 사용 보고서가 늦거나 비어 있다고 사용량을 0으로 단정하지 않습니다.
 
 설계와 실행 판단은 [설계](docs/superpowers/specs/2026-10-26-focus-study-design.md), [계획](docs/superpowers/plans/2026-10-26-focus-study.md), [구현 기록](docs/implementation-ledger.md)에 남겼습니다.
+
+## 공개 PR의 CI
+
+`.github/workflows/verify.yml`은 PR의 실제 head를 checkout하고 SwiftPM 테스트, 두 프로세스 경쟁 검증, 서명 없는 SDK/mock UI 테스트와 기기용 Release 빌드를 실행합니다. `contents: read` 권한만 사용하며 계정·인증서·시크릿·entitlement를 구성하지 않습니다.
+
+2026-10-26 확인한 [GitHub runner 이미지 목록](https://github.com/actions/runner-images/blob/main/images/macos/macos-26-Readme.md)에 맞춰 `macos-26`, Xcode 26.6, iOS 26.5 Simulator를 명시합니다. 로컬 Xcode 27.1/iOS 27.0 결과와 hosted CI 결과를 구분합니다. runner에 이 버전이 없으면 조용히 건너뛰지 않고 실패시켜 실제 지원 목록을 다시 확인합니다. CI는 실제 Screen Time 권한·차단 검증을 대신하지 않습니다.
