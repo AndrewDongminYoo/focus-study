@@ -58,7 +58,14 @@ extension FocusRuntime {
 
 #if DEBUG
 struct FixtureUsageReportHost: View {
-    var body: some View { UsageReportContainer { _ in FixtureReportProbe() } }
+    var body: some View {
+        UsageReportContainer { _ in
+            if ProcessInfo.processInfo.arguments.contains("report-waiting") { Color.clear }
+            else if ProcessInfo.processInfo.arguments.contains("report-empty") { List { UsageSummarySection(total: nil) } }
+            else if ProcessInfo.processInfo.arguments.contains("report-zero") { List { UsageSummarySection(total: 0) } }
+            else { FixtureReportProbe() }
+        }
+    }
 }
 private struct FixtureReportProbe: View {
     @State private var instanceID = UUID()

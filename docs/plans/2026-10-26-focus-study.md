@@ -28,7 +28,8 @@
 **Interfaces:** [AuthorizationProviding / AuthorizationService](../../App/AuthorizationService.swift), [SelectionStoring / SelectionRepository](../../App/SelectionRepository.swift), [SelectionValidator](../../Shared/SelectionValidator.swift)를 따릅니다.
 인증 요청은 오류를 내부에서 처리하고 `AccessStatus`를 노출하며, 선택 파일은 throwing initializer에서 읽습니다.
 
-- [ ] RED: `SelectionTests`에 (0,0,0) 거절, (1,0,0)/(0,1,0)/(50,50,0) 허용, 51개 각각 거절, 카테고리 1개 거절을 작성하고 실행한다.
+- [ ] RED: `SelectionTests`에 (0,0,0) 거절, (1,0,0)/(0,1,0)/(50,50,0) 허용, 51개 각각 거절, 저장 정책의 카테고리 1개 거절을 작성하고 실행한다.
+  Picker의 카테고리 전체 선택은 개별 토큰으로 변환한 뒤 같은 개수 제한을 적용한다.
 - [ ] 구현: 확정된 이름/경로에 본체와 Monitor/Report 타깃을 만들고 iOS 17 최소 버전·공유 scheme·테스트 번들을 설정한다. 선택은 앱 Application Support 내부 Codable 파일로 저장하며 실패 시 기존 파일을 유지한다. 개인 인증 adapter를 연결한다.
 - [ ] GREEN: 해당 host/SDK 테스트와 README의 unsigned Simulator build를 통과시킨다.
 - [ ] 검증: 세 제품 타깃의 Family Controls 설정을 검토한다. App Group은 App/Monitor만 공유하고 Report에는 부여하지 않는다. 계정/프로필 변경이 필요하면 별도 승인 절차로 남긴다.
@@ -44,8 +45,8 @@ UI 조정은 [FocusModel](../../App/FocusModel.swift), 시작 복구는 [FocusRu
 
 - [ ] RED: `SessionControlTests`에 1,500초 만료, 이른 콜백 무동작, A 종료 후 B 시작 뒤 A 콜백 무동작, 같은 종료 2회 무동작, 권한 철회/clockChanged 중단을 작성하고 실행한다.
 - [ ] RED: `SessionControlTests`에 등록 throw 시 stop/clear 및 inactive, 등록 목록 불일치·shield readback 불일치·active 저장 실패 시 롤백, preparing/ending 복구, double start 거절을 작성한다. `SharedControlStoreTests`에는 잠금 timeout·손상 파일을 검사한다.
-  실제 파일 교체 실패 주입은 초기 계획에 있었지만 해당 테스트에는 구현되지 않았다.
-  저장 실패는 `SessionControlTests`의 가짜 저장소에서 주입한다.
+  실제 파일 교체 실패는 `SharedControlStoreTests.testAtomicReplacementFailurePreservesFileAndAllowsRetry`에서 변경 불가 파일을 사용해 재현하며 기존 바이트 보존, 잠금 해제와 재시도를 검사한다.
+  제어 단계별 저장 실패는 `SessionControlTests`의 가짜 저장소에서 주입한다.
   가짜 저장 오류를 단계별 주입하며 오류 직후 active 표시가 없음을 assert한다.
 - [ ] 구현: 설계의 시작/종료 순서를 그대로 연결한다. `flock` 획득부터 read/ID 비교/store 변경/파일 교체까지 같은 임계 구역에 둔다. 저장·정리 실패는 재시도 가능한 오류로 전달한다. 25분 비반복 날짜 구성요소 schedule을 만들고 monitoring을 UUID별로 중지한다. Monitor는 저장된 선택을 요구하지 않으며 늦은 start에서 shield를 재적용하지 않는다.
 - [ ] GREEN: 제어·저장소 테스트와 README의 두 프로세스 경합 검증을 실행한다.
@@ -77,7 +78,9 @@ UI 조정은 [FocusModel](../../App/FocusModel.swift), 시작 복구는 [FocusRu
 
 - [ ] RED: SwiftPM의 `FocusReportLogicTests` 타깃에 속한 `UsageSummaryTests`에 빈 입력의 빈 상태, 합성 60+120초의 180초 합계, 로딩과 빈 상태 구분을 작성한다.
   README의 host 테스트 명령으로 확인한다.
-  로딩 상태는 `UsageSummaryTests`에서 별도로 모델링하지 않으며 현재 테스트는 데이터 없음과 실제 0을 구분한다.
+  `UsageSummaryTests`는 데이터 없음과 실제 0을 구분한다.
+  대기 안내와 빈 데이터·실제 0의 화면은 `FocusFlowTests`에서 실제 `UsageSummarySection` 및 보고서 호스트와 연결된 합성 fixture로 검사한다.
+  실제 시스템 로딩 신호를 추정하거나 보고서 데이터를 본체로 전달하지 않는다.
 - [ ] 구현: Report extension/scene과 SwiftUI 목록을 작성한다. 시스템 데이터는 async 순회하고 앱 이름·사이트·사용량은 Report 메모리와 화면에만 둔다. 본체는 데이터 회신용 callback/파일/URL scheme을 제공하지 않는다.
 - [ ] GREEN: 같은 Report 테스트와 simulator build를 통과시킨다. 실기기 보고서의 표시·갱신 지연은 Task 5에서 확인한다.
 - [ ] 검증: Report 소스에 App Group, SwiftData, 파일 쓰기, 데이터 로그, 네트워크 호출이 없는지 검토한다. `rg -n 'UserDefaults|FileManager|ModelContext|URLSession|print\(|Logger' Report`는 결과 없음이 기대값이며, 이것만으로 완전한 보안 검토를 대신하지 않는다.

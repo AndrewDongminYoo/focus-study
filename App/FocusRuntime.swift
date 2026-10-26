@@ -8,10 +8,29 @@ import SwiftData
     let loadStorage: () throws -> (FocusServices, ModelContainer)
     static func real() throws -> FocusRuntime {
         let authorization = AuthorizationService(), shield = ScreenTimeShield()
-        let engine = SessionControl(store: SharedControlStore(directory: try GroupConfiguration.directory()), monitoring: ScreenTimeMonitoring(), shield: shield)
+        let systemMonitoring = ScreenTimeMonitoring()
+        #if DEBUG
+        let monitoring: any MonitoringClient
+        let diagnosticMonitoring: DiagnosticMonitoring?
+        if ProcessInfo.processInfo.arguments.contains("--screen-time-diagnostics") {
+            let wrapped = DiagnosticMonitoring(base: systemMonitoring)
+            diagnosticMonitoring = wrapped; monitoring = wrapped
+        } else { diagnosticMonitoring = nil; monitoring = systemMonitoring }
+        #else
+        let monitoring = systemMonitoring
+        #endif
+        let engine = SessionControl(store: SharedControlStore(directory: try GroupConfiguration.directory()), monitoring: monitoring, shield: shield)
+        #if DEBUG
+        let diagnostics = diagnosticMonitoring.map { DeviceDiagnostics(monitoring: $0, engine: engine, hasAccess: authorization.hasAccessNow) }
+        #endif
         return FocusRuntime(recovery: StartupRecovery(engine: engine), hasAccess: authorization.hasAccessNow, loadStorage: {
             let directory = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent("PrivateSelection")
+            #if DEBUG
+            var services = FocusServices(authorization: authorization, selection: try SelectionRepository(directory: directory), engine: engine, applySelection: shield.apply, matchesSelection: shield.matches)
+            services.diagnostics = diagnostics
+            #else
             let services = FocusServices(authorization: authorization, selection: try SelectionRepository(directory: directory), engine: engine, applySelection: shield.apply, matchesSelection: shield.matches)
+            #endif
             let container = try ModelContainer(for: SessionRecord.self, configurations: ModelConfiguration(cloudKitDatabase: .none))
             return (services, container)
         })

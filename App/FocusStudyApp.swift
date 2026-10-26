@@ -14,7 +14,7 @@ import SwiftData
             if let model, let container { FocusView(model: model).modelContainer(container) }
             else if let errorMessage {
                 ContentUnavailableView {
-                    Label("저장소를 확인해 주세요", systemImage: "exclamationmark.triangle")
+                    Label("앱 데이터를 확인해 주세요", systemImage: "exclamationmark.triangle")
                 } description: {
                     Text(errorMessage)
                 } actions: {
@@ -23,7 +23,7 @@ import SwiftData
                         Button("현재 세션 종료", role: .destructive) {
                             do {
                                 try runtime.recovery.endCurrent(now: Date())
-                                self.errorMessage = "종료 정리를 요청했습니다. 저장소를 다시 확인해 주세요."
+                                self.errorMessage = "종료를 요청했습니다. 다시 확인해 주세요."
                             } catch { self.errorMessage = "세션 상태를 읽지 못했습니다. 다시 확인해 주세요." }
                         }.accessibilityIdentifier("startupEnd")
                     }

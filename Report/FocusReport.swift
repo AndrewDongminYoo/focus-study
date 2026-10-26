@@ -43,17 +43,14 @@ struct UsageSummaryView: View {
     let configuration: ReportConfiguration
     var body: some View {
         List {
-            Section("이 기기의 오늘 사용 시간") {
-                if let total = configuration.summary.total { Text(formatted(total)).font(.title) }
-                else { Text("아직 보고서 데이터를 표시할 수 없습니다. 잠시 후 다시 확인해 주세요.").foregroundStyle(.secondary) }
-            }
+            UsageSummarySection(total: configuration.summary.total)
             if !configuration.apps.isEmpty {
                 Section("앱") { ForEach(configuration.apps) { row in HStack { Label(row.token); Spacer(); Text(formatted(row.duration)) } } }
             }
             if !configuration.websites.isEmpty {
                 Section("웹사이트") { ForEach(configuration.websites) { row in HStack { Label(row.token); Spacer(); Text(formatted(row.duration)) } } }
             }
-            Section { Text("무엇이 주의를 빼앗았는지 돌아보고 다음 집중 시간에 제한할 항목을 골라보세요.").font(.footnote) }
+            Section { Text("다음 집중 시간에 제한할 항목을 골라보세요.").font(.footnote) }
         }
     }
     private func formatted(_ seconds: TimeInterval) -> String { Duration.seconds(seconds).formatted(.units(allowed: [.hours, .minutes], width: .wide)) }

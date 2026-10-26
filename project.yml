@@ -7,6 +7,7 @@ settings:
     SWIFT_VERSION: "5.0"
     TARGETED_DEVICE_FAMILY: "1,2"
     CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: 393JTTV68D
     MARKETING_VERSION: "0.1"
     CURRENT_PROJECT_VERSION: "1"
     ENABLE_USER_SCRIPT_SANDBOXING: YES
@@ -14,10 +15,10 @@ targets:
   FocusStudy:
     type: application
     platform: iOS
-    sources: [App, Shared, Integration]
+    sources: [App, Shared, Integration, Presentation]
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: example.focusstudy.local
+        PRODUCT_BUNDLE_IDENTIFIER: kr.donminzzi.focusStudy
         INFOPLIST_FILE: Configuration/App-Info.plist
         CODE_SIGN_ENTITLEMENTS: Configuration/App.entitlements
     dependencies:
@@ -31,17 +32,17 @@ targets:
     sources: [Monitor, Shared, Integration]
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: example.focusstudy.local.monitor
+        PRODUCT_BUNDLE_IDENTIFIER: kr.donminzzi.focusStudy.monitor
         INFOPLIST_FILE: Configuration/Monitor-Info.plist
         CODE_SIGN_ENTITLEMENTS: Configuration/Monitor.entitlements
         APPLICATION_EXTENSION_API_ONLY: YES
   FocusReport:
     type: app-extension
     platform: iOS
-    sources: [Report]
+    sources: [Report, Presentation]
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: example.focusstudy.local.report
+        PRODUCT_BUNDLE_IDENTIFIER: kr.donminzzi.focusStudy.report
         INFOPLIST_FILE: Configuration/Report-Info.plist
         CODE_SIGN_ENTITLEMENTS: Configuration/Report.entitlements
         APPLICATION_EXTENSION_API_ONLY: YES
@@ -51,7 +52,7 @@ targets:
     sources: [SDKTests, Shared, Integration, App/SelectionRepository.swift, App/SessionRecord.swift, App/FocusModel.swift, App/AuthorizationService.swift]
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: example.focusstudy.local.sdktests
+        PRODUCT_BUNDLE_IDENTIFIER: kr.donminzzi.focusStudy.sdktests
         GENERATE_INFOPLIST_FILE: YES
   FocusUITests:
     type: bundle.ui-testing
@@ -61,7 +62,7 @@ targets:
       - target: FocusStudy
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: example.focusstudy.local.uitests
+        PRODUCT_BUNDLE_IDENTIFIER: kr.donminzzi.focusStudy.uitests
         GENERATE_INFOPLIST_FILE: YES
 schemes:
   FocusStudy:

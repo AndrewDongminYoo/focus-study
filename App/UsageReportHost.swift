@@ -15,7 +15,7 @@ struct UsageReportContainer<Report: View>: View {
     init(@ViewBuilder report: @escaping (DateInterval) -> Report) { self.report = report }
     var body: some View {
         VStack(spacing: 12) {
-            Text("보고서를 준비하는 데 시간이 걸릴 수 있습니다. 비어 있는 화면은 사용량이 0이라는 뜻이 아닙니다.").font(.footnote).foregroundStyle(.secondary)
+            Text("보고서가 비어 있다면 잠시 후 다시 불러와 주세요.").font(.footnote).foregroundStyle(.secondary).accessibilityIdentifier("reportWaiting")
             report(TimeRules.today(now: date, calendar: .current))
                 .id(refreshID)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -12,6 +12,26 @@ final class SharedControlStoreTests: XCTestCase {
         let actual = try store.withExclusiveAccess { try $0.load() }
         XCTAssertEqual(actual.session?.id, s.id); XCTAssertEqual(actual.schemaVersion, 1)
     }
+    func testAtomicReplacementFailurePreservesFileAndAllowsRetry() throws {
+        let store = SharedControlStore(directory: directory)
+        let file = directory.appendingPathComponent("control.json")
+        var original = ControlEnvelope()
+        original.session = ControlSession(startedAt: Date(timeIntervalSince1970: 100))
+        try store.withExclusiveAccess { try $0.save(original) }
+        let originalBytes = try Data(contentsOf: file)
+        var replacement = ControlEnvelope()
+        replacement.session = ControlSession(startedAt: Date(timeIntervalSince1970: 200))
+        // The immutable destination blocks the real atomic write without a fake writer.
+        XCTAssertEqual(chflags((file.path as NSString).fileSystemRepresentation, UInt32(UF_IMMUTABLE)), 0)
+        defer { _ = chflags((file.path as NSString).fileSystemRepresentation, 0) }
+        XCTAssertThrowsError(try store.withExclusiveAccess { try $0.save(replacement) })
+        XCTAssertEqual(try Data(contentsOf: file), originalBytes)
+        let reopened = SharedControlStore(directory: directory, timeout: 0.02)
+        XCTAssertEqual(try reopened.withExclusiveAccess { try $0.load() }.session?.id, original.session?.id)
+        XCTAssertEqual(chflags((file.path as NSString).fileSystemRepresentation, 0), 0)
+        try reopened.withExclusiveAccess { try $0.save(replacement) }
+        XCTAssertEqual(try store.withExclusiveAccess { try $0.load() }.session?.id, replacement.session?.id)
+    }
     func testCorruptStateIsNotSilentlyReplaced() throws {
         let url = directory.appendingPathComponent("control.json")
         try Data("broken".utf8).write(to: url)
