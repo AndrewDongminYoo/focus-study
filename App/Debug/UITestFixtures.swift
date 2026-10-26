@@ -3,6 +3,7 @@ import Foundation
 import FamilyControls
 import Observation
 import SwiftData
+import SwiftUI
 
 @MainActor @Observable final class FixtureAuthorization: AuthorizationProviding {
     var status: AccessStatus
@@ -52,5 +53,15 @@ extension FocusRuntime {
             return (services, container)
         })
     }
+}
+#endif
+
+#if DEBUG
+struct FixtureUsageReportHost: View {
+    var body: some View { UsageReportContainer { _ in FixtureReportProbe() } }
+}
+private struct FixtureReportProbe: View {
+    @State private var instanceID = UUID()
+    var body: some View { Text(instanceID.uuidString).accessibilityIdentifier("reportGeneration") }
 }
 #endif

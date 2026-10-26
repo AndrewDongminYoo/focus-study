@@ -10,6 +10,17 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["중도 종료"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.buttons["start"].isEnabled)
     }
+    func testReloadRecreatesReportContentWithinSameDay() {
+        let app = app()
+        app.buttons["report"].tap()
+        let generation = app.staticTexts["reportGeneration"]
+        XCTAssertTrue(generation.waitForExistence(timeout: 8))
+        let firstInstance = generation.label
+        app.buttons["reportReload"].tap()
+        let changed = NSPredicate(format: "label != %@", firstInstance)
+        expectation(for: changed, evaluatedWith: generation)
+        waitForExpectations(timeout: 5)
+    }
     func testDeniedPermissionShowsSettingsAndDisablesStartAndReport() {
         let app = app("denied")
         XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: 8))

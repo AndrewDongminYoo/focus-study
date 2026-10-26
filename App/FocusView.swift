@@ -47,8 +47,12 @@ struct FocusView: View {
                 }
                 Section {
                     NavigationLink { 
-                        if model.services.isFixture { Text("합성 보고서 화면") }
+                        #if DEBUG
+                        if model.services.isFixture { FixtureUsageReportHost() }
                         else { UsageReportHost() }
+                        #else
+                        UsageReportHost()
+                        #endif
                     } label: { Label("오늘의 사용 보고서", systemImage: "chart.bar") }
                     .disabled(model.access != .approved).accessibilityIdentifier("report")
                 } footer: { Text("시스템 사용 보고서는 세션 기록과 별개이며 보고서 확장 안에서만 표시됩니다.") }

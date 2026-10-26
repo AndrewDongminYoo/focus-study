@@ -8,8 +8,8 @@
 | --- | --- | --- |
 | macOS / Xcode 27.1 `swift test` | 제어·선택·날짜·시작 복구 32개, SwiftData 5개, 합성 Report 집계 4개 | 41개 통과, 실패 0개 |
 | macOS `focus-control-race --verify` | 생산 flock 구현을 사용하는 두 별도 프로세스의 새 시작/이전 콜백 | `PASS: stale A cannot clear B` |
-| iPhone 18 Pro Simulator / iOS 27.0 | SDK 인증 상태·schedule 3개, 선택 저장소 2개 | 5개 통과 |
-| 같은 Simulator / DEBUG fixture | 거절 안내, 중도 종료 기록, 활성 중 선택 잠금, Picker 취소/저장, 등록 실패, 초기 저장소 실패 후 종료·재시도 | 6개 통과, 실패 0개 |
+| iPhone 18 Pro Simulator / iOS 27.0 | SDK 인증 상태·schedule 3개, 선택 저장소 2개, 기록 오류와 세션 제어 분리 2개 | 7개 통과 |
+| 같은 Simulator / DEBUG fixture | 거절 안내, 중도 종료 기록, 활성 중 선택 잠금, Picker 취소/저장, 등록 실패, 초기 저장소 실패 후 종료·재시도, 같은 날 보고서 새로고침 | 7개 통과, 실패 0개 |
 | 서명 없는 Simulator 및 Release 기기 아키텍처 build | App/Monitor/Report 세 제품 타깃 | `BUILD SUCCEEDED` |
 
 시뮬레이터 결과를 실제 Screen Time 권한·보고서·차단 적용 증거로 사용하지 않는다. 시스템은 실제 기기에서 지연되거나 다른 동작을 보일 수 있다.
@@ -41,3 +41,7 @@
 - 기기 등록·적합한 개발 provisioning profile·Family Controls 개발 capability의 일치는 미확인이다.
 - 본체·Monitor·Report 각각의 배포 entitlement는 이 작업에서 신청하지 않았다. 세 App ID별 별도 심사가 필요하며 개발 빌드와 구분한다.
 - 계정·인증서·프로필·entitlement 자동 변경, GitHub 생성·push·배포는 수행하지 않았다.
+
+## PR #1 후속 검토
+
+최초 hosted CI는 `8b3cd11`에서 단위 41개·SDK/UI 11개·경합·Release 빌드를 모두 통과했다. 후속 코드 리뷰 P2 두 건은 기록 오류가 활성 종료 제어를 숨기는 경우와 같은 날 보고서 재시도가 뷰를 갱신하지 않는 경우였다. 두 건 모두 실패 테스트로 재현하고 수정했다. 수정 후 로컬 검증은 단위 41개와 SDK/UI 14개이며, 새 head의 hosted 결과는 PR checks와 본문에서 구분해 기록한다.
