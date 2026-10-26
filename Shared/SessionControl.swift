@@ -68,7 +68,13 @@ final class SessionControl {
     }
     private func read(_ locked: LockedControl) throws -> ControlEnvelope {
         do { return try locked.load() }
-        catch { shield.clear(); throw error }
+        catch {
+            shield.clear()
+            // Metadata is unavailable. Stop only this app's UUID-namespaced registrations.
+            // Their absence lets a later process detect cleanup instead of trusting stale active metadata.
+            for id in monitoring.registeredSessionIDs { monitoring.stop(id: id) }
+            throw error
+        }
     }
     private func reconcile(_ envelope: inout ControlEnvelope, locked: LockedControl, now: Date, authorized: Bool, clockChanged: Bool) throws {
         guard let s = envelope.session, s.phase != .terminal else { return }
@@ -76,6 +82,7 @@ final class SessionControl {
         else if !authorized { try end(&envelope, locked: locked, reason: .authorizationRevoked, now: now) }
         else if s.phase == .preparing { try end(&envelope, locked: locked, reason: .recoveryInterrupted, now: now) }
         else if clockChanged { try end(&envelope, locked: locked, reason: .clockChanged, now: now) }
+        else if !monitoring.isRegistered(id: s.id) { try end(&envelope, locked: locked, reason: .recoveryInterrupted, now: now) }
         else if now >= s.expiresAt { try end(&envelope, locked: locked, reason: .expired, now: now) }
     }
     private func end(_ envelope: inout ControlEnvelope, locked: LockedControl, reason: EndReason, now: Date) throws {

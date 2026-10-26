@@ -28,6 +28,7 @@ protocol ControlStore {
     func withExclusiveAccess<T>(_ body: (LockedControl) throws -> T) throws -> T
 }
 protocol MonitoringClient {
+    var registeredSessionIDs: [UUID] { get }
     func register(id: UUID, start: Date, end: Date) throws
     func isRegistered(id: UUID) -> Bool
     func stop(id: UUID)

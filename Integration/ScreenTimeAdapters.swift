@@ -19,6 +19,11 @@ enum GroupConfiguration {
 }
 final class ScreenTimeMonitoring: MonitoringClient {
     private let center = DeviceActivityCenter()
+    var registeredSessionIDs: [UUID] { center.activities.compactMap(Self.sessionID) }
+    static func sessionID(_ activity: DeviceActivityName) -> UUID? {
+        guard activity.rawValue.hasPrefix("focus.") else { return nil }
+        return UUID(uuidString: String(activity.rawValue.dropFirst(6)))
+    }
     func register(id: UUID, start: Date, end: Date) throws {
         try center.startMonitoring(name(id), during: Self.schedule(start: start, end: end, calendar: .current))
     }

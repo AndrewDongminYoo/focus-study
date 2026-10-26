@@ -10,12 +10,7 @@ import Observation
     let applySelection: (FamilyActivitySelection) -> Void
     let matchesSelection: (FamilyActivitySelection) -> Bool
     var isFixture = false
-    static func real() throws -> FocusServices {
-        let shield = ScreenTimeShield()
-        let engine = SessionControl(store: SharedControlStore(directory: try GroupConfiguration.directory()), monitoring: ScreenTimeMonitoring(), shield: shield)
-        let directory = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent("PrivateSelection")
-        return FocusServices(authorization: AuthorizationService(), selection: try SelectionRepository(directory: directory), engine: engine, applySelection: shield.apply, matchesSelection: shield.matches)
-    }
+
 }
 @MainActor @Observable final class FocusModel {
     let services: FocusServices

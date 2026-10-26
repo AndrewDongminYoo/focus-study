@@ -4,32 +4,56 @@ import SwiftData
 @main struct FocusStudyApp: App {
     var body: some Scene { WindowGroup { FocusBootstrap() } }
 }
-private struct FocusBootstrap: View {
+@MainActor private struct FocusBootstrap: View {
     @State private var model: FocusModel?
     @State private var container: ModelContainer?
-    @State private var failed = false
+    @State private var runtime: FocusRuntime?
+    @State private var errorMessage: String?
     var body: some View {
         Group {
             if let model, let container { FocusView(model: model).modelContainer(container) }
-            else if failed {
-                ContentUnavailableView("초기 설정을 확인해 주세요", systemImage: "exclamationmark.triangle", description: Text("App Group 식별자와 로컬 저장소를 확인해야 합니다. 개발 서명 설정은 README를 참고해 주세요."))
+            else if let errorMessage {
+                ContentUnavailableView {
+                    Label("저장소를 확인해 주세요", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(errorMessage)
+                } actions: {
+                    Button("다시 확인") { load() }.accessibilityIdentifier("startupRetry")
+                    if let runtime {
+                        Button("현재 세션 종료", role: .destructive) {
+                            do {
+                                try runtime.recovery.endCurrent(now: Date())
+                                self.errorMessage = "종료 정리를 요청했습니다. 저장소를 다시 확인해 주세요."
+                            } catch { self.errorMessage = "세션 상태를 읽지 못했습니다. 다시 확인해 주세요." }
+                        }.accessibilityIdentifier("startupEnd")
+                    }
+                }
             } else { ProgressView("준비 중") }
         }
-        .task {
-            guard model == nil, !failed else { return }
-            do {
-                let services: FocusServices
-                var inMemory = false
+        .task { if model == nil && errorMessage == nil { load() } }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            guard model == nil, let runtime else { return }
+            do { try runtime.recovery.engine.reconcile(now: Date(), authorized: runtime.hasAccess()) }
+            catch { errorMessage = "세션 상태를 확인하지 못했습니다. 다시 확인해 주세요." }
+        }
+    }
+    private func load() {
+        do {
+            if runtime == nil {
                 #if DEBUG
-                if ProcessInfo.processInfo.arguments.contains("--ui-testing") { services = .fixture(arguments: ProcessInfo.processInfo.arguments); inMemory = true }
-                else { services = try .real() }
+                if ProcessInfo.processInfo.arguments.contains("--ui-testing") { runtime = try .fixture(arguments: ProcessInfo.processInfo.arguments) }
+                else { runtime = try .real() }
                 #else
-                services = try .real()
+                runtime = try .real()
                 #endif
-                let created = try ModelContainer(for: SessionRecord.self, configurations: ModelConfiguration(isStoredInMemoryOnly: inMemory, cloudKitDatabase: .none))
-                container = created
-                model = FocusModel(services: services, context: ModelContext(created))
-            } catch { failed = true }
+            }
+            guard let runtime else { throw ControlIssue.io }
+            let (services, created) = try runtime.prepare()
+            container = created
+            model = FocusModel(services: services, context: ModelContext(created))
+            errorMessage = nil
+        } catch {
+            errorMessage = runtime == nil ? "앱을 준비하지 못했습니다. 다시 시도해 주세요." : "선택 항목이나 기록을 불러오지 못했습니다. 현재 세션을 종료하거나 다시 시도해 주세요."
         }
     }
 }

@@ -119,19 +119,47 @@ final class SessionControlTests: XCTestCase {
         XCTAssertThrowsError(try engine.start(now: now, authorized: { true }, apply: {}, matches: { true }))
         XCTAssertFalse(shield.applied)
     }
+    func testFailedCleanupWritesCannotRestoreActiveAfterEngineRestart() throws {
+        for restoredAt in [now.addingTimeInterval(12), now.addingTimeInterval(1510)] {
+        let (engine, store, monitor, shield) = fixture()
+        let a = try engine.start(now: now, authorized: { true }, apply: { shield.apply() }, matches: { true })
+        store.failAllWrites = true
+        XCTAssertThrowsError(try engine.finish(id: a.id, reason: .earlyExit, now: now.addingTimeInterval(10)))
+        XCTAssertEqual(store.envelope.session?.phase, .active); XCTAssertFalse(shield.applied)
+        let restarted = SessionControl(store: store, monitoring: monitor, shield: shield)
+        XCTAssertThrowsError(try restarted.reconcile(now: now.addingTimeInterval(11), authorized: true))
+        store.failAllWrites = false
+        let result = try restarted.reconcile(now: restoredAt, authorized: true)
+        XCTAssertEqual(result.session?.phase, .terminal); XCTAssertEqual(result.session?.reason, .recoveryInterrupted)
+        }
+    }
+    func testTransientReadFailureStopsOwnedMonitoringAndCannotRestoreActiveAfterRestart() throws {
+        let (engine, store, monitor, shield) = fixture()
+        let a = try engine.start(now: now, authorized: { true }, apply: { shield.apply() }, matches: { true })
+        store.failRead = true
+        XCTAssertThrowsError(try engine.snapshot()); XCTAssertFalse(shield.applied)
+        XCTAssertNil(monitor.intervals[a.id])
+        store.failRead = false
+        let restarted = SessionControl(store: store, monitoring: monitor, shield: shield)
+        let result = try restarted.reconcile(now: now.addingTimeInterval(10), authorized: true)
+        XCTAssertEqual(result.session?.phase, .terminal); XCTAssertEqual(result.session?.reason, .recoveryInterrupted)
+    }
+
 }
 
 enum FixtureFailure: Error { case injected }
 final class MemoryControlStore: ControlStore, LockedControl {
-    var envelope = ControlEnvelope(), failPhase: SessionPhase?, failRead = false
+    var envelope = ControlEnvelope(), failPhase: SessionPhase?, failRead = false, failAllWrites = false
     func withExclusiveAccess<T>(_ body: (LockedControl) throws -> T) throws -> T { try body(self) }
     func load() throws -> ControlEnvelope { if failRead { throw FixtureFailure.injected }; return envelope }
     func save(_ envelope: ControlEnvelope) throws {
+        if failAllWrites { throw FixtureFailure.injected }
         if let failPhase, envelope.session?.phase == failPhase { throw FixtureFailure.injected }
         self.envelope = envelope
     }
 }
 final class FakeMonitoring: MonitoringClient {
+    var registeredSessionIDs: [UUID] { Array(intervals.keys) }
     var intervals: [UUID: (Date, Date)] = [:], failRegistration = false, hideRegistration = false
     func register(id: UUID, start: Date, end: Date) throws {
         if failRegistration { throw FixtureFailure.injected }; intervals[id] = (start, end)

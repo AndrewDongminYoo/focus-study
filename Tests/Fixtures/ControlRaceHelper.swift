@@ -2,6 +2,7 @@ import Foundation
 import Darwin
 
 private final class LocalMonitor: MonitoringClient {
+    var registeredSessionIDs: [UUID] { Array(ids) }
     var ids = Set<UUID>()
     func register(id: UUID, start: Date, end: Date) throws { ids.insert(id) }
     func isRegistered(id: UUID) -> Bool { ids.contains(id) }

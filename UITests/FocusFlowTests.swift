@@ -3,6 +3,13 @@ final class FocusFlowTests: XCTestCase {
     func app(_ mode: String = "approved", selected: Bool = true) -> XCUIApplication {
         let app = XCUIApplication(); app.launchArguments = ["--ui-testing", mode] + (selected ? ["--selected"] : []); app.launch(); return app
     }
+    func testStartupStorageFailureAllowsSafeEndAndRetry() {
+        let app = app("startup-failure")
+        XCTAssertTrue(app.buttons["startupEnd"].waitForExistence(timeout: 8))
+        app.buttons["startupEnd"].tap(); app.buttons["startupRetry"].tap()
+        XCTAssertTrue(app.staticTexts["중도 종료"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.buttons["start"].isEnabled)
+    }
     func testDeniedPermissionShowsSettingsAndDisablesStartAndReport() {
         let app = app("denied")
         XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: 8))
