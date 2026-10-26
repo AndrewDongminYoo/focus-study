@@ -354,19 +354,24 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					3DE629DD8E746A48A55969C0 = {
+						DevelopmentTeam = 393JTTV68D;
 						ProvisioningStyle = Automatic;
 						TestTargetID = C08A9BFD08B36E9A25661C63;
 					};
 					7E301B0EEEA7F37DEB38F6C8 = {
+						DevelopmentTeam = 393JTTV68D;
 						ProvisioningStyle = Automatic;
 					};
 					C08A9BFD08B36E9A25661C63 = {
+						DevelopmentTeam = 393JTTV68D;
 						ProvisioningStyle = Automatic;
 					};
 					C38883530CCB9E76D15BE948 = {
+						DevelopmentTeam = 393JTTV68D;
 						ProvisioningStyle = Automatic;
 					};
 					CDB7A404E422F2C03FAF50F6 = {
+						DevelopmentTeam = 393JTTV68D;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -510,7 +515,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = example.focusstudy.local.report;
+				PRODUCT_BUNDLE_IDENTIFIER = kr.donminzzi.focusStudy.report;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -526,7 +531,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = example.focusstudy.local.sdktests;
+				PRODUCT_BUNDLE_IDENTIFIER = kr.donminzzi.focusStudy.sdktests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -543,7 +548,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = example.focusstudy.local;
+				PRODUCT_BUNDLE_IDENTIFIER = kr.donminzzi.focusStudy;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -560,7 +565,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = example.focusstudy.local.monitor;
+				PRODUCT_BUNDLE_IDENTIFIER = kr.donminzzi.focusStudy.monitor;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -576,7 +581,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = example.focusstudy.local.sdktests;
+				PRODUCT_BUNDLE_IDENTIFIER = kr.donminzzi.focusStudy.sdktests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -619,6 +624,7 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 393JTTV68D;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -661,7 +667,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = example.focusstudy.local;
+				PRODUCT_BUNDLE_IDENTIFIER = kr.donminzzi.focusStudy;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -677,7 +683,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = example.focusstudy.local.uitests;
+				PRODUCT_BUNDLE_IDENTIFIER = kr.donminzzi.focusStudy.uitests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = FocusStudy;
@@ -695,7 +701,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = example.focusstudy.local.monitor;
+				PRODUCT_BUNDLE_IDENTIFIER = kr.donminzzi.focusStudy.monitor;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -711,7 +717,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = example.focusstudy.local.uitests;
+				PRODUCT_BUNDLE_IDENTIFIER = kr.donminzzi.focusStudy.uitests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = FocusStudy;
@@ -755,6 +761,7 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 393JTTV68D;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -790,7 +797,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = example.focusstudy.local.report;
+				PRODUCT_BUNDLE_IDENTIFIER = kr.donminzzi.focusStudy.report;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};

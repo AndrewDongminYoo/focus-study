@@ -6,7 +6,7 @@
 	<true/>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.example.focusstudy.local</string>
+		<string>group.kr.donminzzi.focusStudy</string>
 	</array>
 </dict>
 </plist>
