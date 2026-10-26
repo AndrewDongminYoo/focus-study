@@ -19,7 +19,7 @@ xcodebuild test -project FocusStudy.xcodeproj -scheme FocusStudy -destination 'p
 
 Simulator UUID는 이 Mac의 iPhone 18 Pro/iOS 27.0입니다. 다른 환경에서는 `xcrun simctl list devices available` 결과로 바꿉니다. SwiftPM은 macOS에서 순수 제어 로직, SwiftData 기록, 합성 보고서 집계를 실행합니다. iOS scheme은 SDK adapter/repository 테스트와 DEBUG 전용 합성 UI 테스트를 실행합니다. 테스트 fixture에서는 FamilyControls 인증 요청, DeviceActivity monitoring 등록, ManagedSettings 제한을 호출하지 않습니다.
 
-화면만 확인하려면 Debug scheme의 Launch Arguments에 `--ui-testing approved --selected`를 넣습니다. 권한 거절 화면은 `--ui-testing denied --selected`, 등록 실패 화면은 `--ui-testing registration-failure --selected`입니다. 이 경로는 메모리 SwiftData와 고유 임시 제어 파일을 사용하고 Release에는 fixture 구현이 포함되지 않습니다. 실제 Screen Time API 지원의 증거가 아닙니다.
+화면만 확인하려면 Debug scheme의 Launch Arguments에 `--ui-testing approved --selected`를 넣습니다. 권한 거절 화면은 `--ui-testing denied --selected`, 등록 실패 화면은 `--ui-testing registration-failure --selected`입니다. 이 경로는 메모리 SwiftData와 고유 임시 제어 파일을 사용하고 Release에는 fixture 구현이 포함되지 않습니다. 실제 Screen Time API 지원의 증거가 아닙니다. `--ui-testing startup-failure --selected`는 합성 세션이 진행 중일 때 초기 저장소가 한 번 실패하는 복구 화면을 확인합니다.
 
 ## 실제 기기를 연결하기 전
 
@@ -34,6 +34,7 @@ Simulator UUID는 이 Mac의 iPhone 18 Pro/iOS 27.0입니다. 다른 환경에�
 - 개별 앱·웹사이트 토큰을 각각 50개까지 선택합니다. 빈 선택, 카테고리, 한도 초과는 저장·시작 전에 거절합니다. 현재 세션 중 선택을 바꾸지 않습니다.
 - 25분 고정 세션과 중도 종료를 제공하며 일시정지는 없습니다. 시간은 절대 만료 시각에서 다시 계산합니다. 잠금·종료·콜백 지연 때문에 초 단위 자동 해제를 보장하지 않습니다.
 - 하나의 명명된 ManagedSettings store만 사용합니다. UUID를 포함한 monitoring 이름과 App Group의 프로세스 간 잠금으로 이전 콜백과 새 세션을 구분합니다. 실패 시 제한을 롤백하고 활성으로 표시하지 않습니다.
+- 선택·기록 저장소 초기화가 실패해도 제어 상태를 먼저 조정하고 안전한 종료·재시도를 제공합니다.
 - App Group은 세션 ID·시각·단계·종료 사유 등 제어 데이터만 보관합니다. 선택 토큰은 본체 내부 파일에 저장하고 사용량은 Report 확장의 메모리와 화면에만 둡니다. SwiftData에는 앱이 만든 세션 기록만 저장합니다.
 - 웹사이트는 선택된 도메인의 shield를 사용합니다. 임의 URL 입력, 경로별 차단, 모든 브라우저 우회 방지는 제공하지 않습니다. Safari 비공개 브라우징에 영향을 주는 `blockedByFilter`는 사용하지 않습니다.
 - 기록된 시간은 실제 공부나 연속 차단 성공의 증거가 아닙니다. 사용 보고서가 늦거나 비어 있다고 사용량을 0으로 단정하지 않습니다.

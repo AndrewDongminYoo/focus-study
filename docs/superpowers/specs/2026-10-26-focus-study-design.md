@@ -1,7 +1,7 @@
 # FocusStudy 설계
 
-작성일: 2026-10-26. 상태: 승인된 범위의 설계 문서이며 구현은 시작하지 않았다.
-**정식 앱 이름과 프로젝트 경로는 미정이다. FocusStudy는 문서의 임시 식별자일 뿐이다.** 아래 소스 경로와 타깃 이름도 구현 시 확정할 상대 경로 제안이다.
+작성일: 2026-10-26. 상태: 승인된 범위의 로컬 구현을 진행했으며 실제 기기 인수 검증이 남아 있다.
+**정식 앱 이름은 미정이다. FocusStudy는 임시 식별자이다.** 승인된 프로젝트 루트는 `/Volumes/dongminyu/Development/01_personal/focus-study`이며 아래 경로는 이 루트를 기준으로 한다.
 
 ## 목적과 범위
 
@@ -71,7 +71,7 @@ App Group에는 버전, 세션 UUID, UUID를 포함한 activity 이름, 시작/�
 | `security find-identity -v -p codesigning` | `0 valid identities found`. 현재 조회에서 유효한 서명 identity가 보이지 않는다. 계정 미가입이나 인증서 부재로 단정하지 않는다. |
 | 기존 provisioning profile 디렉터리 | 프로필 파일은 존재한다. 새 앱 ID가 미정이므로 적합성·Family Controls 권한·기기 등록은 미검증이다. 내용을 내보내거나 계정을 변경하지 않았다. |
 
-컴파일 전제는 확인했지만 세 타깃의 개발 서명과 실제 기기의 Screen Time 동작은 아직 blocker이다. 정식 이름, 프로젝트 절대 경로, bundle ID 3개, Team, App Group ID를 구현 전에 확정한다. 계정 설정과 entitlement 신청은 별도 승인 범위이다. Family Controls 배포 entitlement는 본체와 두 확장 각각의 App ID에 대해 별도 심사가 필요하며 개발 빌드 가능 여부와 구분한다. [Apple entitlement 신청 안내](https://developer.apple.com/documentation/familycontrols/requesting-the-family-controls-entitlement), [Family Controls 구성](https://developer.apple.com/documentation/xcode/configuring-family-controls)
+컴파일 전제는 확인했지만 세 타깃의 개발 서명과 실제 기기의 Screen Time 동작은 아직 blocker이다. 프로젝트 경로는 위 승인 경로로 확정했다. 정식 이름, bundle ID 3개, Team, App Group ID는 실제 기기 준비 전에 확정한다. 계정 설정과 entitlement 신청은 별도 승인 범위이다. Family Controls 배포 entitlement는 본체와 두 확장 각각의 App ID에 대해 별도 심사가 필요하며 개발 빌드 가능 여부와 구분한다. [Apple entitlement 신청 안내](https://developer.apple.com/documentation/familycontrols/requesting-the-family-controls-entitlement), [Family Controls 구성](https://developer.apple.com/documentation/xcode/configuring-family-controls)
 
 ## 완료 기준과 검증 경계
 
@@ -83,3 +83,10 @@ App Group에는 버전, 세션 UUID, UUID를 포함한 activity 이름, 시작/�
 ## 구현 승인 후 경로 전제 (2026-10-26)
 
 로컬 순차 구현과 새 프로젝트·로컬 버전 관리 초기화가 승인되었다. 프로젝트 루트는 `/Volumes/dongminyu/Development/01_personal/focus-study`이다. 기존의 이번 턴 문서만 작성한다는 제한은 이 승인으로 해제되었다. FocusStudy는 여전히 임시 제품명이며 bundle ID와 App Group ID는 로컬 컴파일용 placeholder를 사용한다. 계정·서명 설정 변경, entitlement 신청, GitHub 생성·push·배포는 승인 범위 밖이다.
+
+
+## 구현 후 복구 계약 보완
+
+독립 전체 검토를 반영해, 제어 상태를 읽지 못하면 잠금 안에서 이 앱의 명명된 store와 `focus.<UUID>` namespace의 등록만 정리한다. 이후 읽기가 회복되어도 등록이 사라진 active 메타데이터를 활성으로 신뢰하지 않고 중단으로 조정한다. 다른 namespace의 monitoring을 중지하지 않으며 제한을 복구 목적으로 재적용하지 않는다. 종료 원인·시각은 ending 기록이 저장된 경우 유지한다. ending과 terminal 저장이 모두 실패한 뒤 재시작하면 잃어버린 원인을 추정하지 않고 복구 중단으로 기록한다.
+
+시작 시 세션 제어 복구를 선택 토큰과 SwiftData 초기화보다 먼저 수행한다. 선택·기록 저장소가 열리지 않아도 제어 경로를 유지하며 오류 화면에서 안전한 현재 세션 종료와 재시도를 제공한다. 기록 저장소가 정상화되기 전에는 terminal을 확인 처리하지 않는다.

@@ -6,11 +6,11 @@
 
 | 환경/명령 | 범위 | 관측 결과 |
 | --- | --- | --- |
-| macOS / Xcode 27.1 `swift test` | 제어·선택·날짜 경계 28개, SwiftData 5개, 합성 Report 집계 4개 | 37개 통과, 실패 0개 |
+| macOS / Xcode 27.1 `swift test` | 제어·선택·날짜·시작 복구 32개, SwiftData 5개, 합성 Report 집계 4개 | 41개 통과, 실패 0개 |
 | macOS `focus-control-race --verify` | 생산 flock 구현을 사용하는 두 별도 프로세스의 새 시작/이전 콜백 | `PASS: stale A cannot clear B` |
 | iPhone 18 Pro Simulator / iOS 27.0 | SDK 인증 상태·schedule 3개, 선택 저장소 2개 | 5개 통과 |
-| 같은 Simulator / DEBUG fixture | 거절 안내, 중도 종료 기록, 활성 중 선택 잠금, Picker 취소/저장, 등록 실패 | 5개 통과. 이후 추가 회귀 및 최종 결과는 구현 기록 참고 |
-| 서명 없는 Simulator build | App/Monitor/Report 세 제품 타깃 | `BUILD SUCCEEDED` |
+| 같은 Simulator / DEBUG fixture | 거절 안내, 중도 종료 기록, 활성 중 선택 잠금, Picker 취소/저장, 등록 실패, 초기 저장소 실패 후 종료·재시도 | 6개 통과, 실패 0개 |
+| 서명 없는 Simulator 및 Release 기기 아키텍처 build | App/Monitor/Report 세 제품 타깃 | `BUILD SUCCEEDED` |
 
 시뮬레이터 결과를 실제 Screen Time 권한·보고서·차단 적용 증거로 사용하지 않는다. 시스템은 실제 기기에서 지연되거나 다른 동작을 보일 수 있다.
 
