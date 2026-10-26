@@ -9,14 +9,15 @@
 
 Critical 또는 Minor 발견 사항은 없었다. 추가 검토는 요청하지 않고 한 번의 TDD 수정 단계와 전체 suite로 처리한다. 최종 통과 결과는 구현 기록에 남긴다.
 
-## 검토로 확인하지 못한 항목
+## 검증 범위와 결과
 
-실제 기기 권한·shield 적용·콜백 시점·Report 갱신, iOS 17 런타임과 DeviceActivity의 calendar 구성요소 해석은 실제 런타임 증거가 필요하다. 이 한계를 기능 실패로 단정하거나 검증 완료로 표시하지 않는다. 별도 추측성 calendar 결함은 제기하지 않았다.
-
-## 수정 후 결과
-
-한 번의 수정 단계 후 단위 테스트 41개, iOS Simulator SDK/UI 테스트 11개가 모두 통과했다. 두 프로세스 경쟁 검증과 서명 없는 Release 빌드도 통과했다. 저장소 복구가 만료 후에 발생하는 경우도 동일 회귀 테스트에 포함해 일반 완료로 오인하지 않도록 검증했다. 재검토자를 추가하지 않았으며 실제 기기 검증은 여전히 남아 있다.
+이 검토의 수정 단계와 당시 실행 결과는 [구현 기록](../implementation-ledger.md)에 보존한다.
+실제 Screen Time 동작과 iOS 17 런타임 등 확인하지 못한 항목은 [검증표](screen-time-device-matrix.md)를 따른다.
+저장소 복구가 만료 후에 발생하는 경우도 회귀 테스트에 포함해 일반 완료로 오인하지 않도록 확인했다.
 
 ## GitHub 후속 코드 리뷰
 
-[PR #1](https://github.com/AndrewDongminYoo/focus-study/pull/1)의 `8b3cd11`에서 P2 두 건이 추가로 발견됐다. 기록 조회 실패 시 확인된 활성 세션 제어를 보존하도록 `FocusModelTests`를 추가했고, 보고서 새로고침은 공유 컨테이너의 SwiftUI 콘텐츠 ID를 변경하도록 실제 뷰 생명주기 UI 테스트를 추가했다. 각 지적을 먼저 실패시킨 뒤 수정했으며 새 테스트를 포함한 Simulator 14개가 통과했다. 실제 Screen Time 접근은 수행하지 않았다.
+[PR #1](https://github.com/AndrewDongminYoo/focus-study/pull/1)의 `8b3cd11`에서 P2 두 건이 추가로 발견됐다.
+기록 조회 실패 시 확인된 활성 세션 제어를 보존하도록 `FocusModelTests`를 추가했고, 보고서 새로고침은 공유 컨테이너의 SwiftUI 콘텐츠 ID를 변경하도록 실제 뷰 생명주기 UI 테스트를 추가했다.
+각 지적을 먼저 실패시킨 뒤 수정했다.
+후속 실행 결과는 [검증 기록](screen-time-device-matrix.md#실행한-검증)에 남겼으며 실제 Screen Time 접근은 수행하지 않았다.
