@@ -44,11 +44,14 @@ Keep new plans, specs, and notes under `docs/plans/`, `docs/specs/`, and `docs/n
 | `Shared/` | Screen Time SDK-independent control types, state machine, file locking, recovery, validation, and time rules |
 | `Integration/ScreenTimeAdapters.swift` | FamilyControls, DeviceActivity, ManagedSettings, and App Group adapters |
 | `Monitor/FocusMonitor.swift` | Extension callbacks delegated to the shared session engine |
-| `Report/` | Extension-only usage aggregation and rendering |
-| `App/Debug/UITestFixtures.swift` | Synthetic authorization, selection, monitoring, storage failures, and report lifecycle probe |
+| `Report/` | Extension-only usage aggregation and token-row rendering |
+| `Presentation/UsageSummarySection.swift` | Shared total/unavailable rendering; the app uses synthetic values only in DEBUG fixtures |
+| `App/Debug/UITestFixtures.swift` | Synthetic authorization, selection, monitoring, storage failures, and report lifecycle/state probes |
+| `Integration/DeviceDiagnostics.swift`, `App/Debug/DeviceDiagnosticsSection.swift` | Opt-in DEBUG diagnostics around the real monitoring adapter and shared callback engine |
 
 The app and Monitor compile `Shared/` and `Integration/` directly into their targets.
 Report has a separate source boundary and does not depend on those directories.
+`Presentation/` contains display-only code compiled into App and Report; it does not transport report data to the host.
 SwiftPM exposes `FocusCore`, `FocusHistory`, and `FocusReportLogic` for host tests; keep Screen Time SDK imports out of `Shared/`.
 Use the existing protocols and injected closures for failure tests rather than adding another service framework.
 
@@ -71,6 +74,8 @@ For behavioral fixes, first reproduce the failure in the relevant suite; a build
 
 Keep fixture implementations behind `#if DEBUG`, using temporary control storage and in-memory SwiftData without real authorization requests, monitoring registration, or shields.
 Preserve accessibility identifiers used by `UITests/FocusFlowTests.swift` when editing UI.
+Real-device diagnostics are separate from fixtures: `--screen-time-diagnostics` opts into the real runtime in DEBUG builds only.
+Do not enable that path during synthetic tests or infer permission to apply restrictions from build or installation approval.
 Report what each executed check establishes; simulator and unsigned build results never prove real Screen Time behavior or iOS 17 runtime support.
 
 ## Signing and physical-device boundary

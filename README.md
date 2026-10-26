@@ -37,6 +37,27 @@ SDK 또는 UI만 확인할 때는 test 명령에 `-only-testing:FocusSDKTests` �
 
 화면만 확인하려면 Debug scheme의 Launch Arguments에 `--ui-testing approved --selected`를 넣습니다. 권한 거절 화면은 `--ui-testing denied --selected`, 등록 실패 화면은 `--ui-testing registration-failure --selected`입니다. 이 경로는 메모리 SwiftData와 고유 임시 제어 파일을 사용하고 Release에는 fixture 구현이 포함되지 않습니다. 실제 Screen Time API 지원의 증거가 아닙니다. `--ui-testing startup-failure --selected`는 합성 세션이 진행 중일 때 초기 저장소가 한 번 실패하는 복구 화면을 확인합니다.
 
+### 보고서 상태와 실기기 진단
+
+보고서 합성 UI는 `--ui-testing report-waiting`, `--ui-testing report-empty`, `--ui-testing report-zero`와 `--selected`로 확인합니다.
+대기 상태는 보고서 콘텐츠가 아직 없는 호스트이며, 빈 데이터와 실제 0은 확장이 사용하는 `UsageSummarySection`을 같은 방식으로 렌더링합니다.
+기본 fixture의 콘텐츠 재생성 검사는 그대로 유지합니다.
+
+실기기 진단은 Debug 빌드의 별도 실행 인자 `--screen-time-diagnostics`로 활성화합니다.
+`--ui-testing`과 함께 사용하지 않으며 합성 fixture와 달리 실제 권한·선택·monitoring 경로를 사용합니다.
+설치 허용은 실제 앱·웹 제한 적용의 동의를 대신하지 않습니다.
+
+1. 동의받은 선택과 정상 권한을 준비한 후 `다음 등록 후 실패 주입`을 누르고 세션을 시작합니다.
+   실제 monitoring 등록이 성공한 직후 한 번 오류를 던져 세션 엔진의 stop/clear 롤백을 확인합니다.
+   실제 SDK가 먼저 실패하면 그 오류를 유지하고 주입은 소비합니다.
+2. 세션 A가 활성일 때 `현재 세션 콜백 저장`을 누릅니다.
+   A를 종료하고 B를 시작한 뒤 `이전 세션 콜백 전달`을 눌러 B가 유지되는지 확인합니다.
+   같은 활성 세션에는 저장한 콜백을 재전달할 수 없습니다.
+3. 관측 결과는 실기기 검증표에 기록합니다.
+   이 경로는 shared callback engine을 직접 호출하므로 OS 확장 콜백의 실제 전달 지연을 증명하지 않습니다.
+
+진단은 기본 실행과 Release 빌드에 표시되지 않으며, 토큰·도메인·사용량을 기록하거나 내보내지 않습니다.
+
 ## 문서와 설정 품질 검사
 
 [Trunk 설정](.trunk/trunk.yaml)은 Markdown, YAML, GitHub Actions와 영어 철자를 검사합니다.
@@ -50,7 +71,7 @@ trunk check --no-fix
 새 checkout에서는 `trunk check`를 실행해 설정된 도구와 Git hook을 준비합니다.
 pre-commit은 staged 파일, pre-push는 push할 커밋을 검사하며 파일을 자동 수정하지 않습니다.
 문장별 줄바꿈을 유지하고 줄 길이는 강제하지 않습니다.
-문서 형식 규칙은 `.trunk/configs/`, 철자 검사 범위와 사전은 루트 [cspell.yaml](cspell.yaml)에서 관리합니다.
+문서 형식 규칙은 `.trunk/configs/`, 철자 검사 범위와 사전은 루트 [cspell.config.yaml](cspell.config.yaml)에서 관리합니다.
 Swift와 Darwin 파일 연산, CI의 Python 코드에는 기본 제공 사전을 적용합니다.
 추가 용어는 [.cspell/project-terms.txt](.cspell/project-terms.txt)에 원문 표기를 유지하고 대소문자 구분 없이 정렬합니다.
 Xcode 프로젝트와 숨김 설정 파일도 검사하며, 한국어 맞춤법 검사를 대신하지 않습니다.
@@ -58,7 +79,10 @@ Xcode 프로젝트와 숨김 설정 파일도 검사하며, 한국어 맞춤법 
 
 ## 실제 기기를 연결하기 전
 
-현재 bundle ID `example.focusstudy.local`, `.monitor`, `.report`와 App Group `group.example.focusstudy.local`은 컴파일용 placeholder입니다. 실제로 등록된 식별자로 오인하지 마세요. 이름과 Team을 결정한 다음 `project.yml`, `Configuration/*-Info.plist`, `Configuration/*.entitlements`의 값을 일치시켜야 합니다. App과 Monitor만 같은 App Group을 사용하며 Report에는 App Group entitlement가 없습니다.
+운영자가 선택한 개발 Team은 `393JTTV68D`이며 bundle ID는 `kr.donminzzi.focusStudy`, 확장은 `.monitor`와 `.report`입니다.
+App Group은 `group.kr.donminzzi.focusStudy`입니다.
+`project.yml`, `Configuration/*-Info.plist`, `Configuration/*.entitlements`가 이 값을 사용하며, Apple 계정의 식별자 등록·capability·프로필 적합성은 별도로 확인해야 합니다.
+App과 Monitor만 같은 App Group을 사용하며 Report에는 App Group entitlement가 없습니다.
 
 개발 서명과 실제 기기 준비 상태는 [검증 기록](docs/notes/screen-time-device-matrix.md#서명과-배포)을 확인하세요.
 실제 앱·웹사이트에 제한을 적용하기 전에는 기기 소유자의 선택과 동의를 받아야 합니다.

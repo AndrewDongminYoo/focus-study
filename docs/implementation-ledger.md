@@ -56,3 +56,91 @@ The branch was retained locally at that stage; the following entries record subs
 PR #1 review 4374580364 (P2): verified against 8b3cd11. Added FocusModel history-failure regression: RED lost active ID/early exit and left restrictions active. Split control and history failures; confirmed active control survives fetch failure while a real control read failure still invalidates it. GREEN FocusSDKTests 7/7 and SwiftPM 41/41. History dependency is injected at its storage boundary; no actual Screen Time requests occur in tests.
 
 PR #1 review 4374580376 (P2): verified same-day reload retained child SwiftUI state (RED timeout). Extracted a shared report container so a synthetic stateful child exercises the same lifecycle as the real report; applying a separate .id(refreshID) recreates content on explicit reload without accessing usage data. GREEN full Simulator 14/14 (7 SDK/model/storage +7 UI); unsigned device Release BUILD SUCCEEDED.
+
+## Backlog follow-up: 2026-10-26
+
+Working tree based on `c25f60c`, before a new commit.
+Issues #6, #7, and #15 add verification paths rather than claiming new physical-device evidence.
+
+- #6: `SharedControlStoreTests.testAtomicReplacementFailurePreservesFileAndAllowsRetry` uses an immutable destination to make the production atomic write fail, then checks original bytes, a new lock acquisition, and a successful retry.
+  Removing the filesystem failure condition produced the expected throw/byte/identity assertion failures; restoring it passed.
+  The production store implementation did not need a change.
+- #7: `Presentation/UsageSummarySection` preserves the existing report rendering and is shared with synthetic DEBUG state fixtures.
+  Three new UI tests failed against the old host/fixture rendering, then passed with waiting, unavailable, and actual-zero states.
+  Captures exposed an `EmptyView` fixture that collapsed the report area; a transparent content view preserves its geometry, and the affected test and capture were checked again.
+  The host does not receive actual report data or infer a system loading signal.
+- #15: the opt-in DEBUG monitoring wrapper registers through the real adapter before throwing a one-shot error; stored stale activity names are replayed through the same session engine used by Monitor.
+  SDK tests use real file locking and the session engine with an observed SDK boundary, not real Screen Time calls.
+  Omitting the injected error and replaying the current activity instead of the saved activity both produced assertion failures; the restored implementation passed.
+  The underlying registration-error case also verifies that a genuine SDK error is preserved and consumes the injection.
+- #8/#9: the operator selected Team `393JTTV68D` and the `kr.donminzzi.focusStudy` prefix.
+  Updated the XcodeGen source, related configuration, generated project, and spelling dictionary.
+  The source and generated project use the same App/Monitor group, and Report has no App Group entitlement.
+  iOS 17 device coverage remains unavailable in this run.
+
+Final local checks: `swift test -j 2` passed 42 XCTest cases (33 core, 5 history, 4 report); the separate-process helper printed `PASS: stale A cannot clear B`.
+The full iOS 27.0 Simulator scheme passed 10 SDK tests and 10 UI tests; the final waiting-fixture geometry change then passed its targeted UI test.
+The unsigned generic-device Release build succeeded.
+A binary-content check rejected the Debug app as a negative control and found none of the checked diagnostic/fixture markers in the Release App, Monitor, and Report executables.
+These checks do not establish physical Screen Time behavior or iOS 17 runtime support.
+
+The signed Debug build without provisioning updates failed because the available wildcard profile lacks Family Controls (Development) and, for App/Monitor, App Groups.
+At that verification boundary, no physical-device installation, launch, authorization request, or restriction had been performed.
+Developer-portal registration/profile changes remain a separate authorization boundary.
+
+Oracle retrieval was `[PARTIAL]`: the canonical wiki project identity could not be verified, so no precedent was retrieved or used.
+
+## Development provisioning and installation: 2026-10-26
+
+After explicit operator approval for development-profile creation and updates, `xcodebuild build -allowProvisioningUpdates` succeeded for Team `393JTTV68D` and the three `kr.donminzzi.focusStudy` product identifiers.
+Strict signature verification passed for the app and embedded extensions.
+Decoded signed entitlements and embedded profiles confirmed the requested identifiers, Family Controls development capability, target-device eligibility, and App/Monitor-only App Group access.
+An entitlement-validation negative control rejected missing Family Controls before the real target checks passed.
+
+Installed the Debug app with `devicectl device install app` on the operator's iPhone 16 Pro.
+A subsequent exact-bundle-ID query confirmed version `0.1`, build `1` on the device.
+The app was not launched; no Screen Time authorization request or real restriction was applied.
+Physical behavioral acceptance and distribution entitlement review remain open.
+The installed build comes from the local working tree based on `c25f60c`, not a newly committed release.
+
+## Category selection and copy correction: 2026-10-26
+
+The operator confirmed authorization, selection, and actual app shielding on the installed build, then reported that selecting every item in a category prevented saving.
+Supplied screenshots also establish report rendering with actual app usage; they do not establish website shielding, expiry, or report refresh behavior.
+
+Five new repository tests use synthetic Codable tokens rather than private device tokens.
+Before the fix, four failed: new and reopened selections did not enable category expansion, and expanded selections were rejected as `categoriesUnsupported`.
+The existing collapsed-category rejection still passed.
+The repository now opens the picker with `includeEntireCategory: true`, preserves individual application and website tokens, removes category policy tokens before persistence, and validates each individual count before writing.
+The tests check stored tokens, reopening, the 50/51 boundary, and unchanged file bytes and selection after rejection.
+This follows Apple's [category expansion initializer](https://developer.apple.com/documentation/familycontrols/familyactivityselection/init(includeentirecategory:)).
+The operator subsequently confirmed that category selection saves successfully on the updated device build on 2026-10-27.
+
+Applied the requested `user-facing-copy` workflow with a default warm voice because no project voice line exists, while retaining the existing formal register.
+Kept selection limits, delayed restriction removal, browser limitations, permission purpose, and retry actions.
+Dropped the following facts or explanations from UI copy:
+
+- Internal report-extension placement: implementation detail with no user action.
+- Study-proof and continuous-blocking disclaimers: not needed beside the timer; the design contract retains these limits.
+- URL-path terminology: replaced with whole-website restriction wording.
+- Explicit blank-versus-zero explanation: replaced with a conditional reload instruction; real zero remains a separate rendered state.
+- Individual token persistence and storage internals: replaced with category-selection support and app-data wording.
+- Repeated reflection prompts: shortened to the next selection action.
+
+The full simulator scheme passed 15 SDK tests and 10 UI tests after the repository and copy changes.
+The empty-report screenshot shows the revised text without clipping.
+Other exported captures were incomplete, so they are not treated as visual proof.
+`trunk check --no-fix` passed for 30 modified files, the local documentation checker passed 63 links with missing-file and missing-anchor negative controls, and `git diff --check` passed.
+
+The signed Debug build succeeded using the existing development profiles, and strict signature verification passed.
+Installed it over the existing iPhone app without uninstalling or launching it; an exact bundle-ID query confirmed version `0.1`, build `1`.
+The device now retains this working-tree Debug build, including the category-selection fix and revised copy.
+The targeted waiting-report test then passed again; its recaptured screenshot shows the revised instruction, preserved empty report area, and reload button without clipping.
+
+## PR handoff: 2026-10-27
+
+The operator confirmed that category selection now saves successfully on the installed build.
+They also reported an authorization-revoked history entry without manually revoking permission.
+The cause and any relation to app termination or an install-over-existing update remain unverified.
+The operator explicitly deferred that investigation, so this PR does not change authorization classification or historical records.
+The displayed history time is the session start time, not the observed interruption time.
