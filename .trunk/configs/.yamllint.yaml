@@ -1,0 +1,13 @@
+rules:
+  quoted-strings:
+    required: only-when-needed
+    extra-allowed: ["^\\d+,\\d+$"]
+  # Existing XcodeGen and GitHub Actions files omit the YAML document marker.
+  document-start: disable
+  # Keep full shell commands and expressions readable without forced wrapping.
+  line-length: disable
+  # GitHub Actions uses the YAML 1.2 key `on`.
+  truthy:
+    check-keys: false
+    # XcodeGen build settings intentionally use Xcode's YES/NO spelling.
+    allowed-values: ["true", "false", "YES", "NO"]

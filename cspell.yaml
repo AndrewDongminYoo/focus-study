@@ -1,0 +1,20 @@
+version: '0.2'
+language: en
+useGitignore: true
+enableGlobDot: true
+ignorePaths:
+  - .git
+dictionaries:
+  - swift
+  # SharedControlStore bridges Darwin file operations; CI embeds Python.
+  - cpp
+  - posix-errno
+  - python
+  - softwareTerms
+  - filetypes
+  - fonts
+  - focus-study-terms
+dictionaryDefinitions:
+  - name: focus-study-terms
+    path: ./.cspell/project-terms.txt
+    addWords: true
