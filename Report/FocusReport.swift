@@ -43,10 +43,7 @@ struct UsageSummaryView: View {
     let configuration: ReportConfiguration
     var body: some View {
         List {
-            Section("이 기기의 오늘 사용 시간") {
-                if let total = configuration.summary.total { Text(formatted(total)).font(.title) }
-                else { Text("아직 보고서 데이터를 표시할 수 없습니다. 잠시 후 다시 확인해 주세요.").foregroundStyle(.secondary) }
-            }
+            UsageSummarySection(total: configuration.summary.total)
             if !configuration.apps.isEmpty {
                 Section("앱") { ForEach(configuration.apps) { row in HStack { Label(row.token); Spacer(); Text(formatted(row.duration)) } } }
             }

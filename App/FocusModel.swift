@@ -10,6 +10,9 @@ import Observation
     let applySelection: (FamilyActivitySelection) -> Void
     let matchesSelection: (FamilyActivitySelection) -> Bool
     var isFixture = false
+    #if DEBUG
+    var diagnostics: DeviceDiagnostics?
+    #endif
 
 }
 @MainActor @Observable final class FocusModel {

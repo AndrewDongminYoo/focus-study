@@ -36,6 +36,9 @@ struct FocusView: View {
                         Button("다시 확인") { model.refresh() }.accessibilityIdentifier("retry")
                     }
                 }
+                #if DEBUG
+                if let diagnostics = model.services.diagnostics { DeviceDiagnosticsSection(diagnostics: diagnostics, model: model) }
+                #endif
                 Section("오늘의 세션") {
                     if model.records.isEmpty { Text("아직 기록이 없습니다.").foregroundStyle(.secondary) }
                     ForEach(model.records, id: \.id) { record in

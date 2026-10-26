@@ -21,6 +21,37 @@ final class FocusFlowTests: XCTestCase {
         expectation(for: changed, evaluatedWith: generation)
         waitForExpectations(timeout: 5)
     }
+    func testReportWaitingDoesNotClaimZeroUsage() {
+        let app = app("report-waiting")
+        app.buttons["report"].tap()
+        XCTAssertTrue(app.staticTexts["reportWaiting"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["reportTotal"].exists)
+        XCTAssertFalse(app.staticTexts["reportUnavailable"].exists)
+        XCTAssertFalse(app.staticTexts["reportGeneration"].exists)
+        captureReport(app, name: "report-waiting")
+    }
+    func testEmptyReportShowsUnavailableInsteadOfZero() {
+        let app = app("report-empty")
+        app.buttons["report"].tap()
+        let unavailable = app.staticTexts["reportUnavailable"]
+        XCTAssertTrue(unavailable.waitForExistence(timeout: 5))
+        XCTAssertEqual(unavailable.label, "아직 보고서 데이터를 표시할 수 없습니다. 잠시 후 다시 확인해 주세요.")
+        XCTAssertFalse(app.staticTexts["reportTotal"].exists)
+        captureReport(app, name: "report-empty")
+    }
+    func testActualZeroReportShowsDurationInsteadOfUnavailable() {
+        let app = app("report-zero")
+        app.buttons["report"].tap()
+        let total = app.staticTexts["reportTotal"]
+        XCTAssertTrue(total.waitForExistence(timeout: 5))
+        XCTAssertTrue(total.label.contains("0"))
+        XCTAssertFalse(app.staticTexts["reportUnavailable"].exists)
+        captureReport(app, name: "report-zero")
+    }
+    private func captureReport(_ app: XCUIApplication, name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
+    }
     func testDeniedPermissionShowsSettingsAndDisablesStartAndReport() {
         let app = app("denied")
         XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: 8))
