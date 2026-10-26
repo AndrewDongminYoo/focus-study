@@ -1,19 +1,19 @@
 import Foundation
 
-enum SessionPhase: String, Codable { case preparing, active, ending, terminal }
-enum EndReason: String, Codable { case expired, earlyExit, authorizationRevoked, startFailed, recoveryInterrupted, clockChanged }
-struct ControlSession: Codable, Equatable {
-    var id: UUID
-    var startedAt: Date
-    var expiresAt: Date
-    var phase: SessionPhase = .preparing
-    var reason: EndReason?
-    var observedAt: Date?
-    var activityName: String { "focus.\(id.uuidString)" }
-    init(startedAt: Date, id: UUID = UUID()) {
+public enum SessionPhase: String, Codable { case preparing, active, ending, terminal }
+public enum EndReason: String, Codable { case expired, earlyExit, authorizationRevoked, startFailed, recoveryInterrupted, clockChanged }
+public struct ControlSession: Codable, Equatable {
+    public var id: UUID
+    public var startedAt: Date
+    public var expiresAt: Date
+    public var phase: SessionPhase = .preparing
+    public var reason: EndReason?
+    public var observedAt: Date?
+    public var activityName: String { "focus.\(id.uuidString)" }
+    public init(startedAt: Date, id: UUID = UUID()) {
         self.id = id; self.startedAt = startedAt; expiresAt = startedAt.addingTimeInterval(1500)
     }
-    var recordedEnd: Date? {
+    public var recordedEnd: Date? {
         guard let observedAt else { return nil }
         return max(startedAt, min(expiresAt, observedAt))
     }

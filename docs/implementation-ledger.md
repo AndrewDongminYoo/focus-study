@@ -11,3 +11,5 @@ Task 1: SelectionTests RED 5 tests / 4 expected failures (empty, categories, 51 
 Task 2: RED compile contract failed on absent SessionControl/ControlStore APIs before implementation (per plan). Ruling: ControlStore callback exposes explicit load/save under a single lock rather than auto-saving inout envelope — preparing and ending must be durable before SDK side effects; an end-of-closure save cannot meet that contract. SDK token storage stays outside Foundation package.
 
 Task 2: GREEN swift test 25/25 tests, 0 failures. Foundation engine and store verified; real Screen Time adapters not yet executed.
+
+Task 3/4: RED missing TimeRules/SessionHistory/UsageSummary before implementation. First GREEN found a test fixture defect: retry test created two UUIDs; corrected to retry the same session. No production change needed.
