@@ -4,6 +4,9 @@
 
 ## 실행한 검증
 
+아래는 2026-10-26 로컬 실행 당시 기록이며 현재 head를 재검증한 결과가 아니다.
+명령과 suite 구성은 [README](../../README.md#실행과-검증)를 따르며, 현재 테스트 수는 새 실행 출력에서 확인한다.
+
 | 환경/명령 | 범위 | 관측 결과 |
 | --- | --- | --- |
 | macOS / Xcode 27.1 `swift test` | 제어·선택·날짜·시작 복구 32개, SwiftData 5개, 합성 Report 집계 4개 | 41개 통과, 실패 0개 |
@@ -36,12 +39,17 @@
 
 ## 서명과 배포
 
-- 개발 서명: `security find-identity -v -p codesigning`에서 유효 identity 0개로 조회됐다. 계정 가입/미가입으로 단정하지 않는다.
-- Team과 정식 bundle ID 3개, App Group ID는 미정이다. 로컬 placeholder만 사용한다.
+- 개발 서명: [초기 환경 확인](../specs/2026-10-26-focus-study-design.md#환경-확인과-선행-조건)의 관측은 과거 기록이다.
+  실기기 작업 전에 현재 identity와 profile을 다시 확인하며 계정 가입 여부를 추정하지 않는다.
+- 식별자 placeholder와 변경 대상은 [기기 준비 안내](../../README.md#실제-기기를-연결하기-전)를 따른다.
 - 기기 등록·적합한 개발 provisioning profile·Family Controls 개발 capability의 일치는 미확인이다.
-- 본체·Monitor·Report 각각의 배포 entitlement는 이 작업에서 신청하지 않았다. 세 App ID별 별도 심사가 필요하며 개발 빌드와 구분한다.
-- 계정·인증서·프로필·entitlement 자동 변경, GitHub 생성·push·배포는 수행하지 않았다.
+- 당시 본체·Monitor·Report의 배포 entitlement는 신청하지 않았다.
+  각 App ID의 배포 승인을 개발 빌드 가능 여부와 구분하며 [Apple 신청 안내](https://developer.apple.com/documentation/familycontrols/requesting-the-family-controls-entitlement)를 확인한다.
+- 이 실기기 검증 단계에서는 계정·인증서·프로필·entitlement 변경이나 실제 제한 적용을 수행하지 않았다.
+  GitHub 후속 작업 이력은 아래 PR 기록과 구분한다.
 
 ## PR #1 후속 검토
 
-최초 hosted CI는 `8b3cd11`에서 단위 41개·SDK/UI 11개·경합·Release 빌드를 모두 통과했다. 후속 코드 리뷰 P2 두 건은 기록 오류가 활성 종료 제어를 숨기는 경우와 같은 날 보고서 재시도가 뷰를 갱신하지 않는 경우였다. 두 건 모두 실패 테스트로 재현하고 수정했다. 수정 후 로컬 검증은 단위 41개와 SDK/UI 14개이며, 새 head의 hosted 결과는 PR checks와 본문에서 구분해 기록한다.
+`8b3cd11`의 최초 hosted CI 성공은 당시 기록이며 현재 PR 상태를 뜻하지 않는다.
+후속 지적과 수정 근거는 [검토 기록](independent-review.md#github-후속-코드-리뷰), 실행 순서는 [구현 기록](../implementation-ledger.md)에 남긴다.
+로컬 후속 결과는 위 표를 기준으로 하고, 새 head의 hosted 결과는 해당 PR checks에서 확인한다.

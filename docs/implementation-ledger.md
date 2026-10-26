@@ -1,4 +1,9 @@
-# SDD ledger — plan: docs/superpowers/plans/2026-10-26-focus-study.md
+# Implementation ledger
+
+Plan: [FocusStudy implementation](plans/2026-10-26-focus-study.md).
+This is a chronological record of decisions and observations from the original implementation and PR follow-up.
+Test totals, signing observations, and branch/remote statements describe those runs, not the current checkout.
+Use the [verification record](notes/screen-time-device-matrix.md) for acceptance status and [README](../README.md#실행과-검증) for commands.
 
 2026-10-26: Local sequential implementation authorized. Product name remains provisional.
 
@@ -31,7 +36,10 @@ Task 5: automated acceptance complete; physical-device acceptance blocked on agr
 
 Final review (independent, afbee63): two Important findings accepted. (1) Cleanup + failed writes or transient read failure can leave active metadata that is later trusted. (2) Bootstrap depends on selection/history initialization, blocking recovery and early exit if those stores fail. No Critical findings; no minor findings. Beginning one TDD fix pass.
 
-Final RED evidence: four new core regressions failed real assertions; startup UI test failed because recovery actions were absent. Fix pass: on unreadable metadata, clear the owned store and stop only registered focus.<UUID> activities under the lock; active metadata without its registration becomes interrupted, never re-shielded. Split startup runtime from selection/SwiftData, reconcile first, retain terminal until history saves, expose safe end/retry on initialization errors. Known durable ending reason/time is retained; if both durable writes failed, restart records an honest recovery interruption rather than inventing the lost cause/time.
+Final RED evidence: four new core regressions failed real assertions; startup UI test failed because recovery actions were absent.
+Fix pass: on unreadable metadata, clear the owned store and stop only registered `focus.<UUID>` activities under the lock; active metadata without its registration becomes interrupted, never re-shielded.
+Split startup runtime from selection/SwiftData, reconcile first, retain terminal until history saves, expose safe end/retry on initialization errors.
+Known durable ending reason/time is retained; if both durable writes failed, restart records an honest recovery interruption rather than inventing the lost cause/time.
 Ruling: unreadable control metadata permits namespace-filtered cleanup of this app’s own focus registrations under the shared lock — no reliable current UUID can be decoded, and leaving the registration active would later falsely restore active UI after shield cleanup. Other activity namespaces are excluded.
 
 Final: fixed stale-active-after-cleanup — two SessionControl restart regressions RED→GREEN. Final: fixed bootstrap recovery blocked by selection/history — two StartupRecovery tests and one UI recovery test RED→GREEN. Full suites: macOS 41/41 (32 core +5 SwiftData +4 report), Simulator 11/11 (5 SDK/repository +6 UI), all 0 failures. Two-process race PASS; unsigned Release generic iOS BUILD SUCCEEDED after fixes. No second reviewer requested; no deferred minor findings. Student-facing startup error copy omits App Group/README internals; developer details remain in documentation.
@@ -41,7 +49,9 @@ Final fix-pass edge: extended the cleanup-write regression to restoration after 
 Ruling: actual App interfaces use throwing SelectionRepository initialization plus read-only selection/counts, and AuthorizationProviding maps request failures to denied rather than exposing async throws — this keeps failed selection loads explicit and permission-denial UI deterministic. FocusModel is the planned UI coordinator; FocusRuntime/StartupRecovery isolate bootstrap safety. Report returns an in-extension ReportConfiguration containing UsageSummary plus token rows, and both ends use the same focus.today context string. Cost if these API choices are wrong: integration changes are needed, not data export or permissions expansion.
 
 Final: Ruling: reviewer declined to assert physical-device authorization/shields/callback timing/report refresh/iOS17 runtime and DeviceActivity calendar interpretation — preserve these as required unverified device-acceptance items rather than claiming simulator proof; cost is runtime defects may remain until signed-device testing.
-Final verification after complete fix pass: swift test 41/41, iOS Simulator 11/11, two-process race PASS, unsigned Release generic iOS BUILD SUCCEEDED. Xcode only emitted its AppIntents-metadata-skipped tooling warnings. No source/test failures remain. Task 1: complete; Task 2: complete; Task 3: complete; Task 4: complete; Task 5: automated portion complete, physical-device portion pending. Branch is intentionally retained without merge/push/CI/remote creation.
+At the end of the local fix pass, the previously recorded suites, process race, and unsigned Release build passed.
+Xcode emitted AppIntents-metadata-skipped tooling warnings.
+The branch was retained locally at that stage; the following entries record subsequent PR review work.
 
 PR #1 review 4374580364 (P2): verified against 8b3cd11. Added FocusModel history-failure regression: RED lost active ID/early exit and left restrictions active. Split control and history failures; confirmed active control survives fetch failure while a real control read failure still invalidates it. GREEN FocusSDKTests 7/7 and SwiftPM 41/41. History dependency is injected at its storage boundary; no actual Screen Time requests occur in tests.
 
