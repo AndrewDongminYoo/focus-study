@@ -1,7 +1,7 @@
 # FocusStudy 설계
 
 작성일: 2026-10-26. 상태: 승인된 범위의 로컬 구현을 진행했으며 실제 기기 인수 검증이 남아 있다.
-**정식 앱 이름은 미정이다. FocusStudy는 임시 식별자이다.** 승인된 프로젝트 루트는 `/Volumes/dongminyu/Development/01_personal/focus-study`이며 아래 경로는 이 루트를 기준으로 한다.
+**정식 앱 이름은 미정이다. FocusStudy는 임시 식별자이다.**
 
 ## 목적과 범위
 
@@ -82,7 +82,7 @@ App Group에는 버전, 세션 UUID, UUID를 포함한 activity 이름, 시작/�
 
 ## 구현 승인 후 경로 전제 (2026-10-26)
 
-로컬 순차 구현과 새 프로젝트·로컬 버전 관리 초기화가 승인되었다. 프로젝트 루트는 `/Volumes/dongminyu/Development/01_personal/focus-study`이다. 기존의 이번 턴 문서만 작성한다는 제한은 이 승인으로 해제되었다. FocusStudy는 여전히 임시 제품명이며 bundle ID와 App Group ID는 로컬 컴파일용 placeholder를 사용한다. 계정·서명 설정 변경, entitlement 신청, GitHub 생성·push·배포는 승인 범위 밖이다.
+로컬 순차 구현과 새 프로젝트·로컬 버전 관리 초기화가 승인되었다. 기존의 이번 턴 문서만 작성한다는 제한은 이 승인으로 해제되었다. FocusStudy는 여전히 임시 제품명이며 bundle ID와 App Group ID는 로컬 컴파일용 placeholder를 사용한다. 계정·서명 설정 변경, entitlement 신청, GitHub 생성·push·배포는 승인 범위 밖이다.
 
 
 ## 구현 후 복구 계약 보완

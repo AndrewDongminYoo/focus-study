@@ -17,7 +17,7 @@
 - 앱 본체와 Monitor 및 Report 확장의 3개 제품 타깃을 사용하고 기본 시스템 shield를 사용한다. 테스트 번들은 제품 타깃 수에 포함하지 않는다.
 - 보호자 관리, Android, 계정, 서버, AI, 카페, 리워드는 제외한다.
 - 사용 보고서 민감 데이터를 앱 저장소로 내보내지 않는다.
-- 정식 앱 이름은 미정이며 FocusStudy는 임시 식별자이다. 승인된 프로젝트 루트는 `/Volumes/dongminyu/Development/01_personal/focus-study`이다.
+- 정식 앱 이름은 미정이며 FocusStudy는 임시 식별자이다.
 - 문서 전용 제한은 후속 구현 승인으로 해제되었다. 로컬 프로젝트·저장소·feature 브랜치와 의미 단위 커밋은 허용한다. push·계정 변경·entitlement 신청은 하지 않는다.
 
 ## Review Focus
@@ -142,7 +142,7 @@ docs/qa/screen-time-device-matrix.md
 
 ## 구현 승인 후 경로 전제 (2026-10-26)
 
-로컬 순차 구현과 새 프로젝트·로컬 버전 관리 초기화가 승인되었다. 프로젝트 루트는 `/Volumes/dongminyu/Development/01_personal/focus-study`이다. 기존의 이번 턴 문서만 작성한다는 제한은 이 승인으로 해제되었다. FocusStudy는 여전히 임시 제품명이며 bundle ID와 App Group ID는 로컬 컴파일용 placeholder를 사용한다. 계정·서명 설정 변경, entitlement 신청, GitHub 생성·push·배포는 승인 범위 밖이다.
+로컬 순차 구현과 새 프로젝트·로컬 버전 관리 초기화가 승인되었다. 기존의 이번 턴 문서만 작성한다는 제한은 이 승인으로 해제되었다. FocusStudy는 여전히 임시 제품명이며 bundle ID와 App Group ID는 로컬 컴파일용 placeholder를 사용한다. 계정·서명 설정 변경, entitlement 신청, GitHub 생성·push·배포는 승인 범위 밖이다.
 
 
 ## 실행 결과 추적

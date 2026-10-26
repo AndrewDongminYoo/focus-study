@@ -2,7 +2,7 @@
 
 학생이 자신의 앱·웹사이트 사용을 돌아보고 25분 집중 시간을 정하는 iOS 17+ SwiftUI/SwiftData 앱입니다. 정식 제품명은 미정입니다.
 
-프로젝트: `/Volumes/dongminyu/Development/01_personal/focus-study/FocusStudy.xcodeproj`  
+Xcode 프로젝트: `FocusStudy.xcodeproj`  
 기본 브랜치: `main`; 구현 브랜치: `feature/focus-study`. 저장소는 [GitHub](https://github.com/AndrewDongminYoo/focus-study)에 게시되어 있으며 PR 검증 CI를 포함합니다. 배포는 구성하지 않았습니다.
 
 ## 실행과 검증

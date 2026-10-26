@@ -1,6 +1,6 @@
 # SDD ledger — plan: docs/superpowers/plans/2026-10-26-focus-study.md
 
-2026-10-26: Local sequential implementation authorized. Project root: /Volumes/dongminyu/Development/01_personal/focus-study. Product name remains provisional.
+2026-10-26: Local sequential implementation authorized. Product name remains provisional.
 
 Ruling: Use this fresh isolated repository on feature/focus-study rather than another worktree — user selected this new project directory; no existing user repository is touched.
 Ruling: Add a Foundation-only Swift package for unsigned macOS core tests alongside three iOS product targets — simulator access is restricted in the initial sandbox; iOS build and UI tests will still be attempted.
