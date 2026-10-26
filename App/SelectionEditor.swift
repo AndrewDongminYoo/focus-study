@@ -10,7 +10,7 @@ struct SelectionEditor: View {
     var body: some View {
         NavigationStack {
             VStack {
-                Text("개별 앱과 웹사이트를 각각 최대 50개까지 선택해 주세요. 카테고리는 지원하지 않습니다.").font(.footnote).padding()
+                Text("앱·웹사이트 각각 최대 50개. 카테고리 전체 선택도 가능합니다.").font(.footnote).padding()
                 FamilyActivityPicker(selection: $draft)
                 if let issue { Text(issue).foregroundStyle(.red).padding() }
             }
@@ -19,7 +19,7 @@ struct SelectionEditor: View {
                 ToolbarItem(placement: .cancellationAction) { Button("취소") { dismiss() }.accessibilityIdentifier("pickerCancel") }
                 ToolbarItem(placement: .confirmationAction) { Button("저장") {
                     do { try model.saveSelection(draft); dismiss() }
-                    catch { issue = "개별 앱이나 웹사이트를 1개 이상, 각각 50개 이하로 선택해 주세요." }
+                    catch { issue = "앱이나 웹사이트를 1개 이상 선택해 주세요. 각각 최대 50개까지 가능합니다." }
                 }.accessibilityIdentifier("pickerSave") }
             }
         }
