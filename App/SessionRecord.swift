@@ -20,7 +20,11 @@ import FocusCore
         reasonRaw = (session.reason ?? .recoveryInterrupted).rawValue
     }
 }
-@MainActor final class SessionHistory {
+@MainActor protocol SessionHistoryProviding {
+    func importTerminal(_ session: ControlSession) throws
+    func records(on date: Date, calendar: Calendar) throws -> [SessionRecord]
+}
+@MainActor final class SessionHistory: SessionHistoryProviding {
     private let context: ModelContext
     private let acknowledge: (UUID) throws -> Void
     private let save: () throws -> Void

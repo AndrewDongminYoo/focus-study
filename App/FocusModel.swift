@@ -14,7 +14,7 @@ import Observation
 }
 @MainActor @Observable final class FocusModel {
     let services: FocusServices
-    private let history: SessionHistory
+    private let history: any SessionHistoryProviding
     private(set) var current: ControlSession?
     private(set) var records: [SessionRecord] = []
     private(set) var errorMessage: String?
@@ -25,20 +25,35 @@ import Observation
     var counts: (apps: Int, websites: Int, categories: Int) { services.selection.counts }
     var canStart: Bool { access == .approved && current == nil && !isStarting && errorMessage == nil && counts.apps + counts.websites > 0 }
     var remaining: Int { current.map { TimeRules.remaining(expiresAt: $0.expiresAt, now: now) } ?? 1500 }
-    init(services: FocusServices, context: ModelContext) {
-        self.services = services
-        history = SessionHistory(context: context, acknowledge: services.engine.acknowledgeTerminal)
+    convenience init(services: FocusServices, context: ModelContext) {
+        self.init(services: services, history: SessionHistory(context: context, acknowledge: services.engine.acknowledgeTerminal))
+    }
+    init(services: FocusServices, history: any SessionHistoryProviding) {
+        self.services = services; self.history = history
     }
     func refresh(clockChanged: Bool = false) {
         services.authorization.refresh(); now = Date()
         do {
-            let envelope = try services.engine.reconcile(now: now, authorized: access == .approved, clockChanged: clockChanged)
-            if let terminal = envelope.session, terminal.phase == .terminal { try history.importTerminal(terminal) }
+            try services.engine.reconcile(now: now, authorized: access == .approved, clockChanged: clockChanged)
             current = try services.engine.snapshot().session
-            records = try history.records(on: now)
+        } catch {
+            current = nil
+            errorMessage = "상태를 확인하지 못했습니다. 다시 확인한 후 시작해 주세요."
+            return
+        }
+        do {
+            if let terminal = current, terminal.phase == .terminal {
+                try history.importTerminal(terminal)
+                current = try services.engine.snapshot().session
+            }
+            records = try history.records(on: now, calendar: .current)
             errorMessage = nil
-        } catch { current = nil; errorMessage = "상태를 확인하지 못했습니다. 다시 확인한 후 시작해 주세요." }
+        } catch {
+            // A history failure does not invalidate a confirmed control session or its early-exit action.
+            errorMessage = "기록을 불러오지 못했습니다. 진행 중인 세션은 종료할 수 있습니다. 다시 확인해 주세요."
+        }
     }
+
     func start() {
         guard canStart else { return }
         isStarting = true; defer { isStarting = false }

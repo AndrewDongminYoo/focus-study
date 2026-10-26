@@ -48,7 +48,7 @@ targets:
   FocusSDKTests:
     type: bundle.unit-test
     platform: iOS
-    sources: [SDKTests, Shared, Integration, App/SelectionRepository.swift]
+    sources: [SDKTests, Shared, Integration, App/SelectionRepository.swift, App/SessionRecord.swift, App/FocusModel.swift, App/AuthorizationService.swift]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: example.focusstudy.local.sdktests
