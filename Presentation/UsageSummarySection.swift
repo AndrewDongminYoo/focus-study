@@ -9,7 +9,7 @@ struct UsageSummarySection: View {
                 Text(Duration.seconds(total).formatted(.units(allowed: [.hours, .minutes], width: .wide)))
                     .font(.title).accessibilityIdentifier("reportTotal")
             } else {
-                Text("아직 보고서 데이터를 표시할 수 없습니다. 잠시 후 다시 확인해 주세요.")
+                Text("사용량을 불러오지 못했습니다. 잠시 후 다시 확인해 주세요.")
                     .foregroundStyle(.secondary).accessibilityIdentifier("reportUnavailable")
             }
         }

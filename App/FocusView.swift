@@ -12,7 +12,7 @@ struct FocusView: View {
                 Section {
                     VStack(alignment: .leading, spacing: 12) {
                         Label("나를 위한 집중 시간", systemImage: "leaf").font(.headline)
-                        Text("주의를 빼앗는 것들을 잠시 내려놓고, 지금 할 일에 집중해 보세요.").foregroundStyle(.secondary)
+                        Text("25분 동안, 지금 할 일에 집중해 보세요.").foregroundStyle(.secondary)
                         Text(String(format: "%02d:%02d", model.remaining / 60, model.remaining % 60))
                             .font(.system(size: 54, weight: .light, design: .rounded)).monospacedDigit().accessibilityIdentifier("countdown")
                         if model.isActive {
@@ -22,13 +22,13 @@ struct FocusView: View {
                             Button("25분 시작") { model.start() }.buttonStyle(.borderedProminent).disabled(!model.canStart).accessibilityIdentifier("start")
                         }
                     }.padding(.vertical, 12)
-                } footer: { Text("기록은 실제 공부 여부나 연속 차단을 증명하지 않습니다. 자동 해제는 지연될 수 있습니다.") }
+                } footer: { Text("제한이 자동으로 풀리기까지 시간이 걸릴 수 있습니다.") }
                 if model.access != .approved { accessSection }
                 Section("제한할 항목") {
                     Button { sheet = .editor } label: {
                         HStack { Label("앱과 웹사이트 선택", systemImage: "hand.raised"); Spacer(); Text("앱 \(model.counts.apps) · 웹 \(model.counts.websites)").foregroundStyle(.secondary) }
                     }.disabled(model.access != .approved || model.isActive || model.isStarting || model.errorMessage != nil).accessibilityIdentifier("selection")
-                    Text("웹사이트는 도메인 단위로 제한합니다. 경로별 차단이나 모든 브라우저의 우회 방지를 보장하지 않습니다.").font(.footnote).foregroundStyle(.secondary)
+                    Text("웹사이트 전체를 제한합니다. 브라우저에 따라 제한되지 않을 수 있습니다.").font(.footnote).foregroundStyle(.secondary)
                 }
                 if let error = model.errorMessage {
                     Section {
@@ -58,7 +58,7 @@ struct FocusView: View {
                         #endif
                     } label: { Label("오늘의 사용 보고서", systemImage: "chart.bar") }
                     .disabled(model.access != .approved).accessibilityIdentifier("report")
-                } footer: { Text("시스템 사용 보고서는 세션 기록과 별개이며 보고서 확장 안에서만 표시됩니다.") }
+                } footer: { Text("집중 기록과 별도로 기기 사용 시간을 확인합니다.") }
             }
             .navigationTitle("FocusStudy")
             .sheet(item: $sheet) { _ in
@@ -79,12 +79,12 @@ struct FocusView: View {
         .onReceive(NotificationCenter.default.publisher(for: .NSSystemClockDidChange)) { _ in model.refresh(clockChanged: true) }
     }
     private var accessSection: some View {
-        Section("Screen Time 접근") {
-            Text("선택한 항목을 제한하고 사용 보고서를 보려면 개인 Screen Time 접근이 필요합니다.")
+        Section("스크린 타임 권한") {
+            Text("앱 제한과 사용 보고서에 스크린 타임 권한이 필요합니다.")
             if model.access == .notRequested {
-                Button("개인 접근 허용") { Task { await model.services.authorization.requestIndividual(); model.refresh() } }.accessibilityIdentifier("authorize")
+                Button("권한 허용") { Task { await model.services.authorization.requestIndividual(); model.refresh() } }.accessibilityIdentifier("authorize")
             } else {
-                Text("설정에서 이 앱의 Screen Time 접근을 확인해 주세요.")
+                Text("설정에서 스크린 타임 권한을 확인해 주세요.")
                 Link("설정 열기", destination: URL(string: UIApplication.openSettingsURLString)!).accessibilityIdentifier("settings")
             }
         }

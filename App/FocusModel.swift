@@ -41,7 +41,7 @@ import Observation
             current = try services.engine.snapshot().session
         } catch {
             current = nil
-            errorMessage = "상태를 확인하지 못했습니다. 다시 확인한 후 시작해 주세요."
+            errorMessage = "상태를 확인하지 못했습니다. 다시 확인해 주세요."
             return
         }
         do {
@@ -53,7 +53,7 @@ import Observation
             errorMessage = nil
         } catch {
             // A history failure does not invalidate a confirmed control session or its early-exit action.
-            errorMessage = "기록을 불러오지 못했습니다. 진행 중인 세션은 종료할 수 있습니다. 다시 확인해 주세요."
+            errorMessage = "기록을 불러오지 못했습니다. 다시 확인해 주세요. 진행 중인 세션은 종료할 수 있습니다."
         }
     }
 
@@ -70,7 +70,7 @@ import Observation
             refresh()
         } catch {
             refresh()
-            errorMessage = "세션을 시작하지 못했습니다. 상태를 다시 확인해 주세요."
+            errorMessage = "집중 시간을 시작하지 못했습니다. 다시 확인해 주세요."
         }
     }
     func end() {

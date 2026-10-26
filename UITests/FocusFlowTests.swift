@@ -35,7 +35,7 @@ final class FocusFlowTests: XCTestCase {
         app.buttons["report"].tap()
         let unavailable = app.staticTexts["reportUnavailable"]
         XCTAssertTrue(unavailable.waitForExistence(timeout: 5))
-        XCTAssertEqual(unavailable.label, "아직 보고서 데이터를 표시할 수 없습니다. 잠시 후 다시 확인해 주세요.")
+        XCTAssertEqual(unavailable.label, "사용량을 불러오지 못했습니다. 잠시 후 다시 확인해 주세요.")
         XCTAssertFalse(app.staticTexts["reportTotal"].exists)
         captureReport(app, name: "report-empty")
     }

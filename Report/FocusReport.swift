@@ -50,7 +50,7 @@ struct UsageSummaryView: View {
             if !configuration.websites.isEmpty {
                 Section("웹사이트") { ForEach(configuration.websites) { row in HStack { Label(row.token); Spacer(); Text(formatted(row.duration)) } } }
             }
-            Section { Text("무엇이 주의를 빼앗았는지 돌아보고 다음 집중 시간에 제한할 항목을 골라보세요.").font(.footnote) }
+            Section { Text("다음 집중 시간에 제한할 항목을 골라보세요.").font(.footnote) }
         }
     }
     private func formatted(_ seconds: TimeInterval) -> String { Duration.seconds(seconds).formatted(.units(allowed: [.hours, .minutes], width: .wide)) }
