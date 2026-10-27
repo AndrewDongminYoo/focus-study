@@ -72,6 +72,17 @@ final class FocusFlowTests: XCTestCase {
         let app = app(); app.buttons["selection"].tap(); app.buttons["fixtureClear"].tap(); app.buttons["pickerCancel"].tap()
         XCTAssertTrue(app.buttons["start"].isEnabled)
     }
+    func testPickerCountsFollowDraftAndCancelRestoresSavedSelection() {
+        let app = app(); app.buttons["selection"].tap()
+        let counts = app.staticTexts["selectionCounts"]
+        XCTAssertTrue(counts.waitForExistence(timeout: 5))
+        XCTAssertEqual(counts.label, "앱 1개 · 웹사이트 0개 선택")
+        app.buttons["fixtureClear"].tap()
+        XCTAssertEqual(counts.label, "앱 0개 · 웹사이트 0개 선택")
+        app.buttons["pickerCancel"].tap(); app.buttons["selection"].tap()
+        XCTAssertEqual(counts.label, "앱 1개 · 웹사이트 0개 선택")
+        captureReport(app, name: "selection-counts")
+    }
     func testEmptySelectionCannotStartAndMockSelectionCanBeSaved() {
         let app = app(selected: false); XCTAssertFalse(app.buttons["start"].isEnabled)
         app.buttons["selection"].tap(); app.buttons["fixtureSelect"].tap(); app.buttons["pickerSave"].tap()
