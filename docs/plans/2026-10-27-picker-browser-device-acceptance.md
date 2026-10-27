@@ -15,24 +15,24 @@ Do not export private tokens, application names, domains, browsing history, or u
 ## Execution
 
 1. Confirm consent to change saved selections and manually start and end a focus session on the daily iPhone.
-  Record the observed OS version, app version/build, browser environments, and observation time.
-  Use anonymous aliases such as selected site A and unselected site B.
+   Record the observed OS version, app version/build, browser environments, and observation time.
+   Use anonymous aliases such as selected site A and unselected site B.
 2. Check the actual Picker boundary separately for applications and websites.
-  Select 50 of one type and save; reopen to confirm that selection was retained.
-  Add one more of that type and attempt to save.
-  Confirm rejection, cancel the draft, and reopen to verify the saved 50-item selection remains.
-  Keep the other type empty to avoid confusing the per-type limits.
-  If the system Picker prevents constructing 51 items, or fewer than 51 selectable items exist, record the exact limitation; do not claim the application's 51-item rejection was exercised.
+   Select 50 of one type and save; reopen to confirm that selection was retained.
+   Add one more of that type and attempt to save.
+   Confirm rejection, cancel the draft, and reopen to verify the saved 50-item selection remains.
+   Keep the other type empty to avoid confusing the per-type limits.
+   If the system Picker prevents constructing 51 items, or fewer than 51 selectable items exist, record the exact limitation; do not claim the application's 51-item rejection was exercised.
 3. Before testing browser behavior, replace the large boundary selection with the operator's small approved test selection.
-  Keep the browser app itself unselected so an application shield does not masquerade as website blocking.
-  Confirm that selected site A and unselected site B load before the focus session.
-  During the session, test A at two paths and B in Safari normal and private tabs, then repeat in an already available alternate browser and an identifiable WKWebView surface when available.
-  Reload or navigate after starting the session; distinguish an existing page from a fresh request and a network failure from a system restriction screen.
+   Keep the browser app itself unselected so an application shield does not masquerade as website blocking.
+   Confirm that selected site A and unselected site B load before the focus session.
+   During the session, test A at two paths and B in Safari normal and private tabs, then repeat in an already available alternate browser and an identifiable WKWebView surface when available.
+   Reload or navigate after starting the session; distinguish an existing page from a fresh request and a network failure from a system restriction screen.
 4. End the session manually, record the observed removal delay, and restore the operator's intended selection.
-  Do not claim an automatic 25-minute expiry was tested by a manual end.
+   Do not claim an automatic 25-minute expiry was tested by a manual end.
 5. Record expected and observed results with their environment and evidence source.
-  Operator-reported observations must remain labeled as such.
-  Unavailable combinations remain unverified; they do not become passing results.
+   Operator-reported observations must remain labeled as such.
+   Unavailable combinations remain unverified; they do not become passing results.
 
 ## Acceptance Record
 
@@ -40,15 +40,15 @@ On 2026-10-27, the operator explicitly confirmed all three selection checks sepa
 This is an operator-reported result on the existing installed build, not an independently captured token count.
 The operator also reported that the missing visible selection count made validation inconvenient.
 
-| Scenario | Expected observation | Current status |
-| --- | --- | --- |
-| Applications: 50 then 51 | 50 retained; 51 rejected without replacing the saved selection | Operator confirmed all three checks on 2026-10-27 |
-| Websites: 50 then 51 | 50 retained; 51 rejected without replacing the saved selection | Operator confirmed all three checks on 2026-10-27 |
-| Safari normal tabs | Selected site restricted at both paths; unselected site remains accessible | Operator reported one restriction message and one indefinite load on iOS 27.0.1; multiple-path and unselected-site controls unconfirmed |
-| Safari private tabs | Record selected/unselected behavior at both paths, including any platform limitation | Operator confirmed a fresh private tab can access the same address blocked in a normal tab during the same active session; Apple intent unconfirmed |
-| Alternate browser | Record actual results and the browser/OS combination | Chrome access reported on iOS 27.0.1; browser version and same-session conditions unconfirmed |
-| WKWebView | Record actual results in an identified embedded-browser surface | Availability unconfirmed |
-| Manual end and restore | Record restriction removal and restore the intended selection | Operator confirmed the loading failure disappears after ending the session; removal delay and selection restoration unconfirmed |
+| Scenario                 | Expected observation                                                                 | Current status                                                                                                                                      |
+| ------------------------ | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Applications: 50 then 51 | 50 retained; 51 rejected without replacing the saved selection                       | Operator confirmed all three checks on 2026-10-27                                                                                                   |
+| Websites: 50 then 51     | 50 retained; 51 rejected without replacing the saved selection                       | Operator confirmed all three checks on 2026-10-27                                                                                                   |
+| Safari normal tabs       | Selected site restricted at both paths; unselected site remains accessible           | Operator reported one restriction message and one indefinite load on iOS 27.0.1; multiple-path and unselected-site controls unconfirmed             |
+| Safari private tabs      | Record selected/unselected behavior at both paths, including any platform limitation | Operator confirmed a fresh private tab can access the same address blocked in a normal tab during the same active session; Apple intent unconfirmed |
+| Alternate browser        | Record actual results and the browser/OS combination                                 | Chrome access reported on iOS 27.0.1; browser version and same-session conditions unconfirmed                                                       |
+| WKWebView                | Record actual results in an identified embedded-browser surface                      | Availability unconfirmed                                                                                                                            |
+| Manual end and restore   | Record restriction removal and restore the intended selection                        | Operator confirmed the loading failure disappears after ending the session; removal delay and selection restoration unconfirmed                     |
 
 ## Delivery and Checks
 

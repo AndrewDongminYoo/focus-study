@@ -25,12 +25,12 @@ xcodebuild test -project FocusStudy.xcodeproj -scheme FocusStudy -destination "p
 xcodebuild build -project FocusStudy.xcodeproj -scheme FocusStudy -configuration Release -destination 'generic/platform=iOS' -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO
 ```
 
-| 검증 | 범위와 한계 |
-| --- | --- |
-| `swift test` | `CoreTests/`, `HistoryTests/`, `ReportTests/`의 제어 로직, SwiftData 기록, 합성 보고서 집계를 검사합니다. |
-| 경합 helper | 실제 파일 잠금과 합성 monitoring/shield를 사용하는 두 프로세스를 검사하며 `PASS: stale A cannot clear B`를 출력해야 합니다. |
-| iOS scheme | `FocusSDKTests`와 `FocusUITests`에서 SDK adapter/repository/model 및 DEBUG 합성 UI를 검사합니다. |
-| unsigned Release build | fixture를 제외한 App/Monitor/Report의 기기 아키텍처 컴파일을 검사합니다. |
+| 검증                   | 범위와 한계                                                                                                                 |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `swift test`           | `CoreTests/`, `HistoryTests/`, `ReportTests/`의 제어 로직, SwiftData 기록, 합성 보고서 집계를 검사합니다.                   |
+| 경합 helper            | 실제 파일 잠금과 합성 monitoring/shield를 사용하는 두 프로세스를 검사하며 `PASS: stale A cannot clear B`를 출력해야 합니다. |
+| iOS scheme             | `FocusSDKTests`와 `FocusUITests`에서 SDK adapter/repository/model 및 DEBUG 합성 UI를 검사합니다.                            |
+| unsigned Release build | fixture를 제외한 App/Monitor/Report의 기기 아키텍처 컴파일을 검사합니다.                                                    |
 
 SDK 또는 UI만 확인할 때는 test 명령에 `-only-testing:FocusSDKTests` 또는 `-only-testing:FocusUITests`를 추가합니다.
 이 검증은 실제 Screen Time 권한·차단·콜백 동작의 증거가 아닙니다.
@@ -89,13 +89,13 @@ App과 Monitor만 같은 App Group을 사용하며 Report에는 App Group entitl
 
 ## 문서 안내
 
-| 문서 | 관리하는 내용 |
-| --- | --- |
-| [AGENTS.md](AGENTS.md) | 소스 구조, 생성 파일 관리, 변경별 검증 선택 |
-| [설계](docs/specs/2026-10-26-focus-study-design.md) | 제품 범위, 사용자 흐름, 데이터 경계, 세션·복구 계약 |
-| [계획](docs/plans/2026-10-26-focus-study.md) | 초기 작업 분해와 현재 구현의 대응 관계 |
-| [구현 기록](docs/implementation-ledger.md) | 시간순 결정과 당시 실행 결과 |
-| [검토 기록](docs/notes/independent-review.md) | 회귀 문제와 수정 근거 |
+| 문서                                                 | 관리하는 내용                                        |
+| ---------------------------------------------------- | ---------------------------------------------------- |
+| [AGENTS.md](AGENTS.md)                               | 소스 구조, 생성 파일 관리, 변경별 검증 선택          |
+| [설계](docs/specs/2026-10-26-focus-study-design.md)  | 제품 범위, 사용자 흐름, 데이터 경계, 세션·복구 계약  |
+| [계획](docs/plans/2026-10-26-focus-study.md)         | 초기 작업 분해와 현재 구현의 대응 관계               |
+| [구현 기록](docs/implementation-ledger.md)           | 시간순 결정과 당시 실행 결과                         |
+| [검토 기록](docs/notes/independent-review.md)        | 회귀 문제와 수정 근거                                |
 | [검증 기록](docs/notes/screen-time-device-matrix.md) | 환경별 검증 결과, 실기기 미검증 항목, 서명 준비 상태 |
 
 ## 공개 PR의 CI

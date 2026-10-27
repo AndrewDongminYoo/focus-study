@@ -113,7 +113,7 @@ Before the fix, four failed: new and reopened selections did not enable category
 The existing collapsed-category rejection still passed.
 The repository now opens the picker with `includeEntireCategory: true`, preserves individual application and website tokens, removes category policy tokens before persistence, and validates each individual count before writing.
 The tests check stored tokens, reopening, the 50/51 boundary, and unchanged file bytes and selection after rejection.
-This follows Apple's [category expansion initializer](https://developer.apple.com/documentation/familycontrols/familyactivityselection/init(includeentirecategory:)).
+This follows Apple's [category expansion initializer](<https://developer.apple.com/documentation/familycontrols/familyactivityselection/init(includeentirecategory:)>).
 The operator subsequently confirmed that category selection saves successfully on the updated device build on 2026-10-27.
 
 Applied the requested `user-facing-copy` workflow with a default warm voice because no project voice line exists, while retaining the existing formal register.

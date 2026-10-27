@@ -35,12 +35,12 @@
 
 ## 타깃과 데이터 경계
 
-| 위치 | 책임과 저장 범위 |
-| --- | --- |
-| App | 인증, Picker, 세션 시작·종료, SwiftData 기록, Report 호스트를 담당한다. 선택 토큰은 앱 내부 파일에만 저장한다. |
-| Monitor | 현재 세션의 만료·권한 상태를 조정하고 같은 명명된 store를 해제한다. 선택 토큰이나 SwiftData에 접근하지 않는다. |
-| Report | 사용량을 집계·렌더링한다. 사용량·앱 이름·사이트·토큰을 App Group, SwiftData, 파일, 로그, 네트워크로 내보내지 않는다. App Group 접근 권한도 주지 않는다. |
-| Shared 소스(App/Monitor만) | 제어 메타데이터와 프로세스 간 잠금, 종료 판정, 명명된 store 식별자를 공유한다. 별도 프레임워크 제품 타깃을 추가하지 않는다. |
+| 위치                       | 책임과 저장 범위                                                                                                                                        |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| App                        | 인증, Picker, 세션 시작·종료, SwiftData 기록, Report 호스트를 담당한다. 선택 토큰은 앱 내부 파일에만 저장한다.                                          |
+| Monitor                    | 현재 세션의 만료·권한 상태를 조정하고 같은 명명된 store를 해제한다. 선택 토큰이나 SwiftData에 접근하지 않는다.                                          |
+| Report                     | 사용량을 집계·렌더링한다. 사용량·앱 이름·사이트·토큰을 App Group, SwiftData, 파일, 로그, 네트워크로 내보내지 않는다. App Group 접근 권한도 주지 않는다. |
+| Shared 소스(App/Monitor만) | 제어 메타데이터와 프로세스 간 잠금, 종료 판정, 명명된 store 식별자를 공유한다. 별도 프레임워크 제품 타깃을 추가하지 않는다.                             |
 
 App과 Monitor는 하나의 `ManagedSettingsStore(named: ManagedSettingsStore.Name("focusSession"))`만 사용한다.
 이 store의 `clearAllSettings()`만 호출하며 기본 store나 다른 앱의 제한을 변경하지 않는다.
@@ -72,12 +72,11 @@ SwiftData `SessionRecord`는 UUID를 고유 키로 하고 시작/예정 만료/�
 3. 등록 성공 후 고정된 선택의 앱·웹 토큰을 store에 적용한다. 등록 목록의 이름, 설정값의 일치, 권한 유지와 메타데이터 쓰기 성공을 확인하고 `active`를 기록한다. 이것은 설정 요청의 성공 조건이며 실제 차단 적용 증거는 아니다. 잠금 해제 후 최신 상태를 재조회해 활성 UI를 표시한다.
 4. 어느 단계든 실패하면 해당 UUID의 monitoring을 중지하고 이 앱 store만 해제한다. 기록을 중단으로 남기고 오류를 표시한다. 롤백 도중 저장 오류가 나도 해제와 중지부터 시도하고, 다음 조정에서 재시도한다. 시작 실패를 완료 세션으로 세지 않는다.
 5. 종료는 ID 일치 확인 후 `ending`을 먼저 기록하고 store 해제, 해당 monitoring 중지, terminal 기록을 순서대로 수행한다. 반복 호출은 같은 결과를 내며 다른 세션에는 영향을 주지 않는다. `ending`에서 죽은 프로세스는 다음 조정에서 정리를 완료한다.
-6.
-    Monitor의 `intervalDidEnd(for:)`는 activity 이름을 `SessionControl.handleCallback`에 전달한다.
-    잠금 안에서 현재 세션의 계산된 이름과 비교한 뒤 권한·단계·등록 상태·만료를 조정한다.
-    이름이 일치하지 않는 콜백은 현재 세션을 변경하지 않는다.
-    정상 권한과 등록을 유지한 active 세션은 이른 콜백만으로 만료되지 않는다. `intervalDidStart`도 만료/불완전 상태 조정만 수행하며 shield를 재적용하지 않는다.
-    콜백에서 본체 actor나 비동기 작업의 완료를 기다리지 않는다.
+6. Monitor의 `intervalDidEnd(for:)`는 activity 이름을 `SessionControl.handleCallback`에 전달한다.
+   잠금 안에서 현재 세션의 계산된 이름과 비교한 뒤 권한·단계·등록 상태·만료를 조정한다.
+   이름이 일치하지 않는 콜백은 현재 세션을 변경하지 않는다.
+   정상 권한과 등록을 유지한 active 세션은 이른 콜백만으로 만료되지 않는다. `intervalDidStart`도 만료/불완전 상태 조정만 수행하며 shield를 재적용하지 않는다.
+   콜백에서 본체 actor나 비동기 작업의 완료를 기다리지 않는다.
 
 앱 활성화·재시작과 Monitor 진입 시 상태를 조정한다.
 권한 철회는 즉시 관측 가능한 시점에 중단/미사용으로 전환하고 store와 monitoring을 정리한다.
@@ -90,14 +89,14 @@ SwiftData `SessionRecord`는 UUID를 고유 키로 하고 시작/예정 만료/�
 
 아래 표는 2026-10-26 초기 설계 당시의 환경 확인 이력이며 현재 설치·서명 상태를 보장하지 않는다.
 
-| 읽기 전용 명령/대상 | 관측 결과와 해석 |
-| --- | --- |
-| `xcode-select -p` | `/Applications/Xcode.app/Contents/Developer` |
-| `xcodebuild -version` | Xcode 27.1, Build 27A9275 |
-| `xcodebuild -showsdks` | iOS 27.1 및 Simulator iOS 27.1 SDK가 있다. iOS 17 런타임·실기기 보유는 미확인이다. 캐시/FSEvents 경고가 있었지만 목록 조회는 성공했다. |
-| 설치 SDK의 `.swiftinterface` | `webDomainTokens`, `shield.webDomains: Set<WebDomainToken>?`, throwing `startMonitoring`, `DeviceActivityResults<DeviceActivityData>`를 받는 async `makeConfiguration`을 확인했다. WWDC의 오래된 배열 기반 예제를 그대로 복사하지 않는다. |
-| `security find-identity -v -p codesigning` | `0 valid identities found`. 현재 조회에서 유효한 서명 identity가 보이지 않는다. 계정 미가입이나 인증서 부재로 단정하지 않는다. |
-| 기존 provisioning profile 디렉터리 | 프로필 파일은 존재한다. 새 앱 ID가 미정이므로 적합성·Family Controls 권한·기기 등록은 미검증이다. 내용을 내보내거나 계정을 변경하지 않았다. |
+| 읽기 전용 명령/대상                        | 관측 결과와 해석                                                                                                                                                                                                                          |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `xcode-select -p`                          | `/Applications/Xcode.app/Contents/Developer`                                                                                                                                                                                              |
+| `xcodebuild -version`                      | Xcode 27.1, Build 27A9275                                                                                                                                                                                                                 |
+| `xcodebuild -showsdks`                     | iOS 27.1 및 Simulator iOS 27.1 SDK가 있다. iOS 17 런타임·실기기 보유는 미확인이다. 캐시/FSEvents 경고가 있었지만 목록 조회는 성공했다.                                                                                                    |
+| 설치 SDK의 `.swiftinterface`               | `webDomainTokens`, `shield.webDomains: Set<WebDomainToken>?`, throwing `startMonitoring`, `DeviceActivityResults<DeviceActivityData>`를 받는 async `makeConfiguration`을 확인했다. WWDC의 오래된 배열 기반 예제를 그대로 복사하지 않는다. |
+| `security find-identity -v -p codesigning` | `0 valid identities found`. 현재 조회에서 유효한 서명 identity가 보이지 않는다. 계정 미가입이나 인증서 부재로 단정하지 않는다.                                                                                                            |
+| 기존 provisioning profile 디렉터리         | 프로필 파일은 존재한다. 새 앱 ID가 미정이므로 적합성·Family Controls 권한·기기 등록은 미검증이다. 내용을 내보내거나 계정을 변경하지 않았다.                                                                                               |
 
 실기기 준비와 서명 상태는 [검증 기록](../notes/screen-time-device-matrix.md#서명과-배포)에서 관리한다.
 개발 서명과 배포 entitlement는 별도로 확인한다.
