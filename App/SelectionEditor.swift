@@ -10,7 +10,7 @@ struct SelectionEditor: View {
     var body: some View {
         NavigationStack {
             VStack {
-                Text("앱·웹사이트 각각 최대 50개. 카테고리 전체 선택도 가능합니다.").font(.footnote).padding()
+                SelectionSummary(appCount: draft.applicationTokens.count, websiteCount: draft.webDomainTokens.count)
                 FamilyActivityPicker(selection: $draft)
                 if let issue { Text(issue).foregroundStyle(.red).padding() }
             }
@@ -25,6 +25,18 @@ struct SelectionEditor: View {
         }
     }
 }
+private struct SelectionSummary: View {
+    let appCount: Int
+    let websiteCount: Int
+    var body: some View {
+        VStack(spacing: 8) {
+            Text("앱 \(appCount)개 · 웹사이트 \(websiteCount)개 선택")
+                .font(.subheadline.weight(.semibold)).monospacedDigit()
+                .accessibilityIdentifier("selectionCounts")
+            Text("앱·웹사이트 각각 최대 50개. 카테고리 전체 선택도 가능합니다.").font(.footnote)
+        }.padding()
+    }
+}
 #if DEBUG
 struct FixtureSelectionEditor: View {
     let repository: FixtureSelection
@@ -34,6 +46,7 @@ struct FixtureSelectionEditor: View {
     var body: some View {
         NavigationStack {
             Form {
+                SelectionSummary(appCount: selected ? 1 : 0, websiteCount: 0)
                 Text("합성 선택 데이터")
                 Button("샘플 선택") { selected = true }.accessibilityIdentifier("fixtureSelect")
                 Button("선택 지우기") { selected = false }.accessibilityIdentifier("fixtureClear")
