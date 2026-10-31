@@ -23,8 +23,10 @@ Use these current documentation paths:
 
 - [Design](docs/specs/2026-10-26-focus-study-design.md)
 - [M1 launch flow and focus length design](docs/specs/2026-10-31-m1-launch-flow-design.md), which supersedes the original design on session length and launch flow
+- [M2 break pass and deadline design](docs/specs/2026-11-01-m2-break-pass-design.md)
 - [Implementation plan](docs/plans/2026-10-26-focus-study.md)
 - [M1 implementation plan](docs/plans/2026-10-31-m1-launch-flow.md)
+- [M2 implementation plan](docs/plans/2026-11-01-m2-break-pass.md)
 - [Implementation decisions](docs/implementation-ledger.md)
 - [Review regressions](docs/notes/independent-review.md)
 - [Physical-device acceptance](docs/notes/screen-time-device-matrix.md)
