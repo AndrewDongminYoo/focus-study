@@ -29,6 +29,8 @@ struct OnboardingView: View {
         .sheet(isPresented: $choosing) { selectionEditor }
         .task { model.refresh() }
         .onChange(of: scenePhase) { _, value in if value == .active { model.refresh() } }
+        // Forward moves stay with the person; losing access moves back so the person is not left past the permission step.
+        .onChange(of: model.access) { _, access in if access != .approved && step.rawValue > OnboardingStep.permission.rawValue { step = .permission } }
     }
     private var canAdvance: Bool {
         switch step {
