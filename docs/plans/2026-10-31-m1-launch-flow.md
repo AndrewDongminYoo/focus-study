@@ -118,6 +118,7 @@ For `testStoreRejectsSessionWithDisallowedLength`, write the envelope JSON with 
   - Keys: `focusLengthMinutes`, `onboardingCompleted`, `onboardingMigrationV1Done`.
   - `lengthMinutes` returns `FocusLength.defaultMinutes` when the stored value is missing or not allowed. Setting a value that is not allowed leaves the stored value unchanged.
   - `migrateIfNeeded` runs once (guarded by `onboardingMigrationV1Done`). It sets `hasCompletedOnboarding = true` only if both arguments are true.
+  - Reconciliation (2026-10-31, final review): the shipped interface is `migrateIfNeeded(hasSelection:)`, and it reads only the selection; this supersedes the two-argument signature above and the Step 1 tests that pass access. `App/FocusSettings.swift`, the reconciliation in `docs/specs/2026-10-31-m1-launch-flow-design.md`, and `testExistingSelectionMigratesEvenWhenFirstAccessReadIsNotApproved` are the authority (commit `f9d5c80`).
   - `FocusServices` gets `var settings = FocusSettings()`.
 
 - [ ] **Step 1: Write the failing tests** with `UserDefaults(suiteName: UUID().uuidString)!`: default is 25, `40` persists across a new instance, `27` is rejected, migration sets the flag for an existing user, migration does not set it for a new user, and a second migration call with both `true` after a first call with `false` does not set the flag.
