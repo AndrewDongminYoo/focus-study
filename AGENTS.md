@@ -3,7 +3,7 @@
 ## Project scope
 
 FocusStudy is a provisional product name for an iOS 17+ app built with SwiftUI, Observation, and SwiftData.
-It provides individual Screen Time authorization, app and website selection, fixed 25-minute focus sessions, local session history, and an isolated usage report.
+It provides individual Screen Time authorization, app and website selection, focus sessions whose length is a personal setting from 25 to 50 minutes in 5-minute steps (see the [M1 design](docs/specs/2026-10-31-m1-launch-flow-design.md)), local session history, and an isolated usage report.
 Keep changes within this baseline unless the task explicitly expands it: no pause, parental management, Android client, accounts, backend, AI, or rewards.
 Preserve existing Korean UI text; use English for code identifiers and technical documentation.
 
@@ -22,7 +22,9 @@ Preserve existing Korean UI text; use English for code identifiers and technical
 Use these current documentation paths:
 
 - [Design](docs/specs/2026-10-26-focus-study-design.md)
+- [M1 launch flow and focus length design](docs/specs/2026-10-31-m1-launch-flow-design.md), which supersedes the original design on session length and launch flow
 - [Implementation plan](docs/plans/2026-10-26-focus-study.md)
+- [M1 implementation plan](docs/plans/2026-10-31-m1-launch-flow.md)
 - [Implementation decisions](docs/implementation-ledger.md)
 - [Review regressions](docs/notes/independent-review.md)
 - [Physical-device acceptance](docs/notes/screen-time-device-matrix.md)
@@ -34,20 +36,22 @@ Keep new plans, specs, and notes under `docs/plans/`, `docs/specs/`, and `docs/n
 
 ## Architecture and ownership
 
-| Location                                                                                       | Responsibility                                                                                               |
-| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `App/FocusStudyApp.swift`, `App/FocusRuntime.swift`                                            | Bootstrap, recovery before storage loading, real versus DEBUG fixture wiring                                 |
-| `App/FocusModel.swift`, `App/FocusView.swift`                                                  | Main-actor state, session actions, foreground/lifecycle refresh, selection and history UI                    |
-| `App/AuthorizationService.swift`, `App/SelectionRepository.swift`, `App/SelectionEditor.swift` | Individual authorization, private token persistence, draft selection validation                              |
-| `App/SessionRecord.swift`                                                                      | SwiftData session records, terminal import and acknowledgement                                               |
-| `App/UsageReportHost.swift`                                                                    | Report context/filter and explicit content recreation on reload                                              |
-| `Shared/`                                                                                      | Screen Time SDK-independent control types, state machine, file locking, recovery, validation, and time rules |
-| `Integration/ScreenTimeAdapters.swift`                                                         | FamilyControls, DeviceActivity, ManagedSettings, and App Group adapters                                      |
-| `Monitor/FocusMonitor.swift`                                                                   | Extension callbacks delegated to the shared session engine                                                   |
-| `Report/`                                                                                      | Extension-only usage aggregation and token-row rendering                                                     |
-| `Presentation/UsageSummarySection.swift`                                                       | Shared total/unavailable rendering; the app uses synthetic values only in DEBUG fixtures                     |
-| `App/Debug/UITestFixtures.swift`                                                               | Synthetic authorization, selection, monitoring, storage failures, and report lifecycle/state probes          |
-| `Integration/DeviceDiagnostics.swift`, `App/Debug/DeviceDiagnosticsSection.swift`              | Opt-in DEBUG diagnostics around the real monitoring adapter and shared callback engine                       |
+| Location                                                                                       | Responsibility                                                                                                              |
+| ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `App/FocusStudyApp.swift`, `App/FocusRuntime.swift`                                            | Bootstrap, recovery before storage loading, one-time onboarding migration, launch routing, real versus DEBUG fixture wiring |
+| `App/FocusModel.swift`, `App/FocusView.swift`                                                  | Main-actor state, launch route, session actions, foreground/lifecycle refresh, timer screen                                 |
+| `App/FocusSettings.swift`, `App/SettingsView.swift`                                            | Focus length, onboarding completion flag, settings sheet with DEBUG diagnostics                                             |
+| `App/OnboardingView.swift`, `App/TodayHistoryView.swift`                                       | Onboarding steps, today's session history sheet                                                                             |
+| `App/AuthorizationService.swift`, `App/SelectionRepository.swift`, `App/SelectionEditor.swift` | Individual authorization, private token persistence, draft selection validation                                             |
+| `App/SessionRecord.swift`                                                                      | SwiftData session records, terminal import and acknowledgement                                                              |
+| `App/UsageReportHost.swift`                                                                    | Report context/filter and explicit content recreation on reload                                                             |
+| `Shared/`                                                                                      | Screen Time SDK-independent control types, state machine, file locking, recovery, validation, and time rules                |
+| `Integration/ScreenTimeAdapters.swift`                                                         | FamilyControls, DeviceActivity, ManagedSettings, and App Group adapters                                                     |
+| `Monitor/FocusMonitor.swift`                                                                   | Extension callbacks delegated to the shared session engine                                                                  |
+| `Report/`                                                                                      | Extension-only usage aggregation and token-row rendering                                                                    |
+| `Presentation/UsageSummarySection.swift`                                                       | Shared total/unavailable rendering; the app uses synthetic values only in DEBUG fixtures                                    |
+| `App/Debug/UITestFixtures.swift`                                                               | Synthetic authorization, selection, monitoring, storage failures, and report lifecycle/state probes                         |
+| `Integration/DeviceDiagnostics.swift`, `App/Debug/DeviceDiagnosticsSection.swift`              | Opt-in DEBUG diagnostics around the real monitoring adapter and shared callback engine                                      |
 
 The app and Monitor compile `Shared/` and `Integration/` directly into their targets.
 Report has a separate source boundary and does not depend on those directories.

@@ -1,18 +1,54 @@
 import XCTest
 final class FocusFlowTests: XCTestCase {
-    func app(_ mode: String = "approved", selected: Bool = true) -> XCUIApplication {
-        let app = XCUIApplication(); app.launchArguments = ["--ui-testing", mode] + (selected ? ["--selected"] : []); app.launch(); return app
+    func app(_ mode: String = "approved", selected: Bool = true, extra: [String] = []) -> XCUIApplication {
+        let app = XCUIApplication(); app.launchArguments = ["--ui-testing", mode] + (selected ? ["--selected"] : []) + extra; app.launch(); return app
+    }
+    /// Today's history and the usage report open from the one-line summary at the bottom of the timer screen.
+    private func openToday(_ app: XCUIApplication) {
+        XCTAssertTrue(app.buttons["todaySummary"].waitForExistence(timeout: 8)); app.buttons["todaySummary"].tap()
+    }
+    private func openReport(_ app: XCUIApplication) {
+        openToday(app); XCTAssertTrue(app.buttons["report"].waitForExistence(timeout: 5)); app.buttons["report"].tap()
     }
     func testStartupStorageFailureAllowsSafeEndAndRetry() {
         let app = app("startup-failure")
         XCTAssertTrue(app.buttons["startupEnd"].waitForExistence(timeout: 8))
         app.buttons["startupEnd"].tap(); app.buttons["startupRetry"].tap()
+        XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: 8)); XCTAssertTrue(app.buttons["start"].isEnabled)
+        openToday(app)
         XCTAssertTrue(app.staticTexts["중도 종료"].waitForExistence(timeout: 8))
-        XCTAssertTrue(app.buttons["start"].isEnabled)
+    }
+    func testTodaySummaryCountsOnlyCompletedSessions() {
+        let app = app("expiring")
+        XCTAssertTrue(app.descendants(matching: .any)["completion"].waitForExistence(timeout: 15))
+        app.buttons["completionDismiss"].tap()
+        XCTAssertTrue(app.buttons["todaySummary"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["todaySummary"].label, "오늘 집중 25분 · 1회")
+        app.buttons["start"].tap(); app.buttons["end"].tap(); app.buttons["종료하기"].tap()
+        XCTAssertTrue(app.buttons["todaySummary"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["todaySummary"].label, "오늘 집중 25분 · 1회")
+        captureReport(app, name: "timer-screen-after-sessions")
+    }
+    func testLengthSettingAppliesToNextSession() {
+        let app = app()
+        XCTAssertTrue(app.buttons["settingsButton"].waitForExistence(timeout: 8)); app.buttons["settingsButton"].tap()
+        XCTAssertTrue(app.segmentedControls["lengthPicker"].waitForExistence(timeout: 5))
+        app.segmentedControls["lengthPicker"].buttons["45분"].tap()
+        captureReport(app, name: "settings")
+        app.buttons["settingsDone"].tap()
+        XCTAssertTrue(app.staticTexts["countdown"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["countdown"].label, "남은 시간 45분 0초")
+    }
+    func testCompletionCopyUsesSessionLength() {
+        let app = app("expiring", extra: ["--length", "40"])
+        // The Label exposes its icon and text under the same identifier, in a runtime-dependent order (iOS 26.5 lists the icon, labelled "Selected", first).
+        let completion = app.descendants(matching: .any).matching(NSPredicate(format: "identifier == 'completion' AND label CONTAINS '집중을 마쳤어요'")).firstMatch
+        XCTAssertTrue(completion.waitForExistence(timeout: 15))
+        XCTAssertTrue(completion.label.contains("40분"), completion.label); XCTAssertFalse(completion.label.contains("25분"), completion.label)
     }
     func testReloadRecreatesReportContentWithinSameDay() {
         let app = app()
-        app.buttons["report"].tap()
+        openReport(app)
         let generation = app.staticTexts["reportGeneration"]
         XCTAssertTrue(generation.waitForExistence(timeout: 8))
         let firstInstance = generation.label
@@ -23,7 +59,7 @@ final class FocusFlowTests: XCTestCase {
     }
     func testReportWaitingDoesNotClaimZeroUsage() {
         let app = app("report-waiting")
-        app.buttons["report"].tap()
+        openReport(app)
         XCTAssertTrue(app.staticTexts["reportWaiting"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["reportTotal"].exists)
         XCTAssertFalse(app.staticTexts["reportUnavailable"].exists)
@@ -32,7 +68,7 @@ final class FocusFlowTests: XCTestCase {
     }
     func testEmptyReportShowsUnavailableInsteadOfZero() {
         let app = app("report-empty")
-        app.buttons["report"].tap()
+        openReport(app)
         let unavailable = app.staticTexts["reportUnavailable"]
         XCTAssertTrue(unavailable.waitForExistence(timeout: 5))
         XCTAssertEqual(unavailable.label, "사용량을 불러오지 못했어요. 잠시 후 다시 확인해 주세요.")
@@ -41,7 +77,7 @@ final class FocusFlowTests: XCTestCase {
     }
     func testActualZeroReportShowsDurationInsteadOfUnavailable() {
         let app = app("report-zero")
-        app.buttons["report"].tap()
+        openReport(app)
         let total = app.staticTexts["reportTotal"]
         XCTAssertTrue(total.waitForExistence(timeout: 5))
         XCTAssertTrue(total.label.contains("0"))
@@ -52,36 +88,51 @@ final class FocusFlowTests: XCTestCase {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
     }
-    func testFirstScreenExplainsPurposeBeforeTheTimer() {
-        let app = app("not-requested")
-        let purpose = app.descendants(matching: .any)["purpose"]
-        XCTAssertTrue(purpose.waitForExistence(timeout: 8))
-        let authorize = app.buttons["authorize"], countdown = app.staticTexts["countdown"]
-        XCTAssertLessThan(authorize.frame.minY, countdown.frame.minY)
-        captureReport(app, name: "first-screen-not-requested")
-        authorize.tap()
-        XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: 5))
+    func testNewUserCompletesOnboardingInOrder() {
+        let app = app("onboarding", selected: false)
+        XCTAssertTrue(app.descendants(matching: .any)["purpose"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.staticTexts["countdown"].exists)
+        captureReport(app, name: "onboarding-intro")
+        app.buttons["onboardingNext"].tap()
+        XCTAssertTrue(app.buttons["authorize"].waitForExistence(timeout: 5)); XCTAssertFalse(app.buttons["onboardingNext"].isEnabled)
+        app.buttons["authorize"].tap()
         let enabled = NSPredicate(format: "isEnabled == true")
-        expectation(for: enabled, evaluatedWith: app.buttons["start"]); waitForExpectations(timeout: 5)
-        XCTAssertFalse(purpose.exists)
+        expectation(for: enabled, evaluatedWith: app.buttons["onboardingNext"]); waitForExpectations(timeout: 5)
+        app.buttons["onboardingNext"].tap()
+        XCTAssertTrue(app.buttons["chooseSelection"].waitForExistence(timeout: 5)); XCTAssertFalse(app.buttons["onboardingNext"].isEnabled)
+        app.buttons["chooseSelection"].tap(); app.buttons["fixtureSelect"].tap(); app.buttons["pickerSave"].tap()
+        expectation(for: enabled, evaluatedWith: app.buttons["onboardingNext"]); waitForExpectations(timeout: 5)
+        app.buttons["onboardingNext"].tap()
+        XCTAssertTrue(app.segmentedControls["lengthPicker"].waitForExistence(timeout: 5))
+        app.segmentedControls["lengthPicker"].buttons["40분"].tap()
+        captureReport(app, name: "onboarding-length")
+        app.buttons["onboardingFinish"].tap()
+        XCTAssertTrue(app.staticTexts["countdown"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["countdown"].label, "남은 시간 40분 0초")
     }
-    func testDeniedPermissionShowsSettingsAndDisablesStartAndReport() {
+    func testOnboardingBackReturnsToPreviousStep() {
+        let app = app("onboarding", selected: false)
+        XCTAssertTrue(app.buttons["onboardingNext"].waitForExistence(timeout: 8)); XCTAssertFalse(app.buttons["onboardingBack"].exists)
+        app.buttons["onboardingNext"].tap()
+        XCTAssertTrue(app.buttons["authorize"].waitForExistence(timeout: 5))
+        app.buttons["onboardingBack"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["purpose"].waitForExistence(timeout: 5)); XCTAssertFalse(app.buttons["authorize"].exists)
+    }
+    func testDeniedPermissionShowsSettingsGuide() {
         let app = app("denied")
-        // The access section now comes first, so the settings link is on screen before any scrolling.
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "settings").firstMatch.waitForExistence(timeout: 8))
-        XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["start"].isEnabled)
-        XCTAssertEqual(app.staticTexts["startBlocker"].label, "스크린 타임 권한을 허용하면 시작할 수 있어요.")
-        app.swipeUp(); app.swipeUp()
-        XCTAssertFalse(app.buttons["report"].isEnabled)
+        XCTAssertFalse(app.buttons["authorize"].exists); XCTAssertFalse(app.buttons["start"].exists)
+        captureReport(app, name: "permission-settings-guide")
     }
     func testActiveSessionLocksSelectionAndEarlyExitCreatesHistory() {
         let app = app(); app.buttons["start"].tap()
         XCTAssertTrue(app.buttons["end"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["selection"].isEnabled)
+        XCTAssertFalse(app.buttons["selection"].exists); XCTAssertFalse(app.buttons["todaySummary"].exists)
         app.buttons["end"].tap()
         XCTAssertTrue(app.buttons["종료하기"].waitForExistence(timeout: 5)); app.buttons["종료하기"].tap()
-        XCTAssertTrue(app.staticTexts["중도 종료"].waitForExistence(timeout: 5)); XCTAssertTrue(app.buttons["selection"].isEnabled)
+        XCTAssertTrue(app.buttons["selection"].waitForExistence(timeout: 5)); XCTAssertTrue(app.buttons["selection"].isEnabled)
+        openToday(app)
+        XCTAssertTrue(app.staticTexts["중도 종료"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.descendants(matching: .any)["completion"].exists)
     }
     func testCountdownSpeaksRemainingTimeAndScalesWithTextSize() {
@@ -135,10 +186,11 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertEqual(counts.label, "앱 1개 · 웹사이트 0개 선택")
         captureReport(app, name: "selection-counts")
     }
-    func testEmptySelectionCannotStartAndMockSelectionCanBeSaved() {
-        let app = app(selected: false); XCTAssertFalse(app.buttons["start"].isEnabled)
-        app.buttons["selection"].tap(); app.buttons["fixtureSelect"].tap(); app.buttons["pickerSave"].tap()
-        XCTAssertTrue(app.buttons["start"].isEnabled)
+    func testEmptySelectionReturnsToSelectionStepThenTimer() {
+        let app = app(selected: false)
+        XCTAssertTrue(app.buttons["chooseSelection"].waitForExistence(timeout: 8)); XCTAssertFalse(app.buttons["start"].exists)
+        app.buttons["chooseSelection"].tap(); app.buttons["fixtureSelect"].tap(); app.buttons["pickerSave"].tap()
+        XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: 5)); XCTAssertTrue(app.buttons["start"].isEnabled)
     }
     func testEmptyDraftDisablesSaveWithInlineReason() {
         let app = app(); app.buttons["selection"].tap()
@@ -149,14 +201,6 @@ final class FocusFlowTests: XCTestCase {
         captureReport(app, name: "selection-empty-draft")
         app.buttons["fixtureSelect"].tap()
         XCTAssertTrue(app.buttons["pickerSave"].isEnabled); XCTAssertFalse(issue.exists)
-    }
-    func testEmptySelectionExplainsBlockerAndOpensPicker() {
-        let app = app(selected: false)
-        let blocker = app.staticTexts["startBlocker"]
-        XCTAssertTrue(blocker.waitForExistence(timeout: 8))
-        XCTAssertEqual(blocker.label, "제한할 앱이나 웹사이트를 고르면 시작할 수 있어요.")
-        app.buttons["chooseSelection"].tap(); app.buttons["fixtureSelect"].tap(); app.buttons["pickerSave"].tap()
-        XCTAssertTrue(app.buttons["start"].isEnabled); XCTAssertFalse(blocker.exists)
     }
     func testRegistrationFailureNeverShowsActiveAndCanRetry() {
         let app = app("registration-failure"); app.buttons["start"].tap()

@@ -2,12 +2,62 @@ import XCTest
 import FamilyControls
 
 @MainActor final class FocusModelTests: XCTestCase {
-    private func fixture() -> (FocusModel, ModelTestHistory, ModelTestStore, ModelTestShield, SessionControl) {
+    private func fixture(defaults: UserDefaults = UserDefaults(suiteName: UUID().uuidString)!) -> (FocusModel, ModelTestHistory, ModelTestStore, ModelTestShield, SessionControl) {
         let store = ModelTestStore(), shield = ModelTestShield(), monitoring = ModelTestMonitoring()
         let engine = SessionControl(store: store, monitoring: monitoring, shield: shield)
-        let services = FocusServices(authorization: ModelTestAuthorization(), selection: ModelTestSelection(), engine: engine, applySelection: { _ in shield.applied = true }, matchesSelection: { _ in shield.applied }, isFixture: true)
+        var services = FocusServices(authorization: ModelTestAuthorization(), selection: ModelTestSelection(), engine: engine, applySelection: { _ in shield.applied = true }, matchesSelection: { _ in shield.applied }, isFixture: true)
+        services.settings = FocusSettings(defaults: defaults)
         let history = ModelTestHistory(acknowledge: engine.acknowledgeTerminal)
         return (FocusModel(services: services, history: history), history, store, shield, engine)
+    }
+    private func doubles(_ model: FocusModel) -> (ModelTestAuthorization, ModelTestSelection) {
+        (model.services.authorization as! ModelTestAuthorization, model.services.selection as! ModelTestSelection)
+    }
+    func testRouteForNewUserFollowsOnboardingOrder() {
+        let (model, _, _, _, _) = fixture(); let (access, selection) = doubles(model)
+        access.status = .notRequested; selection.counts = (0, 0, 0)
+        XCTAssertEqual(model.route, .onboarding(.intro))
+        access.status = .denied; XCTAssertEqual(model.route, .onboarding(.permission))
+        access.status = .approved; XCTAssertEqual(model.route, .onboarding(.selection))
+        selection.counts = (1, 0, 0); XCTAssertEqual(model.route, .onboarding(.length))
+        model.completeOnboarding(); XCTAssertEqual(model.route, .timer)
+    }
+    func testRelaunchAfterSelectionResumesAtLengthStep() {
+        let defaults = UserDefaults(suiteName: UUID().uuidString)!
+        let (first, _, _, _, _) = fixture(defaults: defaults)
+        first.services.settings.migrateIfNeeded(hasSelection: false)
+        XCTAssertEqual(first.route, .onboarding(.length))
+        let (relaunched, _, _, _, _) = fixture(defaults: defaults)
+        relaunched.services.settings.migrateIfNeeded(hasSelection: true)
+        XCTAssertEqual(relaunched.route, .onboarding(.length))
+    }
+    func testExistingSelectionMigratesEvenWhenFirstAccessReadIsNotApproved() {
+        let (model, _, _, _, _) = fixture(); let (access, selection) = doubles(model)
+        access.status = .denied; selection.counts = (1, 0, 0)
+        model.services.settings.migrateIfNeeded(hasSelection: true)
+        access.status = .approved
+        XCTAssertEqual(model.route, .timer)
+    }
+    func testRevokedAccessAfterCompletionShowsPermissionThenTimer() throws {
+        let (model, _, _, shield, engine) = fixture(); let (access, _) = doubles(model)
+        model.completeOnboarding()
+        _ = try engine.start(now: Date(), authorized: { true }, apply: { shield.applied = true }, matches: { true })
+        model.refresh(); XCTAssertTrue(model.isActive)
+        access.status = .denied; model.refresh()
+        XCTAssertFalse(model.isActive); XCTAssertFalse(shield.applied)
+        XCTAssertEqual(model.route, .onboarding(.permission))
+        access.status = .approved; XCTAssertEqual(model.route, .timer)
+    }
+    func testStartUsesConfiguredLength() {
+        let (model, _, _, _, _) = fixture(); model.services.settings.lengthMinutes = 40; model.completeOnboarding()
+        XCTAssertEqual(model.remaining, 2400)
+        model.start(); XCTAssertEqual(model.current?.length, 2400)
+    }
+    func testChangingLengthDuringSessionKeepsRunningSession() {
+        let (model, _, _, _, _) = fixture(); model.completeOnboarding()
+        model.start(); let end = model.current?.expiresAt
+        model.services.settings.lengthMinutes = 50; model.refresh()
+        XCTAssertEqual(model.current?.expiresAt, end); XCTAssertEqual(model.current?.length, 1500)
     }
     func testHistoryFetchFailurePreservesActiveControlsAndCanEndRestrictions() throws {
         let (model, history, _, shield, engine) = fixture()
@@ -39,6 +89,14 @@ import FamilyControls
         model.start(); XCTAssertTrue(model.isActive)
         model.end()
         XCTAssertNil(model.completedSessionID)
+    }
+    func testCompletionKeepsTheSessionsOwnLengthAfterTheSettingChanges() throws {
+        let (model, _, _, shield, engine) = fixture()
+        _ = try engine.start(now: Date().addingTimeInterval(-2400), length: 2400, authorized: { true }, apply: { shield.applied = true }, matches: { true })
+        model.services.settings.lengthMinutes = 25
+        model.refresh()
+        XCTAssertEqual(model.completedLength, 2400)
+        model.dismissCompletion(); XCTAssertNil(model.completedLength)
     }
     func testStartBlockerNamesTheFirstUnmetCondition() throws {
         let (model, history, _, shield, engine) = fixture()
@@ -78,10 +136,10 @@ private final class ModelTestShield: ShieldClient {
     func records(on date: Date, calendar: Calendar) throws -> [SessionRecord] { if failFetch { throw ModelTestError.storage }; return [] }
 }
 @MainActor private final class ModelTestAuthorization: AuthorizationProviding {
-    var status: AccessStatus { .approved }
+    var status: AccessStatus = .approved
     func requestIndividual() async {}
     func refresh() {}
-    func hasAccessNow() -> Bool { true }
+    func hasAccessNow() -> Bool { status == .approved }
 }
 @MainActor private final class ModelTestSelection: SelectionStoring {
     var selection = FamilyActivitySelection()

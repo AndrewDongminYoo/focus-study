@@ -10,9 +10,10 @@ public struct ControlSession: Codable, Equatable {
     public var reason: EndReason?
     public var observedAt: Date?
     public var activityName: String { "focus.\(id.uuidString)" }
-    public init(startedAt: Date, id: UUID = UUID()) {
-        self.id = id; self.startedAt = startedAt; expiresAt = startedAt.addingTimeInterval(1500)
+    public init(startedAt: Date, length: TimeInterval = 1500, id: UUID = UUID()) {
+        self.id = id; self.startedAt = startedAt; expiresAt = startedAt.addingTimeInterval(length)
     }
+    public var length: TimeInterval { expiresAt.timeIntervalSince(startedAt) }
     public var recordedEnd: Date? {
         guard let observedAt else { return nil }
         return max(startedAt, min(expiresAt, observedAt))

@@ -34,6 +34,7 @@ private struct SelectionSummary: View {
                 .font(.subheadline.weight(.semibold)).monospacedDigit()
                 .accessibilityIdentifier("selectionCounts")
             Text("앱과 웹사이트는 각각 50개까지 고를 수 있어요. 카테고리 전체를 골라도 돼요.").font(.footnote)
+            Text("웹사이트 전체를 제한해요. 브라우저에 따라 제한되지 않을 수 있어요.").font(.footnote).foregroundStyle(.secondary)
             if let draftIssue = SelectionFeedback.draftIssue(appCount: appCount, websiteCount: websiteCount) {
                 Label(draftIssue, systemImage: "exclamationmark.circle").font(.footnote).foregroundStyle(.red).accessibilityIdentifier("selectionIssue")
             }

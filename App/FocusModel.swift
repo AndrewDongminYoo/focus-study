@@ -10,12 +10,15 @@ import Observation
     let applySelection: (FamilyActivitySelection) -> Void
     let matchesSelection: (FamilyActivitySelection) -> Bool
     var isFixture = false
+    var settings = FocusSettings()
     #if DEBUG
     var diagnostics: DeviceDiagnostics?
     #endif
 
 }
 enum StartBlocker: Equatable { case access, error, selection }
+enum OnboardingStep: Int, CaseIterable { case intro, permission, selection, length }
+enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
 @MainActor @Observable final class FocusModel {
     let services: FocusServices
     private let history: any SessionHistoryProviding
@@ -24,8 +27,10 @@ enum StartBlocker: Equatable { case access, error, selection }
     private(set) var errorMessage: String?
     private(set) var isStarting = false
     private(set) var now = Date()
-    /// The most recent session that reached its full 25 minutes, until the person dismisses it.
+    /// The most recent session that reached its full length, until the person dismisses it.
     private(set) var completedSessionID: UUID?
+    /// That session's own length; today's records can miss it (a session that crossed midnight, a history failure).
+    private(set) var completedLength: TimeInterval?
     var access: AccessStatus { services.authorization.status }
     var isActive: Bool { current?.phase == .active }
     var counts: (apps: Int, websites: Int, categories: Int) { services.selection.counts }
@@ -37,7 +42,20 @@ enum StartBlocker: Equatable { case access, error, selection }
         if errorMessage != nil { return .error }
         return counts.apps + counts.websites == 0 ? .selection : nil
     }
-    var remaining: Int { current.map { TimeRules.remaining(expiresAt: $0.expiresAt, now: now) } ?? 1500 }
+    var remaining: Int { current.map { TimeRules.remaining(startedAt: $0.startedAt, expiresAt: $0.expiresAt, now: now) } ?? Int(services.settings.lengthSeconds) }
+    /// Which screen launch shows: onboarding resumes at its first unfinished step; a finished person who lost access or selection returns to that step.
+    var route: LaunchRoute {
+        let hasSelection = counts.apps + counts.websites > 0
+        if !services.settings.hasCompletedOnboarding {
+            switch access {
+            case .notRequested: return .onboarding(.intro)
+            case .denied: return .onboarding(.permission)
+            case .approved: return .onboarding(hasSelection ? .length : .selection)
+            }
+        }
+        if access != .approved { return .onboarding(.permission) }
+        return hasSelection ? .timer : .onboarding(.selection)
+    }
     convenience init(services: FocusServices, context: ModelContext) {
         self.init(services: services, history: SessionHistory(context: context, acknowledge: services.engine.acknowledgeTerminal))
     }
@@ -57,7 +75,7 @@ enum StartBlocker: Equatable { case access, error, selection }
         do {
             if let terminal = current, terminal.phase == .terminal {
                 try history.importTerminal(terminal)
-                if terminal.reason == .expired { completedSessionID = terminal.id }
+                if terminal.reason == .expired { completedSessionID = terminal.id; completedLength = terminal.length }
                 current = try services.engine.snapshot().session
             }
             records = try history.records(on: now, calendar: .current)
@@ -70,7 +88,7 @@ enum StartBlocker: Equatable { case access, error, selection }
 
     func start() {
         guard canStart else { return }
-        completedSessionID = nil
+        completedSessionID = nil; completedLength = nil
         isStarting = true; defer { isStarting = false }
         refresh()
         guard errorMessage == nil, access == .approved, current == nil else { return }
@@ -78,7 +96,7 @@ enum StartBlocker: Equatable { case access, error, selection }
             let counts = services.selection.counts
             try SelectionValidator.validate(appCount: counts.apps, webCount: counts.websites, categoryCount: counts.categories)
             let frozen = services.selection.selection
-            _ = try services.engine.start(now: Date(), authorized: { self.services.authorization.hasAccessNow() }, apply: { self.services.applySelection(frozen) }, matches: { self.services.matchesSelection(frozen) })
+            _ = try services.engine.start(now: Date(), length: services.settings.lengthSeconds, authorized: { self.services.authorization.hasAccessNow() }, apply: { self.services.applySelection(frozen) }, matches: { self.services.matchesSelection(frozen) })
             refresh()
         } catch {
             refresh()
@@ -90,7 +108,8 @@ enum StartBlocker: Equatable { case access, error, selection }
         do { try services.engine.finish(id: id, reason: .earlyExit, now: Date()); refresh() }
         catch { current = nil; errorMessage = "종료 상태를 저장하지 못했어요. 다시 확인해 주세요." }
     }
-    func dismissCompletion() { completedSessionID = nil }
+    func dismissCompletion() { completedSessionID = nil; completedLength = nil }
+    func completeOnboarding() { services.settings.hasCompletedOnboarding = true }
     func tick() {
         now = Date()
         if let current, now >= current.expiresAt { refresh() }

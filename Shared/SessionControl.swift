@@ -8,14 +8,14 @@ final class SessionControl {
     init(store: any ControlStore, monitoring: any MonitoringClient, shield: any ShieldClient) {
         self.store = store; self.monitoring = monitoring; self.shield = shield
     }
-    func start(now: Date, authorized: () -> Bool, apply: () -> Void, matches: () -> Bool) throws -> ControlSession {
+    func start(now: Date, length: TimeInterval = 1500, authorized: () -> Bool, apply: () -> Void, matches: () -> Bool) throws -> ControlSession {
         try store.withExclusiveAccess { locked in
             var envelope = try read(locked)
             guard authorized() else { throw ControlIssue.unauthorized }
             if let prior = envelope.session {
                 throw prior.phase == .terminal ? ControlIssue.pendingHistory : ControlIssue.busy
             }
-            var session = ControlSession(startedAt: now)
+            var session = ControlSession(startedAt: now, length: length)
             do {
                 envelope.session = session
                 try locked.save(envelope)

@@ -32,7 +32,7 @@ private struct FileControl: LockedControl {
         guard value.schemaVersion == 1 else { throw ControlIssue.unsupportedSchema }
         if let session = value.session {
             guard session.startedAt.timeIntervalSince1970.isFinite,
-                  abs(session.expiresAt.timeIntervalSince(session.startedAt) - 1500) < 0.01,
+                  FocusLength.isAllowed(seconds: session.length),
                   (session.phase == .terminal || session.phase == .ending) == (session.reason != nil && session.observedAt != nil)
             else { throw ControlIssue.invalidState }
         }

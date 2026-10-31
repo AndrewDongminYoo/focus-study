@@ -13,6 +13,7 @@ ENABLE_STRICT_OBJC_MSGSEND
 exclamationmark.circle
 exclamationmark.triangle
 focusstudy
+gearshape
 GENERATE_INFOPLIST_FILE
 INFOPLIST_FILE
 iphoneos

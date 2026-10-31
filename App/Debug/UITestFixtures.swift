@@ -33,7 +33,14 @@ extension FocusServices {
     static func fixture(arguments: [String]) -> FocusServices {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("FocusFixture-\(UUID().uuidString)")
         let engine = SessionControl(store: SharedControlStore(directory: directory), monitoring: FixtureMonitoring(fail: arguments.contains("registration-failure")), shield: FixtureShield())
-        return FocusServices(authorization: FixtureAuthorization(denied: arguments.contains("denied"), notRequested: arguments.contains("not-requested")), selection: FixtureSelection(selected: arguments.contains("--selected")), engine: engine, applySelection: { _ in }, matchesSelection: { _ in true }, isFixture: true)
+        let onboarding = arguments.contains("onboarding")
+        var services = FocusServices(authorization: FixtureAuthorization(denied: arguments.contains("denied"), notRequested: arguments.contains("not-requested") || onboarding), selection: FixtureSelection(selected: arguments.contains("--selected") && !onboarding), engine: engine, applySelection: { _ in }, matchesSelection: { _ in true }, isFixture: true)
+        // In-memory settings: `onboarding` starts a new person; every other mode is a person who finished onboarding.
+        let settings = FocusSettings(defaults: UserDefaults(suiteName: "FocusFixture-\(UUID().uuidString)")!)
+        if let index = arguments.firstIndex(of: "--length"), index + 1 < arguments.count, let minutes = Int(arguments[index + 1]) { settings.lengthMinutes = minutes }
+        settings.hasCompletedOnboarding = !onboarding
+        services.settings = settings
+        return services
     }
 }
 #endif
@@ -46,8 +53,9 @@ extension FocusRuntime {
             _ = try services.engine.start(now: Date(), authorized: { true }, apply: {}, matches: { true })
         }
         if arguments.contains("expiring") {
-            // A session started 25 minutes minus 3 seconds ago, so the UI test sees the real expiry path.
-            _ = try services.engine.start(now: Date().addingTimeInterval(-1497), authorized: { true }, apply: {}, matches: { true })
+            // A session with the configured length that started 3 seconds before its end, so the UI test sees the real expiry path.
+            let length = services.settings.lengthSeconds
+            _ = try services.engine.start(now: Date().addingTimeInterval(-(length - 3)), length: length, authorized: { true }, apply: {}, matches: { true })
         }
         var attempts = 0
         return FocusRuntime(recovery: StartupRecovery(engine: services.engine), hasAccess: services.authorization.hasAccessNow, loadStorage: {

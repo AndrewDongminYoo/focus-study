@@ -33,7 +33,7 @@ jobs:
         run: swift test
       - name: Verify two-process session race
         run: |
-          xcrun swiftc Shared/ControlTypes.swift Shared/SharedControlStore.swift Shared/SessionControl.swift Tests/Fixtures/ControlRaceHelper.swift -o "$RUNNER_TEMP/focus-control-race"
+          xcrun swiftc Shared/ControlTypes.swift Shared/SharedControlStore.swift Shared/SessionControl.swift Shared/FocusLength.swift Tests/Fixtures/ControlRaceHelper.swift -o "$RUNNER_TEMP/focus-control-race"
           "$RUNNER_TEMP/focus-control-race" --verify
       - name: Select installed iOS 26.5 simulator
         shell: bash

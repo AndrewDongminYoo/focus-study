@@ -59,6 +59,7 @@ targets:
         Integration,
         App/SelectionRepository.swift,
         App/SelectionFeedback.swift,
+        App/FocusSettings.swift,
         App/SessionRecord.swift,
         App/FocusModel.swift,
         App/AuthorizationService.swift,
