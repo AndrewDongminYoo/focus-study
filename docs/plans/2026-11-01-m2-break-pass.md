@@ -140,8 +140,10 @@ func testEndCurrentAfterDeadlineWithLateFocusEndIsDeadlineMissed() throws { /* p
   - `testStartBreakBeforeWaitEndsThrowsBreakUnavailable`.
   - `testStartBreakRegistersFifteenMinuteBreakWithTwelveMinuteWarningThenClearsShield` (the shield is cleared only after the save).
   - `testStartBreakFailureNeverClearsShieldAndReturnsToActive` (`registerBreak` throws; shield `clear` count is 0; phase `active`; the copy is removed).
+  - `testStartBreakSaveFailureNeverClearsShieldAndRollsBack` (the save of `onBreak` throws once, after the copy and the break registration; shield `clear` count is 0; the break activity is stopped; the copy is removed; phase `active`; the last focus activity registration ends at `min(focusEnd, deadline)`).
   - `testWarningCallbackReBlocksStopsBreakActivityAndRemovesCopy`.
   - `testStaleBreakCallbackDoesNotTouchNewerBreak` (warning of `break.1` during break 2: phase stays `onBreak`, no shield call).
+  - `testWarningCallbackAfterDeadlineEndsAsDeadlineMissed` (an `onBreak` session whose deadline is 5 s before the warning of its current break activity: the warning ends the session as `.deadlineMissed`, no save of `breakOver` is recorded, no shield is applied, and the store is cleared).
   - `testDidStartCallbackOfBreakNeverReBlocks`.
   - `testReBlockWithoutCopyEndsAsRecoveryInterrupted`.
   - `testStaleWaitIsCancelledAsOfWaitEndPlusGrace` (reconcile 1 hour later: `pausedSeconds` and `deadlineCredit` grow by the wait plus the grace only; the break count is unchanged).

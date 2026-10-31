@@ -250,18 +250,19 @@ Each one reads the envelope again, checks the session ID and the expected phase,
    4. Overwrite the focus activity end with the deadline.
    5. Save `onBreak`.
    6. Clear this app's named store.
-   - If a step before the save fails: stop the break activity, delete the copy, go back to `active` as in "Cancel the wait", and show a retryable error. The shield was not cleared, so no restriction gap opens.
+   - If any step up to and including the save fails: stop the break activity, delete the copy, go back to `active` as in "Cancel the wait", and show a retryable error. The shield was not cleared, so no restriction gap opens. If the save of `active` also fails, the stored session stays `waiting`, and reconcile step 6 cancels the wait after the grace ([Reconcile order](#reconcile-order)).
 4. **Re-block** (`onBreak` → `breakOver`). Triggers:
-   - The Monitor gets `intervalWillEndWarning(for:)` for the current break activity. This re-blocks without a time check, because an early re-block is the safe direction for the 5-minute limit.
+   - The Monitor gets `intervalWillEndWarning(for:)` for the current break activity. This re-blocks without a check against `breakEndsAt`, because an early re-block is the safe direction for the 5-minute limit.
    - Any reconcile (app foreground, timer tick, any Monitor callback of this session) when `now >= breakEndsAt`.
    - The break activity's `intervalDidEnd(for:)` at +15 min, as a last backstop.
 
    In this order:
-   1. Apply the shield from the break selection copy.
-   2. Check that the named store matches the copy.
-   3. Save `breakOver`.
-   4. Stop the break activity.
-   5. Delete the copy.
+   1. Under the same lock, evaluate [Timed end](#timed-end) with `timedEnd(at:timing:)`. If it gives a reason, end the session with that reason (transition 6), and do not re-block or save `breakOver`. A late warning can arrive at or after the deadline, for example after a late resume that left only seconds before the deadline. Continue with the next step only when it gives `nil`.
+   2. Apply the shield from the break selection copy.
+   3. Check that the named store matches the copy.
+   4. Save `breakOver`.
+   5. Stop the break activity.
+   6. Delete the copy.
 
    If the copy is missing or the store does not match, end the session as `.recoveryInterrupted` (restrictions stay off, and the session is not counted). A break without an end must not happen.
 
