@@ -41,6 +41,7 @@
 		88BF09A39CBF3CBF57974A54 /* SelectionFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8BD3DEDFDB2421AD65430A2 /* SelectionFeedback.swift */; };
 		91066BCCBDB9AFF33114BFC2 /* FocusModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AA7539225348E6C7D4E48A4 /* FocusModelTests.swift */; };
 		960A33C4B778D63BD16082CC /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AA2D86BDEB87B9F650B7BDD /* OnboardingView.swift */; };
+		96CD826664F98E6EB206D3D7 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 907F3115F1146E2363662DD7 /* SettingsView.swift */; };
 		96E0120E988A1BFDFEB4D77A /* FocusReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6ACC6B4E653F11D028A80CDA /* FocusReport.swift */; };
 		A124D163CCAAC1D9AB1E41C4 /* UsageSummarySection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87CD2C5E91E4DA078DA6E8F6 /* UsageSummarySection.swift */; };
 		A23366A9F2ECFED39430A2C1 /* FocusMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5794F1B2F8C782079857848A /* FocusMonitor.swift */; };
@@ -54,6 +55,7 @@
 		BE8B210B7DBB2837FFF61652 /* SelectionFeedbackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F2A8D2AB4DE7F5037838367 /* SelectionFeedbackTests.swift */; };
 		BF51CD57A52473A5B3AE0AFC /* UsageReportHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = D82C12E3AAAB889FC7623746 /* UsageReportHost.swift */; };
 		C8D2A66389908DCF21EA6AA7 /* StartupRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC5423DA7A71AB76ABD3FC97 /* StartupRecovery.swift */; };
+		D4C3D40CEE79FC8FD41EB0B9 /* TodayHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E90E572C4977D76E16B4065 /* TodayHistoryView.swift */; };
 		D5993D9284DFCBA5E3034DAB /* ScreenTimeAdapterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AF1F08069A8EBE3F00C1594 /* ScreenTimeAdapterTests.swift */; };
 		D6AB46A0DD6C5F1A8401D890 /* UITestFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE52C8706C6D532DF83AB565 /* UITestFixtures.swift */; };
 		D7A9FF32E3F70116D876BC3B /* DeviceDiagnosticsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F42EE001D54D96DCA1BE8E3 /* DeviceDiagnosticsSection.swift */; };
@@ -126,11 +128,13 @@
 		6376EBDFD30119EBB7E9E78F /* AuthorizationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthorizationService.swift; sourceTree = "<group>"; };
 		66F1973C38BC3E67F3196742 /* ControlTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlTypes.swift; sourceTree = "<group>"; };
 		6ACC6B4E653F11D028A80CDA /* FocusReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusReport.swift; sourceTree = "<group>"; };
+		6E90E572C4977D76E16B4065 /* TodayHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayHistoryView.swift; sourceTree = "<group>"; };
 		752B365F1BF9522A27ED20E5 /* TimeRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeRules.swift; sourceTree = "<group>"; };
 		7AA7539225348E6C7D4E48A4 /* FocusModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusModelTests.swift; sourceTree = "<group>"; };
 		87CD2C5E91E4DA078DA6E8F6 /* UsageSummarySection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageSummarySection.swift; sourceTree = "<group>"; };
 		88E58134E88B2D579D8CE944 /* FocusSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusSettings.swift; sourceTree = "<group>"; };
 		8D56CC59E7444BE42868BC82 /* SelectionEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionEditor.swift; sourceTree = "<group>"; };
+		907F3115F1146E2363662DD7 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		9124EDD32B42B6B7DC563AC8 /* SharedControlStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedControlStore.swift; sourceTree = "<group>"; };
 		9AF1F08069A8EBE3F00C1594 /* ScreenTimeAdapterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenTimeAdapterTests.swift; sourceTree = "<group>"; };
 		9F2A8D2AB4DE7F5037838367 /* SelectionFeedbackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionFeedbackTests.swift; sourceTree = "<group>"; };
@@ -222,6 +226,8 @@
 				A8BD3DEDFDB2421AD65430A2 /* SelectionFeedback.swift */,
 				A7AB42BEFCACDE0E353D0071 /* SelectionRepository.swift */,
 				C319BE9A1C80D0D864BC6263 /* SessionRecord.swift */,
+				907F3115F1146E2363662DD7 /* SettingsView.swift */,
+				6E90E572C4977D76E16B4065 /* TodayHistoryView.swift */,
 				D82C12E3AAAB889FC7623746 /* UsageReportHost.swift */,
 				A50F2F10325E8D81199A5C44 /* Debug */,
 			);
@@ -515,9 +521,11 @@
 				DD993D2C0724ADEE8F9B5626 /* SelectionValidator.swift in Sources */,
 				406F2F2D61F331335EAC1842 /* SessionControl.swift in Sources */,
 				2223AD7702556469FD055BA5 /* SessionRecord.swift in Sources */,
+				96CD826664F98E6EB206D3D7 /* SettingsView.swift in Sources */,
 				273EF2F6149CC12979F5CDB1 /* SharedControlStore.swift in Sources */,
 				622CC874670E246B827B3746 /* StartupRecovery.swift in Sources */,
 				4C5D0939546B3CA08CDED775 /* TimeRules.swift in Sources */,
+				D4C3D40CEE79FC8FD41EB0B9 /* TodayHistoryView.swift in Sources */,
 				D6AB46A0DD6C5F1A8401D890 /* UITestFixtures.swift in Sources */,
 				BF51CD57A52473A5B3AE0AFC /* UsageReportHost.swift in Sources */,
 				A124D163CCAAC1D9AB1E41C4 /* UsageSummarySection.swift in Sources */,
