@@ -16,7 +16,9 @@ struct FocusView: View {
                 if !model.isActive {
                     Button("제한할 앱") { sheet = .selection }
                         .disabled(model.isStarting || model.errorMessage != nil).accessibilityIdentifier("selection")
-                    Spacer()
+                }
+                Spacer()
+                if !model.isActive || showsDiagnostics {
                     Button { sheet = .settings } label: { Image(systemName: "gearshape") }
                         .accessibilityLabel("설정").accessibilityIdentifier("settingsButton")
                 }
@@ -81,6 +83,14 @@ struct FocusView: View {
                 }
             }
         }
+    }
+    /// DEBUG device diagnostics live in settings and must stay reachable during a session (README device procedure 2).
+    private var showsDiagnostics: Bool {
+        #if DEBUG
+        model.services.diagnostics != nil
+        #else
+        false
+        #endif
     }
     /// Completed sessions only: early exits and interruptions do not count toward today's focus.
     private var todaySummary: String {
