@@ -49,6 +49,8 @@ import SwiftData
             }
             guard let runtime else { throw ControlIssue.io }
             let (services, created) = try runtime.prepare()
+            let counts = services.selection.counts
+            services.settings.migrateIfNeeded(accessApproved: services.authorization.status == .approved, hasSelection: counts.apps + counts.websites > 0)
             container = created
             model = FocusModel(services: services, context: ModelContext(created))
             errorMessage = nil
