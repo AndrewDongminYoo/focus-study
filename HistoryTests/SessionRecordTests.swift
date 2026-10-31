@@ -35,6 +35,19 @@ import FocusCore
         XCTAssertThrowsError(try history.importTerminal(ControlSession(startedAt: Date())))
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<SessionRecord>()), 0)
     }
+    func testFiftyMinuteRecordDurationIsCappedAt3000() throws {
+        let (context, history) = try fixture()
+        var s = ControlSession(startedAt: Date(timeIntervalSince1970: 1000), length: 3000); s.phase = .terminal; s.reason = .expired; s.observedAt = Date(timeIntervalSince1970: 5000)
+        try history.importTerminal(s)
+        XCTAssertEqual(try context.fetch(FetchDescriptor<SessionRecord>()).first?.duration, 3000)
+    }
+    func testRecordCrossingMidnightBelongsToStartDay() throws {
+        let (_, history) = try fixture(); var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        var s = ControlSession(startedAt: ISO8601DateFormatter().date(from: "2026-10-25T23:40:00Z")!, length: 3000); s.phase = .terminal; s.reason = .expired; s.observedAt = s.expiresAt
+        try history.importTerminal(s)
+        XCTAssertEqual(try history.records(on: s.startedAt, calendar: calendar).count, 1)
+        XCTAssertEqual(try history.records(on: s.expiresAt, calendar: calendar).count, 0)
+    }
     func testTodayUsesStartDateAcrossMidnight() throws {
         let (_, history) = try fixture(); var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(secondsFromGMT: 0)!
         var s = ControlSession(startedAt: ISO8601DateFormatter().date(from: "2026-10-25T23:50:00Z")!); s.phase = .terminal; s.reason = .expired; s.observedAt = s.expiresAt

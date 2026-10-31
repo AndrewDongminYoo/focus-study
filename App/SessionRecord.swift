@@ -12,7 +12,7 @@ import FocusCore
     var observedAt: Date
     var reasonRaw: String
     var reason: EndReason { EndReason(rawValue: reasonRaw) ?? .recoveryInterrupted }
-    var duration: TimeInterval { max(0, min(1500, endedAt.timeIntervalSince(startedAt))) }
+    var duration: TimeInterval { max(0, min(expiresAt.timeIntervalSince(startedAt), endedAt.timeIntervalSince(startedAt))) }
     init(session: ControlSession) {
         id = session.id; startedAt = session.startedAt; expiresAt = session.expiresAt
         endedAt = session.recordedEnd ?? session.startedAt
