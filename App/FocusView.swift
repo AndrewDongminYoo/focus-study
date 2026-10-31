@@ -12,6 +12,7 @@ struct FocusView: View {
     var body: some View {
         NavigationStack {
             List {
+                if model.access != .approved { accessSection }
                 Section {
                     VStack(alignment: .leading, spacing: 12) {
                         Label("나를 위한 집중 시간", systemImage: "leaf").font(.headline)
@@ -46,7 +47,6 @@ struct FocusView: View {
                     }.padding(.vertical, 12)
                     .sensoryFeedback(.success, trigger: model.completedSessionID) { _, new in new != nil }
                 } footer: { Text("제한이 자동으로 풀리기까지 시간이 걸릴 수 있습니다.") }
-                if model.access != .approved { accessSection }
                 Section("제한할 항목") {
                     Button { sheet = .editor } label: {
                         HStack { Label("앱과 웹사이트 선택", systemImage: "hand.raised"); Spacer(); Text("앱 \(model.counts.apps) · 웹 \(model.counts.websites)").foregroundStyle(.secondary) }
@@ -103,10 +103,12 @@ struct FocusView: View {
         .onReceive(NotificationCenter.default.publisher(for: .NSSystemClockDidChange)) { _ in model.refresh(clockChanged: true) }
     }
     private var accessSection: some View {
-        Section("스크린 타임 권한") {
-            Text("앱 제한과 사용 보고서에 스크린 타임 권한이 필요합니다.")
+        Section("시작하기 전에") {
+            Label("25분 동안 고른 앱과 웹사이트를 제한해서 지금 할 일에 집중하도록 돕습니다.", systemImage: "timer").accessibilityIdentifier("purpose")
+            Label("앱 제한과 사용 보고서에 스크린 타임 권한이 필요합니다.", systemImage: "hourglass")
+            Label("선택한 항목과 집중 기록은 서버로 보내지 않고 이 기기에 저장합니다.", systemImage: "lock.iphone")
             if model.access == .notRequested {
-                Button("권한 허용") { Task { await model.services.authorization.requestIndividual(); model.refresh() } }.accessibilityIdentifier("authorize")
+                Button("권한 허용") { Task { await model.services.authorization.requestIndividual(); model.refresh() } }.buttonStyle(.borderedProminent).accessibilityIdentifier("authorize")
             } else {
                 Text("설정에서 스크린 타임 권한을 확인해 주세요.")
                 Link("설정 열기", destination: URL(string: UIApplication.openSettingsURLString)!).accessibilityIdentifier("settings")

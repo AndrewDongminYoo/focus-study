@@ -52,14 +52,27 @@ final class FocusFlowTests: XCTestCase {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
     }
+    func testFirstScreenExplainsPurposeBeforeTheTimer() {
+        let app = app("not-requested")
+        let purpose = app.descendants(matching: .any)["purpose"]
+        XCTAssertTrue(purpose.waitForExistence(timeout: 8))
+        let authorize = app.buttons["authorize"], countdown = app.staticTexts["countdown"]
+        XCTAssertLessThan(authorize.frame.minY, countdown.frame.minY)
+        captureReport(app, name: "first-screen-not-requested")
+        authorize.tap()
+        XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: 5))
+        let enabled = NSPredicate(format: "isEnabled == true")
+        expectation(for: enabled, evaluatedWith: app.buttons["start"]); waitForExpectations(timeout: 5)
+        XCTAssertFalse(purpose.exists)
+    }
     func testDeniedPermissionShowsSettingsAndDisablesStartAndReport() {
         let app = app("denied")
-        XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: 8))
+        // The access section now comes first, so the settings link is on screen before any scrolling.
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "settings").firstMatch.waitForExistence(timeout: 8))
+        XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["start"].isEnabled)
         XCTAssertEqual(app.staticTexts["startBlocker"].label, "스크린 타임 권한을 허용하면 시작할 수 있습니다.")
-        app.swipeUp()
-        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "settings").firstMatch.waitForExistence(timeout: 5))
-        app.swipeUp()
+        app.swipeUp(); app.swipeUp()
         XCTAssertFalse(app.buttons["report"].isEnabled)
     }
     func testActiveSessionLocksSelectionAndEarlyExitCreatesHistory() {

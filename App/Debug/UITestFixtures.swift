@@ -7,7 +7,7 @@ import SwiftUI
 
 @MainActor @Observable final class FixtureAuthorization: AuthorizationProviding {
     var status: AccessStatus
-    init(denied: Bool) { status = denied ? .denied : .approved }
+    init(denied: Bool, notRequested: Bool = false) { status = notRequested ? .notRequested : denied ? .denied : .approved }
     func requestIndividual() async { status = .approved }
     func refresh() {}
     func hasAccessNow() -> Bool { status == .approved }
@@ -33,7 +33,7 @@ extension FocusServices {
     static func fixture(arguments: [String]) -> FocusServices {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("FocusFixture-\(UUID().uuidString)")
         let engine = SessionControl(store: SharedControlStore(directory: directory), monitoring: FixtureMonitoring(fail: arguments.contains("registration-failure")), shield: FixtureShield())
-        return FocusServices(authorization: FixtureAuthorization(denied: arguments.contains("denied")), selection: FixtureSelection(selected: arguments.contains("--selected")), engine: engine, applySelection: { _ in }, matchesSelection: { _ in true }, isFixture: true)
+        return FocusServices(authorization: FixtureAuthorization(denied: arguments.contains("denied"), notRequested: arguments.contains("not-requested")), selection: FixtureSelection(selected: arguments.contains("--selected")), engine: engine, applySelection: { _ in }, matchesSelection: { _ in true }, isFixture: true)
     }
 }
 #endif
