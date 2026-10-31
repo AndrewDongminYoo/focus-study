@@ -127,6 +127,16 @@ final class FocusFlowTests: XCTestCase {
         app.buttons["selection"].tap(); app.buttons["fixtureSelect"].tap(); app.buttons["pickerSave"].tap()
         XCTAssertTrue(app.buttons["start"].isEnabled)
     }
+    func testEmptyDraftDisablesSaveWithInlineReason() {
+        let app = app(); app.buttons["selection"].tap()
+        let issue = app.descendants(matching: .any)["selectionIssue"]
+        XCTAssertTrue(app.buttons["pickerSave"].waitForExistence(timeout: 5)); XCTAssertFalse(issue.exists)
+        app.buttons["fixtureClear"].tap()
+        XCTAssertTrue(issue.waitForExistence(timeout: 5)); XCTAssertFalse(app.buttons["pickerSave"].isEnabled)
+        captureReport(app, name: "selection-empty-draft")
+        app.buttons["fixtureSelect"].tap()
+        XCTAssertTrue(app.buttons["pickerSave"].isEnabled); XCTAssertFalse(issue.exists)
+    }
     func testEmptySelectionExplainsBlockerAndOpensPicker() {
         let app = app(selected: false)
         let blocker = app.staticTexts["startBlocker"]

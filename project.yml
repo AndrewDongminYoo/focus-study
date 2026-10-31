@@ -55,6 +55,7 @@ targets:
         Shared,
         Integration,
         App/SelectionRepository.swift,
+        App/SelectionFeedback.swift,
         App/SessionRecord.swift,
         App/FocusModel.swift,
         App/AuthorizationService.swift,

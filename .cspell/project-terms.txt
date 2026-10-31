@@ -10,6 +10,7 @@ devicectl
 donminzzi
 dsym
 ENABLE_STRICT_OBJC_MSGSEND
+exclamationmark.circle
 exclamationmark.triangle
 focusstudy
 GENERATE_INFOPLIST_FILE
