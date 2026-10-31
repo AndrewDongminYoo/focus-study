@@ -27,7 +27,7 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
     private(set) var errorMessage: String?
     private(set) var isStarting = false
     private(set) var now = Date()
-    /// The most recent session that reached its full 25 minutes, until the person dismisses it.
+    /// The most recent session that reached its full length, until the person dismisses it.
     private(set) var completedSessionID: UUID?
     var access: AccessStatus { services.authorization.status }
     var isActive: Bool { current?.phase == .active }
