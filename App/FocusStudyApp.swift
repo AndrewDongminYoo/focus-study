@@ -11,7 +11,14 @@ import SwiftData
     @State private var errorMessage: String?
     var body: some View {
         Group {
-            if let model, let container { FocusView(model: model).modelContainer(container) }
+            if let model, let container {
+                Group {
+                    switch model.route {
+                    case .timer: FocusView(model: model)
+                    case .onboarding(let step): OnboardingView(model: model, start: step)
+                    }
+                }.modelContainer(container)
+            }
             else if let errorMessage {
                 ContentUnavailableView {
                     Label("앱 데이터를 확인해 주세요", systemImage: "exclamationmark.triangle")

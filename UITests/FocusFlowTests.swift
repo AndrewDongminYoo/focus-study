@@ -52,28 +52,41 @@ final class FocusFlowTests: XCTestCase {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
     }
-    func testFirstScreenExplainsPurposeBeforeTheTimer() {
-        let app = app("not-requested")
-        let purpose = app.descendants(matching: .any)["purpose"]
-        XCTAssertTrue(purpose.waitForExistence(timeout: 8))
-        let authorize = app.buttons["authorize"], countdown = app.staticTexts["countdown"]
-        XCTAssertLessThan(authorize.frame.minY, countdown.frame.minY)
-        captureReport(app, name: "first-screen-not-requested")
-        authorize.tap()
-        XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: 5))
+    func testNewUserCompletesOnboardingInOrder() {
+        let app = app("onboarding", selected: false)
+        XCTAssertTrue(app.descendants(matching: .any)["purpose"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.staticTexts["countdown"].exists)
+        captureReport(app, name: "onboarding-intro")
+        app.buttons["onboardingNext"].tap()
+        XCTAssertTrue(app.buttons["authorize"].waitForExistence(timeout: 5)); XCTAssertFalse(app.buttons["onboardingNext"].isEnabled)
+        app.buttons["authorize"].tap()
         let enabled = NSPredicate(format: "isEnabled == true")
-        expectation(for: enabled, evaluatedWith: app.buttons["start"]); waitForExpectations(timeout: 5)
-        XCTAssertFalse(purpose.exists)
+        expectation(for: enabled, evaluatedWith: app.buttons["onboardingNext"]); waitForExpectations(timeout: 5)
+        app.buttons["onboardingNext"].tap()
+        XCTAssertTrue(app.buttons["chooseSelection"].waitForExistence(timeout: 5)); XCTAssertFalse(app.buttons["onboardingNext"].isEnabled)
+        app.buttons["chooseSelection"].tap(); app.buttons["fixtureSelect"].tap(); app.buttons["pickerSave"].tap()
+        expectation(for: enabled, evaluatedWith: app.buttons["onboardingNext"]); waitForExpectations(timeout: 5)
+        app.buttons["onboardingNext"].tap()
+        XCTAssertTrue(app.segmentedControls["lengthPicker"].waitForExistence(timeout: 5))
+        app.segmentedControls["lengthPicker"].buttons["40분"].tap()
+        captureReport(app, name: "onboarding-length")
+        app.buttons["onboardingFinish"].tap()
+        XCTAssertTrue(app.staticTexts["countdown"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["countdown"].label, "남은 시간 40분 0초")
     }
-    func testDeniedPermissionShowsSettingsAndDisablesStartAndReport() {
+    func testOnboardingBackReturnsToPreviousStep() {
+        let app = app("onboarding", selected: false)
+        XCTAssertTrue(app.buttons["onboardingNext"].waitForExistence(timeout: 8)); XCTAssertFalse(app.buttons["onboardingBack"].exists)
+        app.buttons["onboardingNext"].tap()
+        XCTAssertTrue(app.buttons["authorize"].waitForExistence(timeout: 5))
+        app.buttons["onboardingBack"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["purpose"].waitForExistence(timeout: 5)); XCTAssertFalse(app.buttons["authorize"].exists)
+    }
+    func testDeniedPermissionShowsSettingsGuide() {
         let app = app("denied")
-        // The access section now comes first, so the settings link is on screen before any scrolling.
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "settings").firstMatch.waitForExistence(timeout: 8))
-        XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["start"].isEnabled)
-        XCTAssertEqual(app.staticTexts["startBlocker"].label, "스크린 타임 권한을 허용하면 시작할 수 있어요.")
-        app.swipeUp(); app.swipeUp()
-        XCTAssertFalse(app.buttons["report"].isEnabled)
+        XCTAssertFalse(app.buttons["authorize"].exists); XCTAssertFalse(app.buttons["start"].exists)
+        captureReport(app, name: "permission-settings-guide")
     }
     func testActiveSessionLocksSelectionAndEarlyExitCreatesHistory() {
         let app = app(); app.buttons["start"].tap()
@@ -135,10 +148,11 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertEqual(counts.label, "앱 1개 · 웹사이트 0개 선택")
         captureReport(app, name: "selection-counts")
     }
-    func testEmptySelectionCannotStartAndMockSelectionCanBeSaved() {
-        let app = app(selected: false); XCTAssertFalse(app.buttons["start"].isEnabled)
-        app.buttons["selection"].tap(); app.buttons["fixtureSelect"].tap(); app.buttons["pickerSave"].tap()
-        XCTAssertTrue(app.buttons["start"].isEnabled)
+    func testEmptySelectionReturnsToSelectionStepThenTimer() {
+        let app = app(selected: false)
+        XCTAssertTrue(app.buttons["chooseSelection"].waitForExistence(timeout: 8)); XCTAssertFalse(app.buttons["start"].exists)
+        app.buttons["chooseSelection"].tap(); app.buttons["fixtureSelect"].tap(); app.buttons["pickerSave"].tap()
+        XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: 5)); XCTAssertTrue(app.buttons["start"].isEnabled)
     }
     func testEmptyDraftDisablesSaveWithInlineReason() {
         let app = app(); app.buttons["selection"].tap()
@@ -149,14 +163,6 @@ final class FocusFlowTests: XCTestCase {
         captureReport(app, name: "selection-empty-draft")
         app.buttons["fixtureSelect"].tap()
         XCTAssertTrue(app.buttons["pickerSave"].isEnabled); XCTAssertFalse(issue.exists)
-    }
-    func testEmptySelectionExplainsBlockerAndOpensPicker() {
-        let app = app(selected: false)
-        let blocker = app.staticTexts["startBlocker"]
-        XCTAssertTrue(blocker.waitForExistence(timeout: 8))
-        XCTAssertEqual(blocker.label, "제한할 앱이나 웹사이트를 고르면 시작할 수 있어요.")
-        app.buttons["chooseSelection"].tap(); app.buttons["fixtureSelect"].tap(); app.buttons["pickerSave"].tap()
-        XCTAssertTrue(app.buttons["start"].isEnabled); XCTAssertFalse(blocker.exists)
     }
     func testRegistrationFailureNeverShowsActiveAndCanRetry() {
         let app = app("registration-failure"); app.buttons["start"].tap()
