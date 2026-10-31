@@ -36,6 +36,7 @@ SDK 또는 UI만 확인할 때는 test 명령에 `-only-testing:FocusSDKTests` �
 이 검증은 실제 Screen Time 권한·차단·콜백 동작의 증거가 아닙니다.
 
 화면만 확인하려면 Debug scheme의 Launch Arguments에 `--ui-testing approved --selected`를 넣습니다. 권한 거절 화면은 `--ui-testing denied --selected`, 등록 실패 화면은 `--ui-testing registration-failure --selected`입니다. 이 경로는 메모리 SwiftData와 고유 임시 제어 파일을 사용하고 Release에는 fixture 구현이 포함되지 않습니다. 실제 Screen Time API 지원의 증거가 아닙니다. `--ui-testing startup-failure --selected`는 합성 세션이 진행 중일 때 초기 저장소가 한 번 실패하는 복구 화면을 확인합니다.
+`--ui-testing expiring`은 만료 3초 전의 합성 세션으로 시작해 25분 완료 화면을 확인하고, `--ui-testing not-requested --selected`는 권한을 요청하기 전의 첫 화면을 확인합니다.
 
 ### 보고서 상태와 실기기 진단
 

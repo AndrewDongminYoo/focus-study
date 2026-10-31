@@ -144,3 +144,18 @@ They also reported an authorization-revoked history entry without manually revok
 The cause and any relation to app termination or an install-over-existing update remain unverified.
 The operator explicitly deferred that investigation, so this PR does not change authorization classification or historical records.
 The displayed history time is the session start time, not the observed interruption time.
+
+## UI/UX production pass: 2026-10-31
+
+An apple-design review on 2026-10-31 filed issues #20 to #43; this branch implements #25, #27 to #32 in that order.
+The project has no copy voice line, so the `user-facing-copy` pass assumed `warm` again and kept the existing formal register (`~습니다`, `~해 주세요`) instead of the skill's 해요체 default.
+The privacy manifest reason codes were checked against the Apple documentation JSON for `NSPrivacyAccessedAPITypeReasons` and `NSPrivacyAccessedAPIType` on 2026-10-31, and every product source directory was searched for the full API list on that page.
+Only `UserDefaults` (App) and `ProcessInfo.systemUptime` (App and Monitor, through `Shared/`) matched, so Report has no manifest.
+
+On the iOS 27.1 simulator the early-exit confirmation renders as a popover anchored to the end button and has no cancel button; tapping outside dismisses it.
+The cancel UI test taps the cancel button when it exists and the popover dismiss region otherwise, so the cancel-button branch is unexecuted until an iOS 17 runtime is available.
+Two DEBUG fixture modes were added: `expiring` starts a session three seconds before expiry, and `not-requested` reports authorization as not yet requested.
+
+The first-screen privacy line says records are not sent to a server and are stored on this device.
+Issue #32 asked for "data never leaves the device"; that wording was not used because device backups are outside the app's control, and #17 remains the place that audits data egress.
+The completion haptic cannot be observed in the simulator; the tests check only the state change that triggers it.
