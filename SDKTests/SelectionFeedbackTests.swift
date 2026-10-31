@@ -10,6 +10,8 @@ final class SelectionFeedbackTests: XCTestCase {
     func testSaveFailuresAreNotReportedAsSelectionCountProblems() {
         XCTAssertEqual(SelectionFeedback.message(for: ControlIssue.busy), "집중 시간이 끝난 뒤에 바꿀 수 있어요.")
         let other = "선택 항목을 저장하지 못했어요. 다시 저장해 주세요."
+        XCTAssertEqual(SelectionFeedback.message(for: CocoaError(.fileWriteOutOfSpace)), "기기 저장 공간이 부족해요. 공간을 확보한 뒤 다시 저장해 주세요.")
+        XCTAssertEqual(SelectionFeedback.message(for: NSError(domain: NSCocoaErrorDomain, code: CocoaError.fileWriteOutOfSpace.rawValue)), "기기 저장 공간이 부족해요. 공간을 확보한 뒤 다시 저장해 주세요.")
         XCTAssertEqual(SelectionFeedback.message(for: CocoaError(.fileWriteNoPermission)), other)
         XCTAssertEqual(SelectionFeedback.message(for: SelectionIssue.categoriesUnsupported), other)
     }
