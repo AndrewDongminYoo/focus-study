@@ -231,7 +231,7 @@ Any other shape is `ControlIssue.invalidState`, as in M1.
   - In `active`: `min(focus end, deadline)`.
   - In `waiting`: the `active` end after a stale-wait cancel, `min(focus end, deadline) + (waitEndsAt + grace - pausedAt)`. The cancel adds the same time to `pausedSeconds` and to `deadlineCredit`.
   - In `onBreak` and `breakOver`: the deadline.
-  - After a failed save, the registered end must again match the stored phase ([Save failure after an overwrite](#save-failure-after-an-overwrite)).
+  - After a failed save, the registered end must again match the stored phase ([Save failure after an overwrite](#save-failure-after-an-overwrite)). After a process exit between the overwrite and the save, the next focus activity callback restores it ([Callback with nothing due](#callback-with-nothing-due)).
 - Each change of that end calls `startMonitoring` again with the same name, which overwrites the schedule. The interval start stays `startedAt`, so the interval is always at least 25 minutes long even when little focus time is left. `[UNCERTAIN]`: the 15-minute minimum with a past `intervalStart` (see above).
 - A re-registration of the focus activity calls `intervalDidStart(for:)` at once. That callback only reconciles, as in M1. It never applies the shield.
 - A session has at most one break activity at a time. The re-block stops it. This keeps the activity count low (`excessiveActivities`).
@@ -282,11 +282,12 @@ Each one reads the envelope again, checks the session ID and the expected phase,
 
 Transitions 1, 2 and 5 overwrite the focus activity end before they save.
 This rule applies to them, and also to the rollback of transition 3 and to the stale-wait cancel in reconcile step 6, because both are transition 2.
-When that save fails, the stored phase does not change, but the registered end belongs to the new phase. A callback at that end can then find a session that it does not change, with no later callback registered.
+When that save fails, the stored phase does not change, but the registered end belongs to the new phase. That end can come before the stored phase has anything due, or, after transition 1, later than the stored phase needs.
+This rule runs in the error handler of a thrown save and corrects the end at once. A process exit between the overwrite and the save does not reach it; [Callback with nothing due](#callback-with-nothing-due) covers that gap.
 So, under the same lock:
 
 1. Register the focus activity again with the end that [Monitoring activities](#monitoring-activities) gives for the stored phase. Then throw the save error as a retryable error. The stored session and the registered end agree again, and the person or the next reconcile can try again.
-2. If that registration throws, or if the restored end is not after `now`, end the session as `.recoveryInterrupted` with transition 6, which lifts the restrictions and removes the activities and the copy also when the save of `ending` fails. This follows the rollback rule of the 2026-10-26 design ("롤백 도중 저장 오류가 나도 해제와 중지부터 시도하고"). A session that has no callback at its next change must not keep the restrictions on. If the save of `ending` failed, the stored phase stays, and the next reconcile finishes the record at step 5 (focus activity not registered).
+2. If that registration throws, or if the restored end is not after `now`, end the session as `.recoveryInterrupted` with transition 6, which lifts the restrictions and removes the activities and the copy also when the save of `ending` fails. This follows the rollback rule of the 2026-10-26 design ("롤백 도중 저장 오류가 나도 해제와 중지부터 시도하고"). A session that has no callback at its next change must not keep the restrictions on. The only exception is the bounded delay after a process exit in transition 1 ([Callback with nothing due](#callback-with-nothing-due)). If the save of `ending` failed, the stored phase stays, and the next reconcile finishes the record at step 5 (focus activity not registered).
 
 A restored end can be in the past only on the stale-wait path: reconcile step 6 can run long after `waitEndsAt` + grace, when the `waiting` end has already passed. On the paths that the person starts, the restored end is in the future: transition 1 starts in `active` without a timed end, a cancel by the person comes before `waitEndsAt` + grace, and transition 5 already checked `now < deadline`.
 
@@ -306,6 +307,46 @@ The first match decides.
 8. `onBreak` and `now >= breakEndsAt`: re-block (transition 4).
 
 `StartupRecovery.endCurrent` uses the same Timed end rule instead of `now >= expiresAt`. When the rule gives no reason, it ends as `.earlyExit`, as in M1.
+
+#### Callback with nothing due
+
+A process exit between the overwrite and the save of transitions 1, 2 and 5 leaves the old phase stored and the focus activity end of the new phase registered.
+The error handler of [Save failure after an overwrite](#save-failure-after-an-overwrite) does not run then.
+The registered end is a function of the stored envelope, so the next callback of the focus activity restores it:
+
+- `handleCallback` gets `intervalDidEnd(for:)` for the focus activity of the stored session. It runs the cleanup and the reconcile order as usual. If the stored session is then in `active`, `waiting`, `onBreak` or `breakOver`, and this section did not register the focus activity itself, it registers the focus activity again with the end that [Monitoring activities](#monitoring-activities) gives for the stored phase.
+- That end is always after `now` here, because no timed end and no stale-wait cancel fired: `now` is before the `active` end, before `waitEndsAt` + grace (which is before the `waiting` end), or before the deadline.
+- If that registration throws, follow step 2 of [Save failure after an overwrite](#save-failure-after-an-overwrite).
+- The rule runs after the [Callback identity](#callback-identity) check, so a late `intervalDidEnd(for:)` of an earlier session registers nothing.
+- Only `intervalDidEnd(for:)` of the focus activity starts the rule. `intervalDidStart(for:)` and a plain `reconcile` never do, because each registration calls `intervalDidStart(for:)` at once, and a registration from there would loop.
+- The rule never runs on the normal path: a correctly registered end is a time when reconcile step 6 or 7 fires. It runs only for a stale end, or for a callback that arrives before its end. The end that it registers is again a time when the stored phase has something due, so it cannot repeat without a further exit.
+- The rule is reached only if reconcile step 5 (focus activity not registered) does not fire first. That depends on whether an activity whose non-repeating interval has ended stays in `DeviceActivityCenter.activities` (`[UNCERTAIN]`, see [Apple documentation](#apple-documentation-checked-2026-11-01)); the M1 expiry callback has the same dependency. If it does not stay, each of these exits ends as `.recoveryInterrupted` at the stale end, with the restrictions lifted.
+- `[UNCERTAIN]`: whether `startMonitoring` for an activity succeeds when it is called inside that activity's own `intervalDidEnd(for:)`.
+
+The stale end that each exit leaves:
+
+| Exit between overwrite and save           | Stored phase | Registered end                                                                                       | Repair                                                                                                                                              |
+| ----------------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Transition 1                              | `active`     | `waiting` end, which is the `active` end + `wait[breaksTaken]` + grace                               | No callback arrives at the `active` end. The callback at the registered end ends the session with the reason from [Timed end](#timed-end) (step 7). |
+| Transition 2, cancel by the person        | `waiting`    | `active` end of the cancel, at or before the `waiting` end                                           | Before `waitEndsAt` + grace, this rule registers the `waiting` end again. At or after it, reconcile step 6 cancels the wait.                        |
+| Transition 2, stale-wait cancel (step 6)  | `waiting`    | `waiting` end: the cancel adds the same time to `pausedSeconds` and `deadlineCredit`, so it is equal | Nothing to repair.                                                                                                                                  |
+| Transition 3 rollback, cancel to `active` | `waiting`    | `active` end of the cancel                                                                           | The copy still exists, so cleanup step 1 of [Break artifacts](#break-artifacts) corrects it first.                                                  |
+| Transition 5                              | `breakOver`  | `min(new focus end, deadline)`, at or before the deadline                                            | This rule registers the deadline again.                                                                                                             |
+
+Transition 1 is the only exit whose stale end is later than the stored phase needs.
+The lift of the restrictions then comes late by at most `wait[breaksTaken]` + grace (70 seconds with the standard timing), and only while the app is not in the foreground, because the timer tick reconciles at the `active` end.
+The record does not change: [Timed end](#timed-end) compares timestamps, and `recordedEnd` stays capped at `expiresAt`.
+The delay keeps the restrictions on, not off, so the 5-minute limit of a break is not affected.
+Accepting this bound instead of reordering transition 1 is a decision by Claude.
+
+Example of transition 5: length 1500, break requested at +300, re-block at +495, and the process exits after the overwrite of a resume at +600.
+The stored phase is `breakOver` with the deadline +2295, and the registered end is +1800.
+The callback at +1800 changes nothing in the reconcile order, so it registers +2295.
+The callback at +2295 ends the session as `.deadlineMissed` and lifts the restrictions.
+
+An exit inside a callback whose registered end has already passed, for example during the stale-wait cancel or the end, leaves no later callback, and the next app launch reconciles.
+The overwrite on the stale-wait path writes the same end again, so an exit there is not worse than an exit before the transition.
+The same holds in M1 for an exit inside the expiry callback.
 
 ### Callback identity
 
@@ -347,6 +388,7 @@ The cleanup depends only on the stored envelope and the time, never on the calle
 `handleCallback` runs it before the [Callback identity](#callback-identity) check, because the callbacks of an orphaned break activity are often the only ones that arrive without the app.
 
 Every gap between two numbered steps of transitions 3, 4 and 6 meets the table after the next cleanup.
+The gap between the overwrite and the save of transitions 1, 2 and 5 leaves no break artifact, and the next callback of the focus activity corrects its registered end ([Callback with nothing due](#callback-with-nothing-due)).
 A thrown error in a gap gives the same state as a process exit there, or the rollback that the transition states.
 Step 3 of transition 3 only changes fields in memory, so a gap after it is the gap after step 2.
 
@@ -398,6 +440,7 @@ Unverified until those steps run:
 - The re-registration of the focus activity with a past `intervalStart` when less than 15 minutes are left `[UNCERTAIN]`.
 - Whether the Monitor can read the break selection copy and apply the shield while the device is locked (file protection `completeUntilFirstUserAuthentication`) `[UNCERTAIN]`.
 - Whether an ended break activity stays in `DeviceActivityCenter.activities` `[UNCERTAIN]`.
+- Whether the focus activity can be registered again inside its own `intervalDidEnd(for:)` ([Callback with nothing due](#callback-with-nothing-due)) `[UNCERTAIN]`.
 - The iOS 17 runtime.
 
 If step 2 or 3 fails the 5-minute limit, a fallback to check on the device is a second activity whose `intervalDidStart(for:)` is at break start + 3 minutes.
