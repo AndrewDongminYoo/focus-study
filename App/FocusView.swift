@@ -25,6 +25,12 @@ struct FocusView: View {
                             Button("중도 종료", role: .destructive) { model.end() }.accessibilityIdentifier("end")
                         } else {
                             Button("25분 시작") { model.start() }.buttonStyle(.borderedProminent).disabled(!model.canStart).accessibilityIdentifier("start")
+                            if let blocker = model.startBlocker {
+                                Text(blockerText(blocker)).font(.footnote).foregroundStyle(.secondary).accessibilityIdentifier("startBlocker")
+                                if blocker == .selection {
+                                    Button("제한할 항목 고르기") { sheet = .editor }.buttonStyle(.borderless).accessibilityIdentifier("chooseSelection")
+                                }
+                            }
                         }
                         }
                     }.padding(.vertical, 12)
@@ -94,6 +100,13 @@ struct FocusView: View {
                 Text("설정에서 스크린 타임 권한을 확인해 주세요.")
                 Link("설정 열기", destination: URL(string: UIApplication.openSettingsURLString)!).accessibilityIdentifier("settings")
             }
+        }
+    }
+    private func blockerText(_ blocker: StartBlocker) -> String {
+        switch blocker {
+        case .access: "스크린 타임 권한을 허용하면 시작할 수 있습니다."
+        case .error: "오류를 다시 확인한 뒤에 시작할 수 있습니다."
+        case .selection: "제한할 앱이나 웹사이트를 고르면 시작할 수 있습니다."
         }
     }
     private func reason(_ reason: EndReason) -> String {

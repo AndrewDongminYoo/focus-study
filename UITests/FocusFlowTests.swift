@@ -56,6 +56,7 @@ final class FocusFlowTests: XCTestCase {
         let app = app("denied")
         XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: 8))
         XCTAssertFalse(app.buttons["start"].isEnabled)
+        XCTAssertEqual(app.staticTexts["startBlocker"].label, "스크린 타임 권한을 허용하면 시작할 수 있습니다.")
         app.swipeUp()
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "settings").firstMatch.waitForExistence(timeout: 5))
         app.swipeUp()
@@ -98,9 +99,18 @@ final class FocusFlowTests: XCTestCase {
         app.buttons["selection"].tap(); app.buttons["fixtureSelect"].tap(); app.buttons["pickerSave"].tap()
         XCTAssertTrue(app.buttons["start"].isEnabled)
     }
+    func testEmptySelectionExplainsBlockerAndOpensPicker() {
+        let app = app(selected: false)
+        let blocker = app.staticTexts["startBlocker"]
+        XCTAssertTrue(blocker.waitForExistence(timeout: 8))
+        XCTAssertEqual(blocker.label, "제한할 앱이나 웹사이트를 고르면 시작할 수 있습니다.")
+        app.buttons["chooseSelection"].tap(); app.buttons["fixtureSelect"].tap(); app.buttons["pickerSave"].tap()
+        XCTAssertTrue(app.buttons["start"].isEnabled); XCTAssertFalse(blocker.exists)
+    }
     func testRegistrationFailureNeverShowsActiveAndCanRetry() {
         let app = app("registration-failure"); app.buttons["start"].tap()
         XCTAssertTrue(app.staticTexts["startError"].waitForExistence(timeout: 5)); XCTAssertFalse(app.buttons["end"].exists)
+        XCTAssertEqual(app.staticTexts["startBlocker"].label, "오류를 다시 확인한 뒤에 시작할 수 있습니다.")
         XCTAssertFalse(app.buttons["selection"].isEnabled)
         app.buttons["retry"].tap()
         XCTAssertTrue(app.buttons["start"].isEnabled)

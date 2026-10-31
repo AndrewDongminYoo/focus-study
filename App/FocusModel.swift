@@ -15,6 +15,7 @@ import Observation
     #endif
 
 }
+enum StartBlocker: Equatable { case access, error, selection }
 @MainActor @Observable final class FocusModel {
     let services: FocusServices
     private let history: any SessionHistoryProviding
@@ -29,6 +30,13 @@ import Observation
     var isActive: Bool { current?.phase == .active }
     var counts: (apps: Int, websites: Int, categories: Int) { services.selection.counts }
     var canStart: Bool { access == .approved && current == nil && !isStarting && errorMessage == nil && counts.apps + counts.websites > 0 }
+    /// The first unmet start condition, in the order the person has to resolve them.
+    var startBlocker: StartBlocker? {
+        guard current == nil, !isStarting else { return nil }
+        if access != .approved { return .access }
+        if errorMessage != nil { return .error }
+        return counts.apps + counts.websites == 0 ? .selection : nil
+    }
     var remaining: Int { current.map { TimeRules.remaining(expiresAt: $0.expiresAt, now: now) } ?? 1500 }
     convenience init(services: FocusServices, context: ModelContext) {
         self.init(services: services, history: SessionHistory(context: context, acknowledge: services.engine.acknowledgeTerminal))
