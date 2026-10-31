@@ -2,11 +2,16 @@ import XCTest
 @testable import FocusCore
 final class TimeRulesTests: XCTestCase {
     func testCountdownClampsAndRecomputesAfterRestart() {
-        let end = Date(timeIntervalSince1970: 2000)
-        XCTAssertEqual(TimeRules.remaining(expiresAt: end, now: Date(timeIntervalSince1970: 500)), 1500)
-        XCTAssertEqual(TimeRules.remaining(expiresAt: end, now: Date(timeIntervalSince1970: 1500)), 500)
-        XCTAssertEqual(TimeRules.remaining(expiresAt: end, now: Date(timeIntervalSince1970: 2500)), 0)
-        XCTAssertEqual(TimeRules.remaining(expiresAt: end, now: Date(timeIntervalSince1970: 0)), 1500)
+        let start = Date(timeIntervalSince1970: 500), end = Date(timeIntervalSince1970: 2000)
+        XCTAssertEqual(TimeRules.remaining(startedAt: start, expiresAt: end, now: Date(timeIntervalSince1970: 500)), 1500)
+        XCTAssertEqual(TimeRules.remaining(startedAt: start, expiresAt: end, now: Date(timeIntervalSince1970: 1500)), 500)
+        XCTAssertEqual(TimeRules.remaining(startedAt: start, expiresAt: end, now: Date(timeIntervalSince1970: 2500)), 0)
+        XCTAssertEqual(TimeRules.remaining(startedAt: start, expiresAt: end, now: Date(timeIntervalSince1970: 0)), 1500)
+    }
+    func testRemainingIsCappedBySessionLength() {
+        let start = Date(timeIntervalSince1970: 0), end = start.addingTimeInterval(3000)
+        XCTAssertEqual(TimeRules.remaining(startedAt: start, expiresAt: end, now: start.addingTimeInterval(-60)), 3000)
+        XCTAssertEqual(TimeRules.remaining(startedAt: start, expiresAt: end, now: start.addingTimeInterval(2999.2)), 1)
     }
     func testTodayRespects23HourDSTDay() {
         var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: "America/New_York")!

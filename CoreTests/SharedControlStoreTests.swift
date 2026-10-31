@@ -12,6 +12,20 @@ final class SharedControlStoreTests: XCTestCase {
         let actual = try store.withExclusiveAccess { try $0.load() }
         XCTAssertEqual(actual.session?.id, s.id); XCTAssertEqual(actual.schemaVersion, 1)
     }
+    func testStoreLoadsEveryAllowedLengthIncludingLegacy1500() throws {
+        let store = SharedControlStore(directory: directory)
+        for length in [1500.0, 3000.0] {
+            let s = ControlSession(startedAt: Date(timeIntervalSince1970: 100), length: length)
+            try store.withExclusiveAccess { locked in var envelope = try locked.load(); envelope.session = s; try locked.save(envelope) }
+            XCTAssertEqual(try store.withExclusiveAccess { try $0.load() }.session?.length, length)
+        }
+    }
+    func testStoreRejectsSessionWithDisallowedLength() throws {
+        let store = SharedControlStore(directory: directory)
+        var s = ControlSession(startedAt: Date(timeIntervalSince1970: 100)); s.expiresAt = s.startedAt.addingTimeInterval(1560)
+        try store.withExclusiveAccess { locked in var envelope = try locked.load(); envelope.session = s; try locked.save(envelope) }
+        XCTAssertThrowsError(try store.withExclusiveAccess { try $0.load() }) { XCTAssertEqual($0 as? ControlIssue, .invalidState) }
+    }
     func testAtomicReplacementFailurePreservesFileAndAllowsRetry() throws {
         let store = SharedControlStore(directory: directory)
         let file = directory.appendingPathComponent("control.json")

@@ -13,7 +13,7 @@ Xcode 프로젝트는 `FocusStudy.xcodeproj`입니다.
 
 ```sh
 swift test
-xcrun swiftc Shared/ControlTypes.swift Shared/SharedControlStore.swift Shared/SessionControl.swift Tests/Fixtures/ControlRaceHelper.swift -o /tmp/focus-control-race
+xcrun swiftc Shared/ControlTypes.swift Shared/SharedControlStore.swift Shared/SessionControl.swift Shared/FocusLength.swift Tests/Fixtures/ControlRaceHelper.swift -o /tmp/focus-control-race
 /tmp/focus-control-race --verify
 xcodebuild build -project FocusStudy.xcodeproj -scheme FocusStudy -destination 'generic/platform=iOS Simulator' -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO
 ```

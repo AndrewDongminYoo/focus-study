@@ -16,6 +16,11 @@ final class SessionControlTests: XCTestCase {
         XCTAssertEqual(store.envelope.session?.id, s.id)
         XCTAssertTrue(shield.applied)
     }
+    func testStartUsesRequestedLengthForExpiryAndMonitorInterval() throws {
+        let (engine, _, monitor, shield) = fixture()
+        let s = try engine.start(now: now, length: 2400, authorized: { true }, apply: { shield.apply() }, matches: { shield.applied })
+        XCTAssertEqual(s.length, 2400); XCTAssertEqual(monitor.intervals[s.id]?.1, now.addingTimeInterval(2400))
+    }
     func testDeniedAuthorizationCannotStartOrApply() {
         let (engine, store, monitor, shield) = fixture()
         XCTAssertThrowsError(try engine.start(now: now, authorized: { false }, apply: { shield.apply() }, matches: { true }))

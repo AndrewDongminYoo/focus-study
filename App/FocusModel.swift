@@ -37,7 +37,7 @@ enum StartBlocker: Equatable { case access, error, selection }
         if errorMessage != nil { return .error }
         return counts.apps + counts.websites == 0 ? .selection : nil
     }
-    var remaining: Int { current.map { TimeRules.remaining(expiresAt: $0.expiresAt, now: now) } ?? 1500 }
+    var remaining: Int { current.map { TimeRules.remaining(startedAt: $0.startedAt, expiresAt: $0.expiresAt, now: now) } ?? 1500 }
     convenience init(services: FocusServices, context: ModelContext) {
         self.init(services: services, history: SessionHistory(context: context, acknowledge: services.engine.acknowledgeTerminal))
     }
