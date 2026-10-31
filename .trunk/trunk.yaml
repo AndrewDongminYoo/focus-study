@@ -24,12 +24,12 @@ runtimes:
     - python@3.14.4
 lint:
   enabled:
-    - checkov@3.3.30
+    - checkov@3.4.0
     - git-diff-check
     - pinact@4.1.1!:
         commands: [lint, upgrade]
     - prettier@3.9.10
-    - trufflehog@3.90.13
+    - trufflehog@3.99.7
     - cspell@10.4.0
     - actionlint@1.7.12
     - markdownlint@0.50.0
