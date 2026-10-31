@@ -156,6 +156,7 @@ On the iOS 27.1 simulator the early-exit confirmation renders as a popover ancho
 The cancel UI test taps the cancel button when it exists and the popover dismiss region otherwise, so the cancel-button branch is unexecuted until an iOS 17 runtime is available.
 Two DEBUG fixture modes were added: `expiring` starts a session three seconds before expiry, and `not-requested` reports authorization as not yet requested.
 
-The first-screen privacy line says records are not sent to a server and are stored on this device.
-Issue #32 asked for "data never leaves the device"; that wording was not used because device backups are outside the app's control, and #17 remains the place that audits data egress.
+The first-screen privacy line was first written as "not sent to a server and stored on this device", because device backups are outside the app's control.
+On 2026-10-31 the operator replaced it with the exact text "데이터는 기기에만 저장돼요"; it is the only 해요체 string on the screen, by that decision.
+#17 remains the place that audits data egress.
 The completion haptic cannot be observed in the simulator; the tests check only the state change that triggers it.

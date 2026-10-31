@@ -106,7 +106,7 @@ struct FocusView: View {
         Section("시작하기 전에") {
             Label("25분 동안 고른 앱과 웹사이트를 제한해서 지금 할 일에 집중하도록 돕습니다.", systemImage: "timer").accessibilityIdentifier("purpose")
             Label("앱 제한과 사용 보고서에 스크린 타임 권한이 필요합니다.", systemImage: "hourglass")
-            Label("선택한 항목과 집중 기록은 서버로 보내지 않고 이 기기에 저장합니다.", systemImage: "lock.iphone")
+            Label("데이터는 기기에만 저장돼요", systemImage: "lock.iphone")
             if model.access == .notRequested {
                 Button("권한 허용") { Task { await model.services.authorization.requestIndividual(); model.refresh() } }.buttonStyle(.borderedProminent).accessibilityIdentifier("authorize")
             } else {
