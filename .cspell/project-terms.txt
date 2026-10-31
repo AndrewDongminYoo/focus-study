@@ -33,6 +33,7 @@ wholemodule
 WWDC
 xcodegen
 xcodeproj
+xcprivacy
 xcrun
 xctest
 XCUIApplication
