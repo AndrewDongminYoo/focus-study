@@ -5,6 +5,7 @@ struct FocusView: View {
     let model: FocusModel
     @Environment(\.scenePhase) private var scenePhase
     @State private var sheet: SelectionSheet?
+    @State private var confirmingEnd = false
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     var body: some View {
         NavigationStack {
@@ -22,7 +23,11 @@ struct FocusView: View {
                             .font(.system(size: 54, weight: .light, design: .rounded)).monospacedDigit().accessibilityIdentifier("countdown")
                         if model.isActive {
                             Text("집중 시간 진행 중").font(.subheadline)
-                            Button("중도 종료", role: .destructive) { model.end() }.accessibilityIdentifier("end")
+                            Button("중도 종료", role: .destructive) { confirmingEnd = true }.accessibilityIdentifier("end")
+                                .confirmationDialog("집중을 여기서 끝낼까요?", isPresented: $confirmingEnd, titleVisibility: .visible) {
+                                    Button("종료하기", role: .destructive) { model.end() }
+                                    Button("계속 집중하기", role: .cancel) {}
+                                } message: { Text("지금 끝내면 이 세션은 중도 종료로 기록됩니다.") }
                         } else {
                             Button("25분 시작") { model.start() }.buttonStyle(.borderedProminent).disabled(!model.canStart).accessibilityIdentifier("start")
                             if let blocker = model.startBlocker {
@@ -86,6 +91,7 @@ struct FocusView: View {
         .task { model.refresh() }
         .onChange(of: scenePhase) { _, value in if value == .active { model.refresh() } }
         .onChange(of: model.access) { _, _ in model.refresh() }
+        .onChange(of: model.isActive) { _, active in if !active { confirmingEnd = false } }
         .onReceive(timer) { _ in if scenePhase == .active { model.tick() } }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in model.refresh() }
         .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in model.refresh() }

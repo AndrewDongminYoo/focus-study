@@ -67,8 +67,20 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["end"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["selection"].isEnabled)
         app.buttons["end"].tap()
+        XCTAssertTrue(app.buttons["종료하기"].waitForExistence(timeout: 5)); app.buttons["종료하기"].tap()
         XCTAssertTrue(app.staticTexts["중도 종료"].waitForExistence(timeout: 5)); XCTAssertTrue(app.buttons["selection"].isEnabled)
         XCTAssertFalse(app.descendants(matching: .any)["completion"].exists)
+    }
+    func testCancellingEarlyExitKeepsTheSessionRunning() {
+        let app = app(); app.buttons["start"].tap()
+        XCTAssertTrue(app.buttons["end"].waitForExistence(timeout: 5))
+        app.buttons["end"].tap()
+        XCTAssertTrue(app.buttons["종료하기"].waitForExistence(timeout: 5))
+        captureReport(app, name: "early-exit-confirmation")
+        // Newer iOS shows the dialog as a popover without its cancel button; tapping outside dismisses it.
+        let cancel = app.buttons["계속 집중하기"]
+        if cancel.exists { cancel.tap() } else { app.otherElements["PopoverDismissRegion"].tap() }
+        XCTAssertTrue(app.buttons["end"].waitForExistence(timeout: 5)); XCTAssertFalse(app.staticTexts["중도 종료"].exists)
     }
     func testExpiredSessionShowsCompletionUntilDismissed() {
         let app = app("expiring")
