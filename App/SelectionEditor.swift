@@ -19,8 +19,8 @@ struct SelectionEditor: View {
                 ToolbarItem(placement: .cancellationAction) { Button("취소") { dismiss() }.accessibilityIdentifier("pickerCancel") }
                 ToolbarItem(placement: .confirmationAction) { Button("저장") {
                     do { try model.saveSelection(draft); dismiss() }
-                    catch { issue = "앱이나 웹사이트를 1개 이상 선택해 주세요. 각각 최대 50개까지 가능합니다." }
-                }.accessibilityIdentifier("pickerSave") }
+                    catch { issue = SelectionFeedback.message(for: error) }
+                }.disabled(SelectionFeedback.draftIssue(appCount: draft.applicationTokens.count, websiteCount: draft.webDomainTokens.count) != nil).accessibilityIdentifier("pickerSave") }
             }
         }
     }
@@ -33,7 +33,10 @@ private struct SelectionSummary: View {
             Text("앱 \(appCount)개 · 웹사이트 \(websiteCount)개 선택")
                 .font(.subheadline.weight(.semibold)).monospacedDigit()
                 .accessibilityIdentifier("selectionCounts")
-            Text("앱·웹사이트 각각 최대 50개. 카테고리 전체 선택도 가능합니다.").font(.footnote)
+            Text("앱과 웹사이트는 각각 50개까지 고를 수 있어요. 카테고리 전체를 골라도 돼요.").font(.footnote)
+            if let draftIssue = SelectionFeedback.draftIssue(appCount: appCount, websiteCount: websiteCount) {
+                Label(draftIssue, systemImage: "exclamationmark.circle").font(.footnote).foregroundStyle(.red).accessibilityIdentifier("selectionIssue")
+            }
         }.padding()
     }
 }
@@ -52,7 +55,7 @@ struct FixtureSelectionEditor: View {
                 Button("선택 지우기") { selected = false }.accessibilityIdentifier("fixtureClear")
             }.toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("취소") { dismiss() }.accessibilityIdentifier("pickerCancel") }
-                ToolbarItem(placement: .confirmationAction) { Button("저장") { repository.selected = selected; dismiss() }.accessibilityIdentifier("pickerSave") }
+                ToolbarItem(placement: .confirmationAction) { Button("저장") { repository.selected = selected; dismiss() }.disabled(SelectionFeedback.draftIssue(appCount: selected ? 1 : 0, websiteCount: 0) != nil).accessibilityIdentifier("pickerSave") }
             }
         }
     }

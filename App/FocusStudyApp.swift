@@ -18,13 +18,13 @@ import SwiftData
                 } description: {
                     Text(errorMessage)
                 } actions: {
-                    Button("다시 확인") { load() }.accessibilityIdentifier("startupRetry")
+                    Button("다시 확인하기") { load() }.accessibilityIdentifier("startupRetry")
                     if let runtime {
-                        Button("현재 세션 종료", role: .destructive) {
+                        Button("현재 세션 종료하기", role: .destructive) {
                             do {
                                 try runtime.recovery.endCurrent(now: Date())
-                                self.errorMessage = "종료를 요청했습니다. 다시 확인해 주세요."
-                            } catch { self.errorMessage = "세션 상태를 읽지 못했습니다. 다시 확인해 주세요." }
+                                self.errorMessage = "종료를 요청했어요. 다시 확인해 주세요."
+                            } catch { self.errorMessage = "세션 상태를 읽지 못했어요. 다시 확인해 주세요." }
                         }.accessibilityIdentifier("startupEnd")
                     }
                 }
@@ -34,7 +34,7 @@ import SwiftData
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             guard model == nil, let runtime else { return }
             do { try runtime.recovery.engine.reconcile(now: Date(), authorized: runtime.hasAccess()) }
-            catch { errorMessage = "세션 상태를 확인하지 못했습니다. 다시 확인해 주세요." }
+            catch { errorMessage = "세션 상태를 확인하지 못했어요. 다시 확인해 주세요." }
         }
     }
     private func load() {
@@ -53,7 +53,7 @@ import SwiftData
             model = FocusModel(services: services, context: ModelContext(created))
             errorMessage = nil
         } catch {
-            errorMessage = runtime == nil ? "앱을 준비하지 못했습니다. 다시 시도해 주세요." : "선택 항목이나 기록을 불러오지 못했습니다. 현재 세션을 종료하거나 다시 시도해 주세요."
+            errorMessage = runtime == nil ? "앱을 준비하지 못했어요. 다시 시도해 주세요." : "선택 항목이나 기록을 불러오지 못했어요. 현재 세션을 종료하거나 다시 시도해 주세요."
         }
     }
 }

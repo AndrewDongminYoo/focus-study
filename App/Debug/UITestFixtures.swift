@@ -7,7 +7,7 @@ import SwiftUI
 
 @MainActor @Observable final class FixtureAuthorization: AuthorizationProviding {
     var status: AccessStatus
-    init(denied: Bool) { status = denied ? .denied : .approved }
+    init(denied: Bool, notRequested: Bool = false) { status = notRequested ? .notRequested : denied ? .denied : .approved }
     func requestIndividual() async { status = .approved }
     func refresh() {}
     func hasAccessNow() -> Bool { status == .approved }
@@ -33,7 +33,7 @@ extension FocusServices {
     static func fixture(arguments: [String]) -> FocusServices {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("FocusFixture-\(UUID().uuidString)")
         let engine = SessionControl(store: SharedControlStore(directory: directory), monitoring: FixtureMonitoring(fail: arguments.contains("registration-failure")), shield: FixtureShield())
-        return FocusServices(authorization: FixtureAuthorization(denied: arguments.contains("denied")), selection: FixtureSelection(selected: arguments.contains("--selected")), engine: engine, applySelection: { _ in }, matchesSelection: { _ in true }, isFixture: true)
+        return FocusServices(authorization: FixtureAuthorization(denied: arguments.contains("denied"), notRequested: arguments.contains("not-requested")), selection: FixtureSelection(selected: arguments.contains("--selected")), engine: engine, applySelection: { _ in }, matchesSelection: { _ in true }, isFixture: true)
     }
 }
 #endif
@@ -44,6 +44,10 @@ extension FocusRuntime {
         let services = FocusServices.fixture(arguments: arguments)
         if arguments.contains("startup-failure") {
             _ = try services.engine.start(now: Date(), authorized: { true }, apply: {}, matches: { true })
+        }
+        if arguments.contains("expiring") {
+            // A session started 25 minutes minus 3 seconds ago, so the UI test sees the real expiry path.
+            _ = try services.engine.start(now: Date().addingTimeInterval(-1497), authorized: { true }, apply: {}, matches: { true })
         }
         var attempts = 0
         return FocusRuntime(recovery: StartupRecovery(engine: services.engine), hasAccess: services.authorization.hasAccessNow, loadStorage: {

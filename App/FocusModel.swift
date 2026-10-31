@@ -15,6 +15,7 @@ import Observation
     #endif
 
 }
+enum StartBlocker: Equatable { case access, error, selection }
 @MainActor @Observable final class FocusModel {
     let services: FocusServices
     private let history: any SessionHistoryProviding
@@ -23,10 +24,19 @@ import Observation
     private(set) var errorMessage: String?
     private(set) var isStarting = false
     private(set) var now = Date()
+    /// The most recent session that reached its full 25 minutes, until the person dismisses it.
+    private(set) var completedSessionID: UUID?
     var access: AccessStatus { services.authorization.status }
     var isActive: Bool { current?.phase == .active }
     var counts: (apps: Int, websites: Int, categories: Int) { services.selection.counts }
     var canStart: Bool { access == .approved && current == nil && !isStarting && errorMessage == nil && counts.apps + counts.websites > 0 }
+    /// The first unmet start condition, in the order the person has to resolve them.
+    var startBlocker: StartBlocker? {
+        guard current == nil, !isStarting else { return nil }
+        if access != .approved { return .access }
+        if errorMessage != nil { return .error }
+        return counts.apps + counts.websites == 0 ? .selection : nil
+    }
     var remaining: Int { current.map { TimeRules.remaining(expiresAt: $0.expiresAt, now: now) } ?? 1500 }
     convenience init(services: FocusServices, context: ModelContext) {
         self.init(services: services, history: SessionHistory(context: context, acknowledge: services.engine.acknowledgeTerminal))
@@ -41,24 +51,26 @@ import Observation
             current = try services.engine.snapshot().session
         } catch {
             current = nil
-            errorMessage = "상태를 확인하지 못했습니다. 다시 확인해 주세요."
+            errorMessage = "상태를 확인하지 못했어요. 다시 확인해 주세요."
             return
         }
         do {
             if let terminal = current, terminal.phase == .terminal {
                 try history.importTerminal(terminal)
+                if terminal.reason == .expired { completedSessionID = terminal.id }
                 current = try services.engine.snapshot().session
             }
             records = try history.records(on: now, calendar: .current)
             errorMessage = nil
         } catch {
             // A history failure does not invalidate a confirmed control session or its early-exit action.
-            errorMessage = "기록을 불러오지 못했습니다. 다시 확인해 주세요. 진행 중인 세션은 종료할 수 있습니다."
+            errorMessage = "기록을 불러오지 못했어요. 다시 확인해 주세요. 진행 중인 세션은 종료할 수 있어요."
         }
     }
 
     func start() {
         guard canStart else { return }
+        completedSessionID = nil
         isStarting = true; defer { isStarting = false }
         refresh()
         guard errorMessage == nil, access == .approved, current == nil else { return }
@@ -70,14 +82,15 @@ import Observation
             refresh()
         } catch {
             refresh()
-            errorMessage = "집중 시간을 시작하지 못했습니다. 다시 확인해 주세요."
+            errorMessage = "집중 시간을 시작하지 못했어요. 다시 확인해 주세요."
         }
     }
     func end() {
         guard let id = current?.id else { return }
         do { try services.engine.finish(id: id, reason: .earlyExit, now: Date()); refresh() }
-        catch { current = nil; errorMessage = "종료 상태를 저장하지 못했습니다. 다시 확인해 주세요." }
+        catch { current = nil; errorMessage = "종료 상태를 저장하지 못했어요. 다시 확인해 주세요." }
     }
+    func dismissCompletion() { completedSessionID = nil }
     func tick() {
         now = Date()
         if let current, now >= current.expiresAt { refresh() }

@@ -13,6 +13,7 @@
 		2223AD7702556469FD055BA5 /* SessionRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = C319BE9A1C80D0D864BC6263 /* SessionRecord.swift */; };
 		25D34E51A83B9EAB02B652D6 /* FocusModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A79936C6EE2CD49F1C577E32 /* FocusModel.swift */; };
 		273EF2F6149CC12979F5CDB1 /* SharedControlStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9124EDD32B42B6B7DC563AC8 /* SharedControlStore.swift */; };
+		297118490F6E579348F3E665 /* SelectionFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8BD3DEDFDB2421AD65430A2 /* SelectionFeedback.swift */; };
 		2DAC4605B9FA031F762AEAF3 /* FocusReport.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D7F8E5F4EE114794DD03509E /* FocusReport.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		30B2FE49B9B438FEBB38B02E /* ControlTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66F1973C38BC3E67F3196742 /* ControlTypes.swift */; };
 		320BF834880639DE363C4C5E /* DeviceDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48AB9C8FAE727BB9401D212F /* DeviceDiagnostics.swift */; };
@@ -31,7 +32,10 @@
 		674D21FCCD020DB5F8D71243 /* SelectionValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACC55D005E82218CABB3BFED /* SelectionValidator.swift */; };
 		69568524CD868EEF67A6BBD8 /* FocusRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F43D719BF3A630EB9119C4D /* FocusRuntime.swift */; };
 		6998714F799B4974077A5061 /* ControlTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66F1973C38BC3E67F3196742 /* ControlTypes.swift */; };
+		76EEB47E8173D29ECB7987E3 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 467159D4C65093EAE5BF4945 /* PrivacyInfo.xcprivacy */; };
+		80AD11E7F8D4056B446A67F6 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = D4FDE385189F73B5B88044CC /* PrivacyInfo.xcprivacy */; };
 		8419B6EB8D04D027B9401EDB /* SessionControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32E2982CA955C853A36A4B57 /* SessionControl.swift */; };
+		88BF09A39CBF3CBF57974A54 /* SelectionFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8BD3DEDFDB2421AD65430A2 /* SelectionFeedback.swift */; };
 		91066BCCBDB9AFF33114BFC2 /* FocusModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AA7539225348E6C7D4E48A4 /* FocusModelTests.swift */; };
 		96E0120E988A1BFDFEB4D77A /* FocusReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6ACC6B4E653F11D028A80CDA /* FocusReport.swift */; };
 		A124D163CCAAC1D9AB1E41C4 /* UsageSummarySection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87CD2C5E91E4DA078DA6E8F6 /* UsageSummarySection.swift */; };
@@ -42,6 +46,7 @@
 		ABCF68754EE86A291C6C84B9 /* DeviceDiagnosticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6F6207DF784D1729E873080 /* DeviceDiagnosticsTests.swift */; };
 		B23C4AF97432B215934B0806 /* SelectionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7AB42BEFCACDE0E353D0071 /* SelectionRepository.swift */; };
 		BC9E46CADC7EDC2ABA37FEA9 /* FocusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBEEE3ED6BD9BC3A3D850B6B /* FocusView.swift */; };
+		BE8B210B7DBB2837FFF61652 /* SelectionFeedbackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F2A8D2AB4DE7F5037838367 /* SelectionFeedbackTests.swift */; };
 		BF51CD57A52473A5B3AE0AFC /* UsageReportHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = D82C12E3AAAB889FC7623746 /* UsageReportHost.swift */; };
 		C8D2A66389908DCF21EA6AA7 /* StartupRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC5423DA7A71AB76ABD3FC97 /* StartupRecovery.swift */; };
 		D5993D9284DFCBA5E3034DAB /* ScreenTimeAdapterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AF1F08069A8EBE3F00C1594 /* ScreenTimeAdapterTests.swift */; };
@@ -103,6 +108,7 @@
 		32E2982CA955C853A36A4B57 /* SessionControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionControl.swift; sourceTree = "<group>"; };
 		37E336A1178D9EFA0544D247 /* UsageSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageSummary.swift; sourceTree = "<group>"; };
 		3F42EE001D54D96DCA1BE8E3 /* DeviceDiagnosticsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceDiagnosticsSection.swift; sourceTree = "<group>"; };
+		467159D4C65093EAE5BF4945 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		48AB9C8FAE727BB9401D212F /* DeviceDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceDiagnostics.swift; sourceTree = "<group>"; };
 		4F43D719BF3A630EB9119C4D /* FocusRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusRuntime.swift; sourceTree = "<group>"; };
 		5794F1B2F8C782079857848A /* FocusMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusMonitor.swift; sourceTree = "<group>"; };
@@ -117,8 +123,10 @@
 		8D56CC59E7444BE42868BC82 /* SelectionEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionEditor.swift; sourceTree = "<group>"; };
 		9124EDD32B42B6B7DC563AC8 /* SharedControlStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedControlStore.swift; sourceTree = "<group>"; };
 		9AF1F08069A8EBE3F00C1594 /* ScreenTimeAdapterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenTimeAdapterTests.swift; sourceTree = "<group>"; };
+		9F2A8D2AB4DE7F5037838367 /* SelectionFeedbackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionFeedbackTests.swift; sourceTree = "<group>"; };
 		A79936C6EE2CD49F1C577E32 /* FocusModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusModel.swift; sourceTree = "<group>"; };
 		A7AB42BEFCACDE0E353D0071 /* SelectionRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionRepository.swift; sourceTree = "<group>"; };
+		A8BD3DEDFDB2421AD65430A2 /* SelectionFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionFeedback.swift; sourceTree = "<group>"; };
 		AC0AC967AAB6824A6F4E2BB9 /* FocusUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = FocusUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		ACC55D005E82218CABB3BFED /* SelectionValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionValidator.swift; sourceTree = "<group>"; };
 		B6F6207DF784D1729E873080 /* DeviceDiagnosticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceDiagnosticsTests.swift; sourceTree = "<group>"; };
@@ -127,6 +135,7 @@
 		BC5423DA7A71AB76ABD3FC97 /* StartupRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartupRecovery.swift; sourceTree = "<group>"; };
 		BE52C8706C6D532DF83AB565 /* UITestFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestFixtures.swift; sourceTree = "<group>"; };
 		C319BE9A1C80D0D864BC6263 /* SessionRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionRecord.swift; sourceTree = "<group>"; };
+		D4FDE385189F73B5B88044CC /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		D7F8E5F4EE114794DD03509E /* FocusReport.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = FocusReport.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		D82C12E3AAAB889FC7623746 /* UsageReportHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageReportHost.swift; sourceTree = "<group>"; };
 		DBEEE3ED6BD9BC3A3D850B6B /* FocusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusView.swift; sourceTree = "<group>"; };
@@ -195,7 +204,9 @@
 				4F43D719BF3A630EB9119C4D /* FocusRuntime.swift */,
 				5EF0B71AD7C6702B17A1CB2C /* FocusStudyApp.swift */,
 				DBEEE3ED6BD9BC3A3D850B6B /* FocusView.swift */,
+				467159D4C65093EAE5BF4945 /* PrivacyInfo.xcprivacy */,
 				8D56CC59E7444BE42868BC82 /* SelectionEditor.swift */,
+				A8BD3DEDFDB2421AD65430A2 /* SelectionFeedback.swift */,
 				A7AB42BEFCACDE0E353D0071 /* SelectionRepository.swift */,
 				C319BE9A1C80D0D864BC6263 /* SessionRecord.swift */,
 				D82C12E3AAAB889FC7623746 /* UsageReportHost.swift */,
@@ -225,6 +236,7 @@
 			isa = PBXGroup;
 			children = (
 				5794F1B2F8C782079857848A /* FocusMonitor.swift */,
+				D4FDE385189F73B5B88044CC /* PrivacyInfo.xcprivacy */,
 			);
 			path = Monitor;
 			sourceTree = "<group>";
@@ -248,6 +260,7 @@
 				B6F6207DF784D1729E873080 /* DeviceDiagnosticsTests.swift */,
 				7AA7539225348E6C7D4E48A4 /* FocusModelTests.swift */,
 				9AF1F08069A8EBE3F00C1594 /* ScreenTimeAdapterTests.swift */,
+				9F2A8D2AB4DE7F5037838367 /* SelectionFeedbackTests.swift */,
 			);
 			path = SDKTests;
 			sourceTree = "<group>";
@@ -278,6 +291,7 @@
 			buildConfigurationList = 8AEDC76B8F535DF24736A174 /* Build configuration list for PBXNativeTarget "FocusMonitor" */;
 			buildPhases = (
 				282109DA52DFF8213FD8A4AF /* Sources */,
+				486D72521B4F4376FA18F1BC /* Resources */,
 			);
 			buildRules = (
 			);
@@ -295,6 +309,7 @@
 			buildConfigurationList = 8A9B32A0EF3948FB3BC2579E /* Build configuration list for PBXNativeTarget "FocusStudy" */;
 			buildPhases = (
 				2BF9AD2DB06721BF6988325B /* Sources */,
+				12B47847B1C0A9D7730E15EA /* Resources */,
 				387A9674F17F3C0F54856864 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
@@ -399,6 +414,25 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		12B47847B1C0A9D7730E15EA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				76EEB47E8173D29ECB7987E3 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		486D72521B4F4376FA18F1BC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				80AD11E7F8D4056B446A67F6 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		182773AE999A4AAC9E7F1747 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -412,6 +446,8 @@
 				91066BCCBDB9AFF33114BFC2 /* FocusModelTests.swift in Sources */,
 				D5993D9284DFCBA5E3034DAB /* ScreenTimeAdapterTests.swift in Sources */,
 				05B490A92A62E0FBCD85FF62 /* ScreenTimeAdapters.swift in Sources */,
+				88BF09A39CBF3CBF57974A54 /* SelectionFeedback.swift in Sources */,
+				BE8B210B7DBB2837FFF61652 /* SelectionFeedbackTests.swift in Sources */,
 				A40A72275F9FB28505CCE43B /* SelectionRepository.swift in Sources */,
 				A503059A61732ECD7C5F9B39 /* SelectionValidator.swift in Sources */,
 				8419B6EB8D04D027B9401EDB /* SessionControl.swift in Sources */,
@@ -452,6 +488,7 @@
 				BC9E46CADC7EDC2ABA37FEA9 /* FocusView.swift in Sources */,
 				DB3ADF8B9AB1B42FDD1DC7D5 /* ScreenTimeAdapters.swift in Sources */,
 				FF670A33591AD4EDF75EEDFE /* SelectionEditor.swift in Sources */,
+				297118490F6E579348F3E665 /* SelectionFeedback.swift in Sources */,
 				B23C4AF97432B215934B0806 /* SelectionRepository.swift in Sources */,
 				DD993D2C0724ADEE8F9B5626 /* SelectionValidator.swift in Sources */,
 				406F2F2D61F331335EAC1842 /* SessionControl.swift in Sources */,

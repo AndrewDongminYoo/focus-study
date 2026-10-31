@@ -29,6 +29,29 @@ import FamilyControls
         XCTAssertNil(model.current); XCTAssertFalse(model.isActive); XCTAssertNotNil(model.errorMessage)
         XCTAssertFalse(shield.applied)
     }
+    func testOnlyAFullSessionIsMarkedCompletedUntilDismissed() throws {
+        let (model, _, _, shield, engine) = fixture()
+        let session = try engine.start(now: Date().addingTimeInterval(-1500), authorized: { true }, apply: { shield.applied = true }, matches: { true })
+        model.refresh()
+        XCTAssertEqual(model.completedSessionID, session.id); XCTAssertNil(model.current)
+        model.dismissCompletion()
+        XCTAssertNil(model.completedSessionID)
+        model.start(); XCTAssertTrue(model.isActive)
+        model.end()
+        XCTAssertNil(model.completedSessionID)
+    }
+    func testStartBlockerNamesTheFirstUnmetCondition() throws {
+        let (model, history, _, shield, engine) = fixture()
+        let selection = try XCTUnwrap(model.services.selection as? ModelTestSelection)
+        model.refresh(); XCTAssertNil(model.startBlocker)
+        selection.counts = (0, 0, 0)
+        XCTAssertEqual(model.startBlocker, .selection)
+        history.failFetch = true; model.refresh()
+        XCTAssertEqual(model.startBlocker, .error)
+        history.failFetch = false; selection.counts = (1, 0, 0); model.refresh()
+        _ = try engine.start(now: Date(), authorized: { true }, apply: { shield.applied = true }, matches: { true })
+        model.refresh(); XCTAssertNil(model.startBlocker)
+    }
 }
 private enum ModelTestError: Error { case storage }
 private final class ModelTestStore: ControlStore, LockedControl {
@@ -62,6 +85,6 @@ private final class ModelTestShield: ShieldClient {
 }
 @MainActor private final class ModelTestSelection: SelectionStoring {
     var selection = FamilyActivitySelection()
-    var counts: (apps: Int, websites: Int, categories: Int) { (1,0,0) }
+    var counts: (apps: Int, websites: Int, categories: Int) = (1, 0, 0)
     func save(_ selection: FamilyActivitySelection) throws {}
 }
