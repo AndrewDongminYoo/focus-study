@@ -41,10 +41,10 @@ final class FocusFlowTests: XCTestCase {
     }
     func testCompletionCopyUsesSessionLength() {
         let app = app("expiring", extra: ["--length", "40"])
-        // The Label exposes both a container and its text under the same identifier.
-        let completion = app.descendants(matching: .any).matching(identifier: "completion").firstMatch
+        // The Label exposes its icon and text under the same identifier, in a runtime-dependent order (iOS 26.5 lists the icon, labelled "Selected", first).
+        let completion = app.descendants(matching: .any).matching(NSPredicate(format: "identifier == 'completion' AND label CONTAINS '집중을 마쳤어요'")).firstMatch
         XCTAssertTrue(completion.waitForExistence(timeout: 15))
-        XCTAssertTrue(completion.label.contains("40분")); XCTAssertFalse(completion.label.contains("25분"))
+        XCTAssertTrue(completion.label.contains("40분"), completion.label); XCTAssertFalse(completion.label.contains("25분"), completion.label)
     }
     func testReloadRecreatesReportContentWithinSameDay() {
         let app = app()
