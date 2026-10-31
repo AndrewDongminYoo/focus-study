@@ -83,7 +83,7 @@ struct FocusView: View {
                     .disabled(model.access != .approved).accessibilityIdentifier("report")
                 } footer: { Text("집중 기록과 별도로 기기 사용 시간을 볼 수 있어요.") }
             }
-            .navigationTitle("FocusStudy")
+            .navigationTitle("오늘의 집중")
             .sheet(item: $sheet) { _ in
                 #if DEBUG
                 if let fixture = model.services.selection as? FixtureSelection { FixtureSelectionEditor(repository: fixture) }
