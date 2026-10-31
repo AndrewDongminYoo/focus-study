@@ -29,6 +29,17 @@ import FamilyControls
         XCTAssertNil(model.current); XCTAssertFalse(model.isActive); XCTAssertNotNil(model.errorMessage)
         XCTAssertFalse(shield.applied)
     }
+    func testOnlyAFullSessionIsMarkedCompletedUntilDismissed() throws {
+        let (model, _, _, shield, engine) = fixture()
+        let session = try engine.start(now: Date().addingTimeInterval(-1500), authorized: { true }, apply: { shield.applied = true }, matches: { true })
+        model.refresh()
+        XCTAssertEqual(model.completedSessionID, session.id); XCTAssertNil(model.current)
+        model.dismissCompletion()
+        XCTAssertNil(model.completedSessionID)
+        model.start(); XCTAssertTrue(model.isActive)
+        model.end()
+        XCTAssertNil(model.completedSessionID)
+    }
 }
 private enum ModelTestError: Error { case storage }
 private final class ModelTestStore: ControlStore, LockedControl {

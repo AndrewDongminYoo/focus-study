@@ -45,6 +45,10 @@ extension FocusRuntime {
         if arguments.contains("startup-failure") {
             _ = try services.engine.start(now: Date(), authorized: { true }, apply: {}, matches: { true })
         }
+        if arguments.contains("expiring") {
+            // A session started 25 minutes minus 3 seconds ago, so the UI test sees the real expiry path.
+            _ = try services.engine.start(now: Date().addingTimeInterval(-1497), authorized: { true }, apply: {}, matches: { true })
+        }
         var attempts = 0
         return FocusRuntime(recovery: StartupRecovery(engine: services.engine), hasAccess: services.authorization.hasAccessNow, loadStorage: {
             attempts += 1

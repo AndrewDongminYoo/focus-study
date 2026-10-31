@@ -23,6 +23,8 @@ import Observation
     private(set) var errorMessage: String?
     private(set) var isStarting = false
     private(set) var now = Date()
+    /// The most recent session that reached its full 25 minutes, until the person dismisses it.
+    private(set) var completedSessionID: UUID?
     var access: AccessStatus { services.authorization.status }
     var isActive: Bool { current?.phase == .active }
     var counts: (apps: Int, websites: Int, categories: Int) { services.selection.counts }
@@ -47,6 +49,7 @@ import Observation
         do {
             if let terminal = current, terminal.phase == .terminal {
                 try history.importTerminal(terminal)
+                if terminal.reason == .expired { completedSessionID = terminal.id }
                 current = try services.engine.snapshot().session
             }
             records = try history.records(on: now, calendar: .current)
@@ -59,6 +62,7 @@ import Observation
 
     func start() {
         guard canStart else { return }
+        completedSessionID = nil
         isStarting = true; defer { isStarting = false }
         refresh()
         guard errorMessage == nil, access == .approved, current == nil else { return }
@@ -78,6 +82,7 @@ import Observation
         do { try services.engine.finish(id: id, reason: .earlyExit, now: Date()); refresh() }
         catch { current = nil; errorMessage = "종료 상태를 저장하지 못했습니다. 다시 확인해 주세요." }
     }
+    func dismissCompletion() { completedSessionID = nil }
     func tick() {
         now = Date()
         if let current, now >= current.expiresAt { refresh() }

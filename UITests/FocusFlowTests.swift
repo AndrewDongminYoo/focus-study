@@ -67,6 +67,16 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertFalse(app.buttons["selection"].isEnabled)
         app.buttons["end"].tap()
         XCTAssertTrue(app.staticTexts["중도 종료"].waitForExistence(timeout: 5)); XCTAssertTrue(app.buttons["selection"].isEnabled)
+        XCTAssertFalse(app.descendants(matching: .any)["completion"].exists)
+    }
+    func testExpiredSessionShowsCompletionUntilDismissed() {
+        let app = app("expiring")
+        let completion = app.descendants(matching: .any)["completion"]
+        XCTAssertTrue(completion.waitForExistence(timeout: 15))
+        XCTAssertFalse(app.buttons["start"].exists)
+        captureReport(app, name: "session-completed")
+        app.buttons["completionDismiss"].tap()
+        XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: 5)); XCTAssertFalse(completion.exists)
     }
     func testPickerCancelKeepsExistingSelection() {
         let app = app(); app.buttons["selection"].tap(); app.buttons["fixtureClear"].tap(); app.buttons["pickerCancel"].tap()

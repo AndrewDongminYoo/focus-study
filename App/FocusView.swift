@@ -13,6 +13,11 @@ struct FocusView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Label("나를 위한 집중 시간", systemImage: "leaf").font(.headline)
                         Text("25분 동안, 지금 할 일에 집중해 보세요.").foregroundStyle(.secondary)
+                        if model.completedSessionID != nil {
+                            Label("25분 집중을 마쳤습니다", systemImage: "checkmark.circle.fill").font(.title2.weight(.semibold)).foregroundStyle(.green).accessibilityIdentifier("completion")
+                            Text("오늘의 세션에 기록했습니다. 잠시 쉬었다가 다음 집중을 시작해 보세요.").foregroundStyle(.secondary)
+                            Button("닫기") { model.dismissCompletion() }.buttonStyle(.bordered).accessibilityIdentifier("completionDismiss")
+                        } else {
                         Text(String(format: "%02d:%02d", model.remaining / 60, model.remaining % 60))
                             .font(.system(size: 54, weight: .light, design: .rounded)).monospacedDigit().accessibilityIdentifier("countdown")
                         if model.isActive {
@@ -21,7 +26,9 @@ struct FocusView: View {
                         } else {
                             Button("25분 시작") { model.start() }.buttonStyle(.borderedProminent).disabled(!model.canStart).accessibilityIdentifier("start")
                         }
+                        }
                     }.padding(.vertical, 12)
+                    .sensoryFeedback(.success, trigger: model.completedSessionID) { _, new in new != nil }
                 } footer: { Text("제한이 자동으로 풀리기까지 시간이 걸릴 수 있습니다.") }
                 if model.access != .approved { accessSection }
                 Section("제한할 항목") {
