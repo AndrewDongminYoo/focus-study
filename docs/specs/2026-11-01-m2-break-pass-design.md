@@ -231,6 +231,7 @@ Any other shape is `ControlIssue.invalidState`, as in M1.
   - In `active`: `min(focus end, deadline)`.
   - In `waiting`: the `active` end after a stale-wait cancel, `min(focus end, deadline) + (waitEndsAt + grace - pausedAt)`. The cancel adds the same time to `pausedSeconds` and to `deadlineCredit`.
   - In `onBreak` and `breakOver`: the deadline.
+  - After a failed save, the registered end must again match the stored phase ([Save failure after an overwrite](#save-failure-after-an-overwrite)).
 - Each change of that end calls `startMonitoring` again with the same name, which overwrites the schedule. The interval start stays `startedAt`, so the interval is always at least 25 minutes long even when little focus time is left. `[UNCERTAIN]`: the 15-minute minimum with a past `intervalStart` (see above).
 - A re-registration of the focus activity calls `intervalDidStart(for:)` at once. That callback only reconciles, as in M1. It never applies the shield.
 - A session has at most one break activity at a time. The re-block stops it. This keeps the activity count low (`excessiveActivities`).
@@ -241,8 +242,8 @@ Any other shape is `ControlIssue.invalidState`, as in M1.
 Each transition is one `withExclusiveAccess` section on `SessionControl`.
 Each one reads the envelope again, checks the session ID and the expected phase, and does nothing if they do not match.
 
-1. **Request a break** (`active` → `waiting`). Allowed only if `breaksTaken < 3`. Set `pausedAt = now` and `waitEndsAt = now + wait[breaksTaken]`. Overwrite the focus activity end with the `waiting` end from [Monitoring activities](#monitoring-activities), then save.
-2. **Cancel the wait** (`waiting` → `active`). Let `end` be `now`, or `waitEndsAt + grace` if that is earlier. Add `end - pausedAt` to `pausedSeconds` and to `deadlineCredit`. Clear `pausedAt` and `waitEndsAt`. Overwrite the focus activity end with `min(focus end, deadline)`, then save.
+1. **Request a break** (`active` → `waiting`). Allowed only if `breaksTaken < 3`. Set `pausedAt = now` and `waitEndsAt = now + wait[breaksTaken]`. Overwrite the focus activity end with the `waiting` end from [Monitoring activities](#monitoring-activities), then save. A failed save follows [Save failure after an overwrite](#save-failure-after-an-overwrite).
+2. **Cancel the wait** (`waiting` → `active`). Let `end` be `now`, or `waitEndsAt + grace` if that is earlier. Add `end - pausedAt` to `pausedSeconds` and to `deadlineCredit`. Clear `pausedAt` and `waitEndsAt`. Overwrite the focus activity end with `min(focus end, deadline)`, then save. A failed save follows [Save failure after an overwrite](#save-failure-after-an-overwrite).
 3. **Start the break** (`waiting` → `onBreak`). Allowed only if `now >= waitEndsAt` and `now < waitEndsAt + grace`. In this order:
    1. Write the break selection copy.
    2. Register the break activity `focus.<UUID>.break.<breaksTaken + 1>`.
@@ -250,7 +251,7 @@ Each one reads the envelope again, checks the session ID and the expected phase,
    4. Overwrite the focus activity end with the deadline.
    5. Save `onBreak`.
    6. Clear this app's named store.
-   - If any step up to and including the save fails: stop the break activity, delete the copy, go back to `active` as in "Cancel the wait", and show a retryable error. The shield was not cleared, so no restriction gap opens. If the save of `active` also fails, the stored session stays `waiting`, and reconcile step 6 cancels the wait after the grace ([Reconcile order](#reconcile-order)).
+   - If any step up to and including the save fails: stop the break activity, delete the copy, go back to `active` as in "Cancel the wait", and show a retryable error. The shield was not cleared, so no restriction gap opens. If the save of `active` also fails, the stored session stays `waiting`. [Save failure after an overwrite](#save-failure-after-an-overwrite) then registers the `waiting` end again, so a callback arrives for reconcile step 6, which cancels the wait after the grace ([Reconcile order](#reconcile-order)).
 4. **Re-block** (`onBreak` → `breakOver`). Triggers:
    - The Monitor gets `intervalWillEndWarning(for:)` for the current break activity. This re-blocks without a check against `breakEndsAt`, because an early re-block is the safe direction for the 5-minute limit.
    - Any reconcile (app foreground, timer tick, any Monitor callback of this session) when `now >= breakEndsAt`.
@@ -266,8 +267,20 @@ Each one reads the envelope again, checks the session ID and the expected phase,
 
    If the copy is missing or the store does not match, end the session as `.recoveryInterrupted` (restrictions stay off, and the session is not counted). A break without an end must not happen.
 
-5. **Resume** (`breakOver` → `active`). The person taps "다시 집중하기". If `now >= deadline`, end as `.deadlineMissed` instead. Otherwise add `now - pausedAt` to `pausedSeconds`, clear `pausedAt`, overwrite the focus activity end with `min(new focus end, deadline)`, and save. If the new focus end is after the deadline, the session cannot complete. It stays `active` until the deadline and then ends as `.deadlineMissed` ([Timed end](#timed-end)).
+5. **Resume** (`breakOver` → `active`). The person taps "다시 집중하기". If `now >= deadline`, end as `.deadlineMissed` instead. Otherwise add `now - pausedAt` to `pausedSeconds`, clear `pausedAt`, overwrite the focus activity end with `min(new focus end, deadline)`, and save. A failed save follows [Save failure after an overwrite](#save-failure-after-an-overwrite). If the new focus end is after the deadline, the session cannot complete. It stays `active` until the deadline and then ends as `.deadlineMissed` ([Timed end](#timed-end)).
 6. **End** (any non-terminal phase → `ending` → `terminal`). Unchanged order from the 2026-10-26 design: save `ending`, clear the store, stop the monitoring, save `terminal`. M2 adds two steps: stop the break activity, and delete the break selection copy.
+
+#### Save failure after an overwrite
+
+Transitions 1, 2 and 5 overwrite the focus activity end before they save.
+This rule applies to them, and also to the rollback of transition 3 and to the stale-wait cancel in reconcile step 6, because both are transition 2.
+When that save fails, the stored phase does not change, but the registered end belongs to the new phase. A callback at that end can then find a session that it does not change, with no later callback registered.
+So, under the same lock:
+
+1. Register the focus activity again with the end that [Monitoring activities](#monitoring-activities) gives for the stored phase. Then throw the save error as a retryable error. The stored session and the registered end agree again, and the person or the next reconcile can try again.
+2. If that registration throws, or if the restored end is not after `now`, end the session as `.recoveryInterrupted` with transition 6. For this end only, clear this app's named store, stop the focus activity and the break activity, and delete the break selection copy, also when the save of `ending` fails. This follows the rollback rule of the 2026-10-26 design ("롤백 도중 저장 오류가 나도 해제와 중지부터 시도하고"). A session that has no callback at its next change must not keep the restrictions on. If the save of `ending` failed, the stored phase stays, and the next reconcile finishes the record at step 5 (focus activity not registered).
+
+A restored end can be in the past only on the stale-wait path: reconcile step 6 can run long after `waitEndsAt` + grace, when the `waiting` end has already passed. On the paths that the person starts, the restored end is in the future: transition 1 starts in `active` without a timed end, a cancel by the person comes before `waitEndsAt` + grace, and transition 5 already checked `now < deadline`.
 
 ### Reconcile order
 

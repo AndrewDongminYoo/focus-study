@@ -36,6 +36,7 @@
 7. The selection copy exists only between break start and re-block or session end. Test: Task 2 Step 1 and Task 3 Step 1.
 8. A reconcile arrives late, after both the focus end and the deadline. The reason must come from comparing the two times (spec [Timed end](../specs/2026-11-01-m2-break-pass-design.md#timed-end)), not from the order of the checks. Test: Task 1 Step 1 and Task 2 Step 1.
 9. A version 1 envelope is read and a transition saves it. The file must then hold `schemaVersion` 2, and the break-shape checks must apply to both versions. Test: Task 1 Step 1 and Task 2 Step 1.
+10. A save fails after a transition overwrote the focus activity end. The registered end must again match the stored phase, or the session must end with the restrictions lifted (spec [Save failure after an overwrite](../specs/2026-11-01-m2-break-pass-design.md#save-failure-after-an-overwrite)). Test: Task 2 Step 1.
 
 ---
 
@@ -141,6 +142,13 @@ func testEndCurrentAfterDeadlineWithLateFocusEndIsDeadlineMissed() throws { /* p
   - `testStartBreakRegistersFifteenMinuteBreakWithTwelveMinuteWarningThenClearsShield` (the shield is cleared only after the save).
   - `testStartBreakFailureNeverClearsShieldAndReturnsToActive` (`registerBreak` throws; shield `clear` count is 0; phase `active`; the copy is removed).
   - `testStartBreakSaveFailureNeverClearsShieldAndRollsBack` (the save of `onBreak` throws once, after the copy and the break registration; shield `clear` count is 0; the break activity is stopped; the copy is removed; phase `active`; the last focus activity registration ends at `min(focusEnd, deadline)`).
+  - `testStartBreakRollbackSaveFailureRestoresWaitingEnd` (the saves of `onBreak` and of `active` both throw: shield `clear` count is 0; the stored phase is `waiting`; the last focus activity registration ends at the `waiting` end).
+  - Save failures after an overwrite (spec [Save failure after an overwrite](../specs/2026-11-01-m2-break-pass-design.md#save-failure-after-an-overwrite)). The fake store throws on the named save once, unless the test says otherwise:
+    - `testRequestBreakSaveFailureRestoresActiveEnd` (the save of `waiting` throws: `requestBreak` throws; the stored phase is `active`; the last registration ends at `min(focusEnd, deadline)`).
+    - `testCancelWaitSaveFailureRestoresWaitingEnd` (the save of `active` throws: the stored phase is `waiting`; the last registration ends at the `waiting` end; reconcile at that end cancels the wait as of `waitEndsAt` + grace).
+    - `testResumeSaveFailureRestoresDeadlineEnd` (length 1500: break requested at +300, re-block at +495, resume at +600 and the save of `active` throws. The stored phase is `breakOver`. The last registration ends at the deadline +2295, not at the new focus end +1800. Reconcile at +2295 ends as `.deadlineMissed` with the shield cleared.)
+    - `testStaleWaitCancelSaveFailureWithPastEndEndsSafely` (a `waiting` session reconciled 1 hour after `waitEndsAt` + grace, past its `waiting` end, and the save of `active` throws: the shield is cleared, the focus activity and the break activity are stopped, and the session ends as `.recoveryInterrupted`).
+    - `testSaveAndRestoreFailureEndsAsRecoveryInterrupted` (resume; the store throws on every save, and the restore registration throws: shield `clear` count is 1; the focus activity is stopped; the stored phase is still `breakOver`; after the store accepts saves again, reconcile ends the session as `.recoveryInterrupted`).
   - `testWarningCallbackReBlocksStopsBreakActivityAndRemovesCopy`.
   - `testStaleBreakCallbackDoesNotTouchNewerBreak` (warning of `break.1` during break 2: phase stays `onBreak`, no shield call).
   - `testWarningCallbackAfterDeadlineEndsAsDeadlineMissed` (an `onBreak` session whose deadline is 5 s before the warning of its current break activity: the warning ends the session as `.deadlineMissed`, no save of `breakOver` is recorded, no shield is applied, and the store is cleared).
