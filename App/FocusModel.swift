@@ -51,7 +51,7 @@ enum StartBlocker: Equatable { case access, error, selection }
             current = try services.engine.snapshot().session
         } catch {
             current = nil
-            errorMessage = "상태를 확인하지 못했습니다. 다시 확인해 주세요."
+            errorMessage = "상태를 확인하지 못했어요. 다시 확인해 주세요."
             return
         }
         do {
@@ -64,7 +64,7 @@ enum StartBlocker: Equatable { case access, error, selection }
             errorMessage = nil
         } catch {
             // A history failure does not invalidate a confirmed control session or its early-exit action.
-            errorMessage = "기록을 불러오지 못했습니다. 다시 확인해 주세요. 진행 중인 세션은 종료할 수 있습니다."
+            errorMessage = "기록을 불러오지 못했어요. 다시 확인해 주세요. 진행 중인 세션은 종료할 수 있어요."
         }
     }
 
@@ -82,13 +82,13 @@ enum StartBlocker: Equatable { case access, error, selection }
             refresh()
         } catch {
             refresh()
-            errorMessage = "집중 시간을 시작하지 못했습니다. 다시 확인해 주세요."
+            errorMessage = "집중 시간을 시작하지 못했어요. 다시 확인해 주세요."
         }
     }
     func end() {
         guard let id = current?.id else { return }
         do { try services.engine.finish(id: id, reason: .earlyExit, now: Date()); refresh() }
-        catch { current = nil; errorMessage = "종료 상태를 저장하지 못했습니다. 다시 확인해 주세요." }
+        catch { current = nil; errorMessage = "종료 상태를 저장하지 못했어요. 다시 확인해 주세요." }
     }
     func dismissCompletion() { completedSessionID = nil }
     func tick() {

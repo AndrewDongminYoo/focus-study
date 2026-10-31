@@ -148,7 +148,7 @@ The displayed history time is the session start time, not the observed interrupt
 ## UI/UX production pass: 2026-10-31
 
 An apple-design review on 2026-10-31 filed issues #20 to #43; this branch implements #25, #27 to #32 in that order.
-The project has no copy voice line, so the `user-facing-copy` pass assumed `warm` again and kept the existing formal register (`~습니다`, `~해 주세요`) instead of the skill's 해요체 default.
+The project has no copy voice line, so the `user-facing-copy` pass assumed `warm` again and at first kept the existing formal register (`~습니다`, `~해 주세요`); the operator later moved the app to 해요체, as recorded at the end of this section.
 The privacy manifest reason codes were checked against the Apple documentation JSON for `NSPrivacyAccessedAPITypeReasons` and `NSPrivacyAccessedAPIType` on 2026-10-31, and every product source directory was searched for the full API list on that page.
 Only `UserDefaults` (App) and `ProcessInfo.systemUptime` (App and Monitor, through `Shared/`) matched, so Report has no manifest.
 
@@ -157,6 +157,8 @@ The cancel UI test taps the cancel button when it exists and the popover dismiss
 Two DEBUG fixture modes were added: `expiring` starts a session three seconds before expiry, and `not-requested` reports authorization as not yet requested.
 
 The first-screen privacy line was first written as "not sent to a server and stored on this device", because device backups are outside the app's control.
-On 2026-10-31 the operator replaced it with the exact text "데이터는 기기에만 저장돼요"; it is the only 해요체 string on the screen, by that decision.
+On 2026-10-31 the operator replaced it with the exact text "데이터는 기기에만 저장돼요" and then asked for the other strings to match its tone.
+A second `user-facing-copy` pass converted every shipped string in `App/`, `Presentation/` and `Report/` to 해요체 and gave single-action buttons a `~하기` form (`25분 시작하기`, `권한 허용하기`, `다시 확인하기`, `현재 세션 종료하기`).
+That pass changed tone only: the meaning changes owned by #34 and #35 (for example "25분 만료" and the "웹" short form) and the DEBUG-only diagnostic strings were left as they were.
 #17 remains the place that audits data egress.
 The completion haptic cannot be observed in the simulator; the tests check only the state change that triggers it.

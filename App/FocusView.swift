@@ -18,8 +18,8 @@ struct FocusView: View {
                         Label("나를 위한 집중 시간", systemImage: "leaf").font(.headline)
                         Text("25분 동안, 지금 할 일에 집중해 보세요.").foregroundStyle(.secondary)
                         if model.completedSessionID != nil {
-                            Label("25분 집중을 마쳤습니다", systemImage: "checkmark.circle.fill").font(.title2.weight(.semibold)).foregroundStyle(.green).accessibilityIdentifier("completion")
-                            Text("오늘의 세션에 기록했습니다. 잠시 쉬었다가 다음 집중을 시작해 보세요.").foregroundStyle(.secondary)
+                            Label("25분 집중을 마쳤어요", systemImage: "checkmark.circle.fill").font(.title2.weight(.semibold)).foregroundStyle(.green).accessibilityIdentifier("completion")
+                            Text("오늘의 세션에 기록했어요. 잠시 쉬었다가 다음 집중을 시작해 보세요.").foregroundStyle(.secondary)
                             Button("닫기") { model.dismissCompletion() }.buttonStyle(.bordered).accessibilityIdentifier("completionDismiss")
                         } else {
                         Text(String(format: "%02d:%02d", model.remaining / 60, model.remaining % 60))
@@ -33,9 +33,9 @@ struct FocusView: View {
                                 .confirmationDialog("집중을 여기서 끝낼까요?", isPresented: $confirmingEnd, titleVisibility: .visible) {
                                     Button("종료하기", role: .destructive) { model.end() }
                                     Button("계속 집중하기", role: .cancel) {}
-                                } message: { Text("지금 끝내면 이 세션은 중도 종료로 기록됩니다.") }
+                                } message: { Text("지금 끝내면 이 세션은 중도 종료로 기록돼요.") }
                         } else {
-                            Button("25분 시작") { model.start() }.buttonStyle(.borderedProminent).disabled(!model.canStart).accessibilityIdentifier("start")
+                            Button("25분 시작하기") { model.start() }.buttonStyle(.borderedProminent).disabled(!model.canStart).accessibilityIdentifier("start")
                             if let blocker = model.startBlocker {
                                 Text(blockerText(blocker)).font(.footnote).foregroundStyle(.secondary).accessibilityIdentifier("startBlocker")
                                 if blocker == .selection {
@@ -46,24 +46,24 @@ struct FocusView: View {
                         }
                     }.padding(.vertical, 12)
                     .sensoryFeedback(.success, trigger: model.completedSessionID) { _, new in new != nil }
-                } footer: { Text("제한이 자동으로 풀리기까지 시간이 걸릴 수 있습니다.") }
+                } footer: { Text("제한이 자동으로 풀리기까지 시간이 걸릴 수 있어요.") }
                 Section("제한할 항목") {
                     Button { sheet = .editor } label: {
                         HStack { Label("앱과 웹사이트 선택", systemImage: "hand.raised"); Spacer(); Text("앱 \(model.counts.apps) · 웹 \(model.counts.websites)").foregroundStyle(.secondary) }
                     }.disabled(model.access != .approved || model.isActive || model.isStarting || model.errorMessage != nil).accessibilityIdentifier("selection")
-                    Text("웹사이트 전체를 제한합니다. 브라우저에 따라 제한되지 않을 수 있습니다.").font(.footnote).foregroundStyle(.secondary)
+                    Text("웹사이트 전체를 제한해요. 브라우저에 따라 제한되지 않을 수 있어요.").font(.footnote).foregroundStyle(.secondary)
                 }
                 if let error = model.errorMessage {
                     Section {
                         Text(error).foregroundStyle(.red).accessibilityIdentifier("startError")
-                        Button("다시 확인") { model.refresh() }.accessibilityIdentifier("retry")
+                        Button("다시 확인하기") { model.refresh() }.accessibilityIdentifier("retry")
                     }
                 }
                 #if DEBUG
                 if let diagnostics = model.services.diagnostics { DeviceDiagnosticsSection(diagnostics: diagnostics, model: model) }
                 #endif
                 Section("오늘의 세션") {
-                    if model.records.isEmpty { Text("아직 기록이 없습니다.").foregroundStyle(.secondary) }
+                    if model.records.isEmpty { Text("아직 기록이 없어요.").foregroundStyle(.secondary) }
                     ForEach(model.records, id: \.id) { record in
                         HStack {
                             VStack(alignment: .leading) { Text(record.startedAt, style: .time); Text(reason(record.reason)).font(.caption).foregroundStyle(.secondary) }
@@ -81,7 +81,7 @@ struct FocusView: View {
                         #endif
                     } label: { Label("오늘의 사용 보고서", systemImage: "chart.bar") }
                     .disabled(model.access != .approved).accessibilityIdentifier("report")
-                } footer: { Text("집중 기록과 별도로 기기 사용 시간을 확인합니다.") }
+                } footer: { Text("집중 기록과 별도로 기기 사용 시간을 볼 수 있어요.") }
             }
             .navigationTitle("FocusStudy")
             .sheet(item: $sheet) { _ in
@@ -104,11 +104,11 @@ struct FocusView: View {
     }
     private var accessSection: some View {
         Section("시작하기 전에") {
-            Label("25분 동안 고른 앱과 웹사이트를 제한해서 지금 할 일에 집중하도록 돕습니다.", systemImage: "timer").accessibilityIdentifier("purpose")
-            Label("앱 제한과 사용 보고서에 스크린 타임 권한이 필요합니다.", systemImage: "hourglass")
+            Label("25분 동안 고른 앱과 웹사이트를 제한해서 지금 할 일에 집중하도록 도와요.", systemImage: "timer").accessibilityIdentifier("purpose")
+            Label("앱을 제한하고 사용 보고서를 보여 주려면 스크린 타임 권한이 필요해요.", systemImage: "hourglass")
             Label("데이터는 기기에만 저장돼요", systemImage: "lock.iphone")
             if model.access == .notRequested {
-                Button("권한 허용") { Task { await model.services.authorization.requestIndividual(); model.refresh() } }.buttonStyle(.borderedProminent).accessibilityIdentifier("authorize")
+                Button("권한 허용하기") { Task { await model.services.authorization.requestIndividual(); model.refresh() } }.buttonStyle(.borderedProminent).accessibilityIdentifier("authorize")
             } else {
                 Text("설정에서 스크린 타임 권한을 확인해 주세요.")
                 Link("설정 열기", destination: URL(string: UIApplication.openSettingsURLString)!).accessibilityIdentifier("settings")
@@ -117,9 +117,9 @@ struct FocusView: View {
     }
     private func blockerText(_ blocker: StartBlocker) -> String {
         switch blocker {
-        case .access: "스크린 타임 권한을 허용하면 시작할 수 있습니다."
-        case .error: "오류를 다시 확인한 뒤에 시작할 수 있습니다."
-        case .selection: "제한할 앱이나 웹사이트를 고르면 시작할 수 있습니다."
+        case .access: "스크린 타임 권한을 허용하면 시작할 수 있어요."
+        case .error: "오류를 다시 확인한 뒤에 시작할 수 있어요."
+        case .selection: "제한할 앱이나 웹사이트를 고르면 시작할 수 있어요."
         }
     }
     private func reason(_ reason: EndReason) -> String {

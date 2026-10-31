@@ -35,7 +35,7 @@ final class FocusFlowTests: XCTestCase {
         app.buttons["report"].tap()
         let unavailable = app.staticTexts["reportUnavailable"]
         XCTAssertTrue(unavailable.waitForExistence(timeout: 5))
-        XCTAssertEqual(unavailable.label, "사용량을 불러오지 못했습니다. 잠시 후 다시 확인해 주세요.")
+        XCTAssertEqual(unavailable.label, "사용량을 불러오지 못했어요. 잠시 후 다시 확인해 주세요.")
         XCTAssertFalse(app.staticTexts["reportTotal"].exists)
         captureReport(app, name: "report-empty")
     }
@@ -71,7 +71,7 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "settings").firstMatch.waitForExistence(timeout: 8))
         XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["start"].isEnabled)
-        XCTAssertEqual(app.staticTexts["startBlocker"].label, "스크린 타임 권한을 허용하면 시작할 수 있습니다.")
+        XCTAssertEqual(app.staticTexts["startBlocker"].label, "스크린 타임 권한을 허용하면 시작할 수 있어요.")
         app.swipeUp(); app.swipeUp()
         XCTAssertFalse(app.buttons["report"].isEnabled)
     }
@@ -154,7 +154,7 @@ final class FocusFlowTests: XCTestCase {
         let app = app(selected: false)
         let blocker = app.staticTexts["startBlocker"]
         XCTAssertTrue(blocker.waitForExistence(timeout: 8))
-        XCTAssertEqual(blocker.label, "제한할 앱이나 웹사이트를 고르면 시작할 수 있습니다.")
+        XCTAssertEqual(blocker.label, "제한할 앱이나 웹사이트를 고르면 시작할 수 있어요.")
         app.buttons["chooseSelection"].tap(); app.buttons["fixtureSelect"].tap(); app.buttons["pickerSave"].tap()
         XCTAssertTrue(app.buttons["start"].isEnabled); XCTAssertFalse(blocker.exists)
     }
@@ -162,7 +162,7 @@ final class FocusFlowTests: XCTestCase {
         let app = app("registration-failure"); app.buttons["start"].tap()
         XCTAssertTrue(app.staticTexts["startError"].waitForExistence(timeout: 5)); XCTAssertFalse(app.buttons["end"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["completion"].exists)
-        XCTAssertEqual(app.staticTexts["startBlocker"].label, "오류를 다시 확인한 뒤에 시작할 수 있습니다.")
+        XCTAssertEqual(app.staticTexts["startBlocker"].label, "오류를 다시 확인한 뒤에 시작할 수 있어요.")
         XCTAssertFalse(app.buttons["selection"].isEnabled)
         app.buttons["retry"].tap()
         XCTAssertTrue(app.buttons["start"].isEnabled)

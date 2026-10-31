@@ -33,7 +33,7 @@ private struct SelectionSummary: View {
             Text("앱 \(appCount)개 · 웹사이트 \(websiteCount)개 선택")
                 .font(.subheadline.weight(.semibold)).monospacedDigit()
                 .accessibilityIdentifier("selectionCounts")
-            Text("앱·웹사이트 각각 최대 50개. 카테고리 전체 선택도 가능합니다.").font(.footnote)
+            Text("앱과 웹사이트는 각각 50개까지 고를 수 있어요. 카테고리 전체를 골라도 돼요.").font(.footnote)
             if let draftIssue = SelectionFeedback.draftIssue(appCount: appCount, websiteCount: websiteCount) {
                 Label(draftIssue, systemImage: "exclamationmark.circle").font(.footnote).foregroundStyle(.red).accessibilityIdentifier("selectionIssue")
             }
