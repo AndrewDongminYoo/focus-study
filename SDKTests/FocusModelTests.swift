@@ -25,9 +25,18 @@ import FamilyControls
     func testRelaunchAfterSelectionResumesAtLengthStep() {
         let defaults = UserDefaults(suiteName: UUID().uuidString)!
         let (first, _, _, _, _) = fixture(defaults: defaults)
+        first.services.settings.migrateIfNeeded(hasSelection: false)
         XCTAssertEqual(first.route, .onboarding(.length))
         let (relaunched, _, _, _, _) = fixture(defaults: defaults)
+        relaunched.services.settings.migrateIfNeeded(hasSelection: true)
         XCTAssertEqual(relaunched.route, .onboarding(.length))
+    }
+    func testExistingSelectionMigratesEvenWhenFirstAccessReadIsNotApproved() {
+        let (model, _, _, _, _) = fixture(); let (access, selection) = doubles(model)
+        access.status = .denied; selection.counts = (1, 0, 0)
+        model.services.settings.migrateIfNeeded(hasSelection: true)
+        access.status = .approved
+        XCTAssertEqual(model.route, .timer)
     }
     func testRevokedAccessAfterCompletionShowsPermissionThenTimer() throws {
         let (model, _, _, shield, engine) = fixture(); let (access, _) = doubles(model)

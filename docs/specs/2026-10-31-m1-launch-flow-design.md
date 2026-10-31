@@ -83,6 +83,7 @@ The operator decided that a person with no settings goes through onboarding and 
   - The person has finished onboarding once. The app stores this as a flag in `UserDefaults` when the last onboarding step ends.
 - Without the flag, saving a selection in step 3 would already satisfy the first two conditions and skip step 4. The flag prevents that, and it also makes a relaunch in the middle of onboarding resume at the first unfinished step.
 - Migration: on the first launch of the M1 build, if access is approved and a selection exists, the app sets the flag. An existing user therefore skips onboarding after the update.
+  - Reconciliation (2026-10-31, final review): the shipped migration reads only the selection; `FocusSettings.migrateIfNeeded(hasSelection:)` is the authority, pinned by `testExistingSelectionMigratesEvenWhenFirstAccessReadIsNotApproved`. The one-time read of access at launch could not be retried, so a wrong read would keep an existing user in onboarding. A selection can exist at that point only from a pre-M1 build, because launch runs the migration before any onboarding screen can save one. An existing user without access still sees the permission step, through the route rule below.
 - If access is revoked and then approved again, the flag is still set, so the app returns straight to the timer screen. Only the permission step is shown again.
 - Onboarding steps, in this order:
   1. Intro: what the app does, and "데이터는 기기에만 저장돼요". This replaces the "시작하기 전에" section on today's first screen.

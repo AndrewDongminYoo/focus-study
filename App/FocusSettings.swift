@@ -24,11 +24,13 @@ import Observation
         get { storedOnboarding }
         set { storedOnboarding = newValue; defaults.set(newValue, forKey: Keys.onboarding) }
     }
-    /// Runs once per install: a person who already had access and a selection before onboarding existed skips it.
-    func migrateIfNeeded(accessApproved: Bool, hasSelection: Bool) {
+    /// Runs once per install: a person who saved a selection before onboarding existed skips it.
+    /// Safe on the selection alone because launch runs this before any onboarding screen can save one;
+    /// access is not read here, so a launch-time access read cannot strand that person in onboarding.
+    func migrateIfNeeded(hasSelection: Bool) {
         guard !defaults.bool(forKey: Keys.migration) else { return }
         defaults.set(true, forKey: Keys.migration)
-        if accessApproved && hasSelection { hasCompletedOnboarding = true }
+        if hasSelection { hasCompletedOnboarding = true }
     }
     private enum Keys {
         static let length = "focusLengthMinutes", onboarding = "onboardingCompleted", migration = "onboardingMigrationV1Done"

@@ -16,19 +16,19 @@ import XCTest
     }
     func testMigrationMarksExistingUserAsOnboarded() {
         let settings = FocusSettings(defaults: defaults())
-        settings.migrateIfNeeded(accessApproved: true, hasSelection: true)
+        settings.migrateIfNeeded(hasSelection: true)
         XCTAssertTrue(settings.hasCompletedOnboarding)
     }
     func testMigrationLeavesNewUserForOnboarding() {
         let settings = FocusSettings(defaults: defaults())
-        settings.migrateIfNeeded(accessApproved: false, hasSelection: false)
+        settings.migrateIfNeeded(hasSelection: false)
         XCTAssertFalse(settings.hasCompletedOnboarding)
     }
     func testMigrationRunsOnlyOnce() {
         let store = defaults()
-        FocusSettings(defaults: store).migrateIfNeeded(accessApproved: false, hasSelection: false)
+        FocusSettings(defaults: store).migrateIfNeeded(hasSelection: false)
         let later = FocusSettings(defaults: store)
-        later.migrateIfNeeded(accessApproved: true, hasSelection: true)
+        later.migrateIfNeeded(hasSelection: true)
         XCTAssertFalse(later.hasCompletedOnboarding)
     }
 }
