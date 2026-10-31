@@ -33,7 +33,7 @@
 4. The re-block finds no selection copy, or the store does not match. The session must end as `.recoveryInterrupted`, never stay in a break without an end. Test: Task 2 Step 1.
 5. The gaps after the re-blocks, added together, use up more than the slack. The session must end as `.deadlineMissed` at the deadline, lift the restrictions, and give no focus time. This is true whether the person never taps "다시 집중하기" or taps it and then focuses past the deadline in `active`. Test: Task 2 Step 1 and Task 4 Step 1.
 6. The person resumes with less than 15 minutes of focus left. The focus activity must be registered from `startedAt`, so the interval is at least the focus length. Test: Task 2 Step 1 and Task 3 Step 1.
-7. The selection copy exists only between break start and re-block or session end. Test: Task 2 Step 1 and Task 3 Step 1.
+7. The selection copy and the break activity exist only while the stored phase is `onBreak`, whatever process exit or thrown error came before. The next lock section removes every other copy and break activity, and in `waiting` it also corrects the registered focus activity end (spec [Break artifacts](../specs/2026-11-01-m2-break-pass-design.md#break-artifacts)). Test: Task 2 Step 1 and Task 3 Step 1.
 8. A reconcile arrives late, after both the focus end and the deadline. The reason must come from comparing the two times (spec [Timed end](../specs/2026-11-01-m2-break-pass-design.md#timed-end)), not from the order of the checks. Test: Task 1 Step 1 and Task 2 Step 1.
 9. A version 1 envelope is read and a transition saves it. The file must then hold `schemaVersion` 2, and the break-shape checks must apply to both versions. Test: Task 1 Step 1 and Task 2 Step 1.
 10. A save fails after a transition overwrote the focus activity end. The registered end must again match the stored phase, or the session must end with the restrictions lifted (spec [Save failure after an overwrite](../specs/2026-11-01-m2-break-pass-design.md#save-failure-after-an-overwrite)). Test: Task 2 Step 1.
@@ -111,7 +111,7 @@ func testEndCurrentAfterDeadlineWithLateFocusEndIsDeadlineMissed() throws { /* p
 
 - Modify: `Shared/ControlTypes.swift` (protocols), `Shared/SessionControl.swift`, `Tests/Fixtures/ControlRaceHelper.swift`
 - Modify so that every target still compiles (each conformer and call site of the changed protocol and initializer):
-  - `Integration/ScreenTimeAdapters.swift`: `registerBreak` throws `ControlIssue.breakUnavailable` until Task 3, so no break can start and no shield is cleared. `isBreakRegistered` returns `false`, and `stopBreak` calls `stopMonitoring` for the break name.
+  - `Integration/ScreenTimeAdapters.swift`: `registerBreak` throws `ControlIssue.breakUnavailable` until Task 3, so no break can start and no shield is cleared. `isBreakRegistered` returns `false`, `registeredBreaks` returns `[]`, and `stopBreak` calls `stopMonitoring` for the break name.
   - `Integration/DeviceDiagnostics.swift`: the wrapper forwards the new members to its base. `replay(current:)` calls `engine.handleCallback(activityName:now:authorized:)` and must pass `kind: .didEnd`, the kind that a stale focus activity delivers.
   - `App/Debug/UITestFixtures.swift`: fixture monitoring records break registrations in memory.
   - `App/FocusRuntime.swift` and `Monitor/FocusMonitor.swift`: pass a `BreakSelectionStore` whose `restoreShield` returns `false` until Task 3 (Monitor) and Task 5 (app), and pass `CallbackKind` from the existing callbacks.
@@ -123,8 +123,8 @@ func testEndCurrentAfterDeadlineWithLateFocusEndIsDeadlineMissed() throws { /* p
 
 - Consumes: Task 1.
 - Produces:
-  - `MonitoringClient` adds `registerBreak(id: UUID, index: Int, start: Date, end: Date, warning: TimeInterval) throws`, `isBreakRegistered(id: UUID, index: Int) -> Bool` and `stopBreak(id: UUID, index: Int)`. `stop(id:)` stops the focus activity and every break activity of that session. `register(id:start:end:)` overwrites an existing schedule.
-  - `protocol BreakSelectionStore { func restoreShield(id: UUID) -> Bool; func remove(id: UUID); func removeAll() }`. `restoreShield` applies the copy and returns `true` only when the store matches it.
+  - `MonitoringClient` adds `registerBreak(id: UUID, index: Int, start: Date, end: Date, warning: TimeInterval) throws`, `isBreakRegistered(id: UUID, index: Int) -> Bool`, `var registeredBreaks: [(id: UUID, index: Int)] { get }` and `stopBreak(id: UUID, index: Int)`. `stop(id:)` stops the focus activity and every break activity of that session. `register(id:start:end:)` overwrites an existing schedule.
+  - `protocol BreakSelectionStore { func restoreShield(id: UUID) -> Bool; func exists(id: UUID) -> Bool; func remove(id: UUID); func removeAll(except id: UUID?) }`. `restoreShield` applies the copy and returns `true` only when the store matches it. `removeAll(except: nil)` deletes every copy.
   - `enum CallbackKind { case didStart, didEnd, willEndWarning }`.
   - `SessionControl.init(store:monitoring:shield:breakSelection:timing:)`, with `timing` defaulting to `.standard`.
   - `func requestBreak(id: UUID, now: Date) throws -> ControlSession`
@@ -132,7 +132,7 @@ func testEndCurrentAfterDeadlineWithLateFocusEndIsDeadlineMissed() throws { /* p
   - `func startBreak(id: UUID, now: Date, saveSelection: () throws -> Void) throws`
   - `func resume(id: UUID, now: Date) throws`
   - `func handleCallback(activityName: String, kind: CallbackKind, now: Date, authorized: Bool) throws`
-  - `reconcile` follows the spec section [Reconcile order](../specs/2026-11-01-m2-break-pass-design.md#reconcile-order) and takes the time-based reason only from `ControlSession.timedEnd(at:timing:)`. Every focus activity registration uses the end from the spec section [Monitoring activities](../specs/2026-11-01-m2-break-pass-design.md#monitoring-activities), so `active` registers `min(focusEnd, deadline)`. `start` calls `breakSelection.removeAll()` inside the lock before it saves the new session. `end` also stops the break activity and calls `breakSelection.remove(id:)`. `read` failure also calls `breakSelection.removeAll()`.
+  - `reconcile` follows the spec section [Reconcile order](../specs/2026-11-01-m2-break-pass-design.md#reconcile-order) and takes the time-based reason only from `ControlSession.timedEnd(at:timing:)`. Every focus activity registration uses the end from the spec section [Monitoring activities](../specs/2026-11-01-m2-break-pass-design.md#monitoring-activities), so `active` registers `min(focusEnd, deadline)`. Every lock section, `start` included, runs the cleanup of the spec section [Break artifacts](../specs/2026-11-01-m2-break-pass-design.md#break-artifacts) right after it reads the envelope, and `handleCallback` runs it before the identity check. `end` follows the five numbered steps of spec transition 6. `read` failure also calls `breakSelection.removeAll(except: nil)`.
   - `ControlIssue` adds `breakUnavailable` (no breaks left, wrong phase, or the wait is not over).
 
 - [ ] **Step 1: Write the failing tests** with a fake monitor that records every registration (name, start, end, warning), a fake shield, and a fake `BreakSelectionStore`:
@@ -166,6 +166,8 @@ func testEndCurrentAfterDeadlineWithLateFocusEndIsDeadlineMissed() throws { /* p
   - `testReconcileAtNewFocusEndExpiresAndNotBefore`.
   - `testBreakRequestOnVersion1SessionSavesVersion2` (write the M1 literal, `requestBreak`, read raw JSON: `schemaVersion` 2 and `phase` `waiting`).
   - `testStartRemovesLeftoverSelectionCopies`.
+  - `testEveryLockSectionRemovesArtifactsTheStoredPhaseDoesNotAllow` (parameterized over no session and each stored phase, and over `reconcile`, `start`, and a callback whose name changes nothing. The fakes start with copies for the stored ID and for another ID, and with break activities 1 to 3 of both IDs. After the section, only the artifacts of the spec table [Break artifacts](../specs/2026-11-01-m2-break-pass-design.md#break-artifacts) remain. In `waiting` before the grace, the last focus activity registration ends at the `waiting` end.)
+  - `testInterruptionAtEveryStepOfBreakAndEndTransitionsKeepsTheArtifactTable` (parameterized. The fakes record a snapshot of the whole fake world, which is the stored envelope, the focus and break registrations with their ends, the copies and the shield, after each effect of transitions 3 and 4, of the rollback of transition 3, of transition 6, and of the cleanup itself. Exit pass: for each snapshot, a new `SessionControl` over a copy of it runs `reconcile`. For the snapshots of transition 3 and its rollback, it runs once before the grace and once 1 hour after `waitEndsAt` + grace. Throw pass: each effect that can throw throws once, then `reconcile` runs. After that reconcile: only the table's artifacts exist; the last focus activity registration ends at the end that the spec section [Monitoring activities](../specs/2026-11-01-m2-break-pass-design.md#monitoring-activities) gives for the stored phase, or the focus activity is stopped in `terminal`; the shield is cleared only when the stored phase is `onBreak` or `terminal`.)
   - `testEndDuringBreakStopsBothActivitiesAndRemovesCopy`.
   - `testReadFailureStopsBreakActivitiesAndRemovesAllCopies`.
 - [ ] **Step 2: Run `swift test --filter FocusCoreTests`. Expected: FAIL (members missing).**
@@ -179,7 +181,7 @@ func testEndCurrentAfterDeadlineWithLateFocusEndIsDeadlineMissed() throws { /* p
 **Files:**
 
 - Create: `Integration/BreakSelectionFile.swift`
-- Modify: `Integration/ScreenTimeAdapters.swift` (replace the Task 2 stub of `registerBreak` and `isBreakRegistered`), `Monitor/FocusMonitor.swift` (replace the Task 2 `BreakSelectionStore` placeholder with `BreakSelectionFile`)
+- Modify: `Integration/ScreenTimeAdapters.swift` (replace the Task 2 stub of `registerBreak`, `isBreakRegistered` and `registeredBreaks`), `Monitor/FocusMonitor.swift` (replace the Task 2 `BreakSelectionStore` placeholder with `BreakSelectionFile`)
 - Test: `SDKTests/ScreenTimeAdapterTests.swift`, `SDKTests/BreakSelectionFileTests.swift` (new), `SDKTests/DeviceDiagnosticsTests.swift`
 
 **Interfaces:**
@@ -187,7 +189,7 @@ func testEndCurrentAfterDeadlineWithLateFocusEndIsDeadlineMissed() throws { /* p
 - Consumes: Task 2.
 - Produces:
   - `ScreenTimeMonitoring.breakSchedule(start: Date, end: Date, warning: TimeInterval, calendar: Calendar) -> DeviceActivitySchedule`, with `warningTime` as minute and second components.
-  - `ScreenTimeMonitoring.sessionID(_:)` reads the 36 characters after `focus.` for both names. `breakIndex(_:) -> Int?` returns `n` for `focus.<UUID>.break.<n>` and `nil` for every other name.
+  - `ScreenTimeMonitoring.sessionID(_:)` reads the 36 characters after `focus.` for both names. `breakIndex(_:) -> Int?` returns `n` for `focus.<UUID>.break.<n>` and `nil` for every other name. `registeredBreaks` lists the names in `DeviceActivityCenter().activities` that both parsers accept.
   - `final class BreakSelectionFile: BreakSelectionStore { init(directory: URL, shield: ScreenTimeShield); func save(_ selection: FamilyActivitySelection, id: UUID) throws }`. It writes `break-selection.<UUID>.json` with `.atomic` and `.completeFileProtectionUntilFirstUserAuthentication`, and it stores application and web domain tokens only.
   - `FocusMonitor` overrides `intervalWillEndWarning(for:)` and passes the callback kind to `handleCallback`.
 
@@ -195,7 +197,7 @@ func testEndCurrentAfterDeadlineWithLateFocusEndIsDeadlineMissed() throws { /* p
   - `testBreakScheduleIsFifteenMinutesWithTwelveMinuteWarning`.
   - `testSessionIDParsesFocusAndBreakNamesAndBreakIndexRejectsOthers` (`focus.<UUID>`, `focus.<UUID>.break.2`, `focus.bad`, `other.<UUID>`).
   - `testFocusScheduleFromStartedAtIsAtLeastTheFocusLength`.
-  - `testBreakSelectionFileLifecycle` (in a temporary directory: `save` creates the file, `remove(id:)` deletes only that ID, `removeAll()` deletes every `break-selection.*` file and nothing else, `restoreShield` returns `false` when the file is missing).
+  - `testBreakSelectionFileLifecycle` (in a temporary directory: `save` creates the file and `exists(id:)` then returns `true`, `remove(id:)` deletes only that ID, `removeAll(except:)` deletes every other `break-selection.*` file and nothing else, `removeAll(except: nil)` deletes every copy, `restoreShield` returns `false` when the file is missing).
   - `testDiagnosticMonitoringForwardsBreakRegistration`.
 - [ ] **Step 2: Run** `xcodegen generate`, then the iOS test command with `-only-testing:FocusSDKTests`. Expected: FAIL.
 - [ ] **Step 3: Implement the interfaces above.**

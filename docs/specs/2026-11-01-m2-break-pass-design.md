@@ -112,7 +112,7 @@ This decision changes the 2026-10-26 data boundary, so the operator must approve
 
 - The Monitor extension must apply the shield again at the 3-minute point, while the app is usually not running. The Monitor does not have the selection tokens today. The 2026-10-26 design says: "Monitor ... 선택 토큰이나 SwiftData에 접근하지 않는다" and "토큰, 사용량, 사이트 이름은 공유하지 않는다".
 - Proposal: at break start, the app writes a copy of the session's frozen selection (application tokens and web domain tokens only) to the App Group directory `SessionControl/`, as `break-selection.<UUID>.json`. The file uses the same file protection as `control.json`.
-- The copy exists only during a break. The re-block deletes it after the shield matches. The end of the session deletes it. A control-state read failure deletes every `break-selection.*` file.
+- The copy exists only while the stored phase is `onBreak` ([Break artifacts](#break-artifacts)). The re-block deletes it after the shield matches. The end of the session deletes it. Every lock section deletes a copy that the stored phase does not allow, whatever interruption left it. A control-state read failure deletes every `break-selection.*` file.
 - Tokens are opaque values that the system issues for this device. The file stays on the device, so "데이터는 기기에만 저장돼요" stays true. The Report extension still has no App Group access.
 - The re-block always uses this frozen copy, from the app and from the Monitor. The selection editor stays locked during the whole session, including breaks.
 - If the operator rejects this proposal: this design found no other way for the Monitor to restore the selection, because a `ManagedSettingsStore` shield cannot be suspended and restored without the tokens. Only the app could re-block, and only while it runs, so "blocked again at once" would not be true.
@@ -124,7 +124,7 @@ This decision changes the 2026-10-26 data boundary, so the operator must approve
 - A version 1 envelope (M1 or earlier build) decodes with no break fields. Its session has 0 breaks and no pause, and it counts down and completes as in M1. The break-shape checks in [Session fields](#session-fields) apply to both versions.
 - A build before M2 cannot read a version 2 envelope. It fails with a decoding error (an unknown phase or reason) or with `unsupportedSchema`, because `FileControl.load()` decodes before it checks the version. Both are a control-state read failure, which clears this app's store and stops the focus activities that the old build can parse. A downgrade is not supported, and the old build leaves two things behind:
   - Its `sessionID(_:)` returns `nil` for `focus.<UUID>.break.<n>`, so it does not stop a break activity. Its `handleCallback` ignores that name, and the activity ends by itself at break start + 15 minutes.
-  - It does not know `break-selection.*` files. A copy stays in the App Group until an M2 build starts a session or runs its read-failure cleanup. Both delete every copy (see [Process lock and recovery contract](#process-lock-and-recovery-contract)).
+  - It does not know `break-selection.*` files. A copy stays in the App Group until the next lock section of an M2 build, which deletes every copy that the stored phase does not allow ([Break artifacts](#break-artifacts)). A read failure deletes every copy.
 
 ## Constraints
 
@@ -251,7 +251,7 @@ Each one reads the envelope again, checks the session ID and the expected phase,
    4. Overwrite the focus activity end with the deadline.
    5. Save `onBreak`.
    6. Clear this app's named store.
-   - If any step up to and including the save fails: stop the break activity, delete the copy, go back to `active` as in "Cancel the wait", and show a retryable error. The shield was not cleared, so no restriction gap opens. If the save of `active` also fails, the stored session stays `waiting`. [Save failure after an overwrite](#save-failure-after-an-overwrite) then registers the `waiting` end again, so a callback arrives for reconcile step 6, which cancels the wait after the grace ([Reconcile order](#reconcile-order)).
+   - If any step up to and including the save fails: stop the break activity, go back to `active` as in "Cancel the wait", delete the copy last, and show a retryable error. The copy goes last because in `waiting` it is the sign of an interrupted break start ([Break artifacts](#break-artifacts)). The shield was not cleared, so no restriction gap opens. If the save of `active` also fails, the stored session stays `waiting`. [Save failure after an overwrite](#save-failure-after-an-overwrite) then registers the `waiting` end again, so a callback arrives for reconcile step 6, which cancels the wait after the grace ([Reconcile order](#reconcile-order)).
 4. **Re-block** (`onBreak` → `breakOver`). Triggers:
    - The Monitor gets `intervalWillEndWarning(for:)` for the current break activity. This re-blocks without a check against `breakEndsAt`, because an early re-block is the safe direction for the 5-minute limit.
    - Any reconcile (app foreground, timer tick, any Monitor callback of this session) when `now >= breakEndsAt`.
@@ -266,9 +266,17 @@ Each one reads the envelope again, checks the session ID and the expected phase,
    6. Delete the copy.
 
    If the copy is missing or the store does not match, end the session as `.recoveryInterrupted` (restrictions stay off, and the session is not counted). A break without an end must not happen.
+   If the save of `breakOver` fails, throw the error. The stored phase stays `onBreak` with the shield applied, which is the safe direction, and the next reconcile at or after `breakEndsAt` re-blocks again.
 
 5. **Resume** (`breakOver` → `active`). The person taps "다시 집중하기". If `now >= deadline`, end as `.deadlineMissed` instead. Otherwise add `now - pausedAt` to `pausedSeconds`, clear `pausedAt`, overwrite the focus activity end with `min(new focus end, deadline)`, and save. A failed save follows [Save failure after an overwrite](#save-failure-after-an-overwrite). If the new focus end is after the deadline, the session cannot complete. It stays `active` until the deadline and then ends as `.deadlineMissed` ([Timed end](#timed-end)).
-6. **End** (any non-terminal phase → `ending` → `terminal`). Unchanged order from the 2026-10-26 design: save `ending`, clear the store, stop the monitoring, save `terminal`. M2 adds two steps: stop the break activity, and delete the break selection copy.
+6. **End** (any non-terminal phase → `ending` → `terminal`). The order of the 2026-10-26 design, with the M2 additions in steps 3 and 4:
+   1. Save `ending`.
+   2. Clear this app's named store.
+   3. Stop the monitoring: the focus activity and every break activity of the session (`stop(id:)`).
+   4. Delete the break selection copy.
+   5. Save `terminal`.
+
+   As in M1, a failed save of `ending` does not stop steps 2 to 5.
 
 #### Save failure after an overwrite
 
@@ -278,13 +286,14 @@ When that save fails, the stored phase does not change, but the registered end b
 So, under the same lock:
 
 1. Register the focus activity again with the end that [Monitoring activities](#monitoring-activities) gives for the stored phase. Then throw the save error as a retryable error. The stored session and the registered end agree again, and the person or the next reconcile can try again.
-2. If that registration throws, or if the restored end is not after `now`, end the session as `.recoveryInterrupted` with transition 6. For this end only, clear this app's named store, stop the focus activity and the break activity, and delete the break selection copy, also when the save of `ending` fails. This follows the rollback rule of the 2026-10-26 design ("롤백 도중 저장 오류가 나도 해제와 중지부터 시도하고"). A session that has no callback at its next change must not keep the restrictions on. If the save of `ending` failed, the stored phase stays, and the next reconcile finishes the record at step 5 (focus activity not registered).
+2. If that registration throws, or if the restored end is not after `now`, end the session as `.recoveryInterrupted` with transition 6, which lifts the restrictions and removes the activities and the copy also when the save of `ending` fails. This follows the rollback rule of the 2026-10-26 design ("롤백 도중 저장 오류가 나도 해제와 중지부터 시도하고"). A session that has no callback at its next change must not keep the restrictions on. If the save of `ending` failed, the stored phase stays, and the next reconcile finishes the record at step 5 (focus activity not registered).
 
 A restored end can be in the past only on the stale-wait path: reconcile step 6 can run long after `waitEndsAt` + grace, when the `waiting` end has already passed. On the paths that the person starts, the restored end is in the future: transition 1 starts in `active` without a timed end, a cancel by the person comes before `waitEndsAt` + grace, and transition 5 already checked `now < deadline`.
 
 ### Reconcile order
 
-`reconcile` checks the conditions in this order.
+`reconcile` first runs the cleanup of [Break artifacts](#break-artifacts), as every lock section does.
+Then it checks the conditions in this order.
 The first match decides.
 
 1. `ending`: finish the cleanup (unchanged).
@@ -302,6 +311,7 @@ The first match decides.
 
 - `handleCallback` takes the activity name and the callback kind (`intervalDidStart`, `intervalDidEnd`, `intervalWillEndWarning`).
 - A name that is not the current session's focus activity or its current break activity (`n == breaksTaken`) changes nothing. A late callback from an earlier break or an earlier session therefore cannot re-block, clear or end a newer session.
+  The cleanup of [Break artifacts](#break-artifacts) runs before this check.
 - `FocusMonitor` adds `intervalWillEndWarning(for:)`. It passes the callback to the engine with a restore action that reads the break selection copy through `Integration/`.
 
 ### Process lock and recovery contract
@@ -309,8 +319,50 @@ The first match decides.
 - The lock, its 0.25-second timeout and the atomic JSON replace do not change.
 - The waiting countdown runs in the app, outside the lock. Only the transitions take the lock.
 - A failed control-state read (corrupt JSON, unsupported schema, file protection) still clears this app's store and stops every `focus.<UUID>` registration. M2 adds the break activities to that cleanup, and it deletes every `break-selection.*` file. It never applies the shield to recover.
-- **Start** (unchanged otherwise) deletes every `break-selection.*` file inside the lock before it saves the new session. No copy can belong to a session that does not exist yet, so this removes a copy that a downgrade or a crash left behind.
+- **Start** is unchanged otherwise. Like every lock section, it runs the cleanup of [Break artifacts](#break-artifacts) before it saves the new session. No stored session can be on a break then, so this removes every copy and every break activity that a downgrade or a crash left behind.
 - A session that is stored in `waiting`, `onBreak` or `breakOver` when the app or the Monitor starts goes through the reconcile order above. Nothing assumes that the process that started the break is still alive.
+
+#### Break artifacts
+
+The break artifacts are the selection copy `break-selection.<UUID>.json` and the break activity `focus.<UUID>.break.<n>`.
+The stored envelope decides which of them may exist, whatever process exit or thrown error came before:
+
+| Stored envelope                       | Selection copy                              | Break activity                                   |
+| ------------------------------------- | ------------------------------------------- | ------------------------------------------------ |
+| A session in `onBreak`                | `break-selection.<id>.json` of that session | `focus.<id>.break.<breaksTaken>` of that session |
+| A session in any other phase, or none | none                                        | none                                             |
+
+The table lists what may exist, not what must exist. An `onBreak` session without its copy ends at the re-block ([Transitions](#transitions), step 4).
+
+Every lock section except the read-only `snapshot()` (each transition, Start, `acknowledgeTerminal`, `reconcile` and `handleCallback`) runs this cleanup right after it reads the envelope, before any other check:
+
+1. If the stored session is in `waiting` and its copy exists, an earlier section stopped inside transition 3, and the registered focus activity end can be the deadline. If `now >= waitEndsAt + grace`, cancel the wait (transition 2). Otherwise register the focus activity again with the `waiting` end from [Monitoring activities](#monitoring-activities). [Save failure after an overwrite](#save-failure-after-an-overwrite) applies to both.
+2. Stop every registered break activity that the table does not allow.
+3. Delete every `break-selection.*` file that the table does not allow.
+
+Each step is idempotent, and an artifact that does not exist costs one check.
+The copy is deleted last, because in `waiting` it is the only sign that the focus activity end must be registered again.
+The break activity listing is not that sign: an ended activity can stay in `DeviceActivityCenter.activities` (`[UNCERTAIN]`), and each registration calls `intervalDidStart(for:)` again.
+The cleanup depends only on the stored envelope and the time, never on the caller or the callback name, so a late callback cannot use it to change a newer session.
+`handleCallback` runs it before the [Callback identity](#callback-identity) check, because the callbacks of an orphaned break activity are often the only ones that arrive without the app.
+
+Every gap between two numbered steps of transitions 3, 4 and 6 meets the table after the next cleanup.
+A thrown error in a gap gives the same state as a process exit there, or the rollback that the transition states.
+Step 3 of transition 3 only changes fields in memory, so a gap after it is the gap after step 2.
+
+| Gap                                                        | Stored phase  | Leftovers that the cleanup removes | Registered focus end                                                | Restrictions                                                                  |
+| ---------------------------------------------------------- | ------------- | ---------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Transition 3, after step 1                                 | `waiting`     | copy                               | `waiting` end                                                       | on                                                                            |
+| Transition 3, after step 2 or 3                            | `waiting`     | copy, `break.<breaksTaken + 1>`    | `waiting` end                                                       | on                                                                            |
+| Transition 3, after step 4                                 | `waiting`     | copy, `break.<breaksTaken + 1>`    | deadline; cleanup step 1 registers the `waiting` end again          | on                                                                            |
+| Transition 3, after step 5                                 | `onBreak`     | none                               | deadline                                                            | on until the re-block; the break counts. This is the safe direction.          |
+| Transition 3 rollback, before the save of `active`         | `waiting`     | copy, maybe the break activity     | `waiting` end, deadline or `active` end; cleanup step 1 corrects it | on                                                                            |
+| Transition 3 rollback, after the save of `active`          | `active`      | copy                               | `active` end                                                        | on                                                                            |
+| Transition 4, after step 1, 2 or 3, or a failed save       | `onBreak`     | none                               | deadline                                                            | on after step 2; the next reconcile at or after `breakEndsAt` re-blocks again |
+| Transition 4, after step 4                                 | `breakOver`   | copy, `break.<breaksTaken>`        | deadline                                                            | on                                                                            |
+| Transition 4, after step 5                                 | `breakOver`   | copy                               | deadline                                                            | on                                                                            |
+| Transition 6, after step 1, 2, 3 or 4                      | `ending`      | those that steps 3 and 4 left      | stopped after step 3                                                | off after step 2; reconcile step 1 finishes the end                           |
+| Transition 6, failed saves of both `ending` and `terminal` | earlier phase | none                               | stopped                                                             | off; reconcile step 5 ends the session as `.recoveryInterrupted`              |
 
 ## Superseded lines
 
