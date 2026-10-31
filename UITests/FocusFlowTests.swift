@@ -71,6 +71,22 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["중도 종료"].waitForExistence(timeout: 5)); XCTAssertTrue(app.buttons["selection"].isEnabled)
         XCTAssertFalse(app.descendants(matching: .any)["completion"].exists)
     }
+    func testCountdownSpeaksRemainingTimeAndScalesWithTextSize() {
+        let regular = app()
+        let countdown = regular.staticTexts["countdown"]
+        XCTAssertTrue(countdown.waitForExistence(timeout: 8))
+        XCTAssertEqual(countdown.label, "남은 시간 25분 0초")
+        let regularHeight = countdown.frame.height
+        regular.terminate()
+        let large = XCUIApplication()
+        large.launchArguments = ["--ui-testing", "approved", "--selected", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        large.launch()
+        let scaled = large.staticTexts["countdown"]
+        XCTAssertTrue(scaled.waitForExistence(timeout: 8))
+        XCTAssertGreaterThan(scaled.frame.height, regularHeight)
+        XCTAssertLessThanOrEqual(scaled.frame.maxX, large.windows.firstMatch.frame.maxX)
+        captureReport(large, name: "countdown-accessibility-xxxl")
+    }
     func testCancellingEarlyExitKeepsTheSessionRunning() {
         let app = app(); app.buttons["start"].tap()
         XCTAssertTrue(app.buttons["end"].waitForExistence(timeout: 5))

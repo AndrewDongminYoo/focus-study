@@ -29,6 +29,7 @@ swiftc
 swiftinterface
 Testables
 udid
+UICT
 wholemodule
 WWDC
 xcodegen

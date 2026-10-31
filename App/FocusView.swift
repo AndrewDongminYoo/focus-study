@@ -4,6 +4,8 @@ import Combine
 struct FocusView: View {
     let model: FocusModel
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .largeTitle) private var countdownSize: CGFloat = 54
     @State private var sheet: SelectionSheet?
     @State private var confirmingEnd = false
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -20,7 +22,10 @@ struct FocusView: View {
                             Button("닫기") { model.dismissCompletion() }.buttonStyle(.bordered).accessibilityIdentifier("completionDismiss")
                         } else {
                         Text(String(format: "%02d:%02d", model.remaining / 60, model.remaining % 60))
-                            .font(.system(size: 54, weight: .light, design: .rounded)).monospacedDigit().accessibilityIdentifier("countdown")
+                            .font(.system(size: countdownSize, weight: .light, design: .rounded)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
+                            .contentTransition(.numericText(countsDown: true)).animation(reduceMotion ? nil : .default, value: model.remaining)
+                            .accessibilityLabel("남은 시간 \(model.remaining / 60)분 \(model.remaining % 60)초").accessibilityAddTraits(.updatesFrequently)
+                            .accessibilityIdentifier("countdown")
                         if model.isActive {
                             Text("집중 시간 진행 중").font(.subheadline)
                             Button("중도 종료", role: .destructive) { confirmingEnd = true }.accessibilityIdentifier("end")
