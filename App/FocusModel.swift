@@ -10,6 +10,7 @@ import Observation
     let applySelection: (FamilyActivitySelection) -> Void
     let matchesSelection: (FamilyActivitySelection) -> Bool
     var isFixture = false
+    var settings = FocusSettings()
     #if DEBUG
     var diagnostics: DeviceDiagnostics?
     #endif
