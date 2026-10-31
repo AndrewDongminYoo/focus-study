@@ -175,3 +175,8 @@ The original first-screen and empty-selection UI tests were replaced by onboardi
 
 Verification ran on a new iPhone Duo simulator (iOS 27.1) after the earlier simulator disappeared. Two test runs were killed while bootstrapping at load averages of 73 to 99 with Spotlight indexing busy; those runs are not code results.
 Nothing in M1 was checked on a physical device or on an iOS 17 runtime.
+
+Final review fix pass (2026-10-31): the migration now reads only the selection, so the migration sentence above describes the earlier rule; `FocusSettings.migrateIfNeeded(hasSelection:)` and `testExistingSelectionMigratesEvenWhenFirstAccessReadIsNotApproved` are the authority.
+A launch-time access read could not be retried, and a wrong read would keep an existing user in onboarding.
+In DEBUG diagnostic runs, the timer screen keeps the settings button during a session so README device procedure 2 can save a session's callback.
+After the fix pass, the full iOS scheme, `swift test` and the unsigned device Release build passed locally.
