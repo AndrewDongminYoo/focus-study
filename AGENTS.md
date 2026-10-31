@@ -3,7 +3,7 @@
 ## Project scope
 
 FocusStudy is a provisional product name for an iOS 17+ app built with SwiftUI, Observation, and SwiftData.
-It provides individual Screen Time authorization, app and website selection, fixed 25-minute focus sessions, local session history, and an isolated usage report.
+It provides individual Screen Time authorization, app and website selection, focus sessions whose length is a personal setting from 25 to 50 minutes in 5-minute steps (see the [M1 design](docs/specs/2026-10-31-m1-launch-flow-design.md)), local session history, and an isolated usage report.
 Keep changes within this baseline unless the task explicitly expands it: no pause, parental management, Android client, accounts, backend, AI, or rewards.
 Preserve existing Korean UI text; use English for code identifiers and technical documentation.
 
@@ -22,7 +22,9 @@ Preserve existing Korean UI text; use English for code identifiers and technical
 Use these current documentation paths:
 
 - [Design](docs/specs/2026-10-26-focus-study-design.md)
+- [M1 launch flow and focus length design](docs/specs/2026-10-31-m1-launch-flow-design.md), which supersedes the original design on session length and launch flow
 - [Implementation plan](docs/plans/2026-10-26-focus-study.md)
+- [M1 implementation plan](docs/plans/2026-10-31-m1-launch-flow.md)
 - [Implementation decisions](docs/implementation-ledger.md)
 - [Review regressions](docs/notes/independent-review.md)
 - [Physical-device acceptance](docs/notes/screen-time-device-matrix.md)

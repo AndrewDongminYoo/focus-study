@@ -162,3 +162,16 @@ A second `user-facing-copy` pass converted every shipped string in `App/`, `Pres
 That pass changed tone only: the meaning changes owned by #34 and #35 (for example "25분 만료" and the "웹" short form) and the DEBUG-only diagnostic strings were left as they were.
 #17 remains the place that audits data egress.
 The completion haptic cannot be observed in the simulator; the tests check only the state change that triggers it.
+
+## M1 launch flow and focus length: 2026-10-31
+
+The [M1 design](specs/2026-10-31-m1-launch-flow-design.md) and [M1 plan](plans/2026-10-31-m1-launch-flow.md) were executed natively, task by task, with a failing test before each change.
+Sessions now store their own length (25 to 50 minutes in 5-minute steps), and storage still loads a 25-minute session written by the previous build.
+The race check compiles `Shared/FocusLength.swift`, so the README command and CI list it.
+Launch shows onboarding until access, a selection and the onboarding flag exist; a one-time migration sets the flag for people who already had access and a selection.
+A person whose access is off sees a Settings guide without a menu path, because no device check has recorded that path (issues #11 and #38).
+The timer screen follows layout A; history, the usage report, settings and the DEBUG diagnostics moved into sheets.
+The original first-screen and empty-selection UI tests were replaced by onboarding tests, because the timer screen no longer shows the access and selection blockers.
+
+Verification ran on a new iPhone Duo simulator (iOS 27.1) after the earlier simulator disappeared. Two test runs were killed while bootstrapping at load averages of 73 to 99 with Spotlight indexing busy; those runs are not code results.
+Nothing in M1 was checked on a physical device or on an iOS 17 runtime.
