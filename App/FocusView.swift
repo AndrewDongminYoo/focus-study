@@ -97,10 +97,7 @@ struct FocusView: View {
         let completed = model.records.filter { $0.reason == .expired }
         return "오늘 집중 \(Int(completed.reduce(0) { $0 + $1.duration }) / 60)분 · \(completed.count)회"
     }
-    private var completedMinutes: Int {
-        guard let id = model.completedSessionID, let record = model.records.first(where: { $0.id == id }) else { return model.services.settings.lengthMinutes }
-        return Int(record.expiresAt.timeIntervalSince(record.startedAt)) / 60
-    }
+    private var completedMinutes: Int { Int(model.completedLength ?? model.services.settings.lengthSeconds) / 60 }
     private func blockerText(_ blocker: StartBlocker) -> String {
         switch blocker {
         case .access: "스크린 타임 권한을 허용하면 시작할 수 있어요."

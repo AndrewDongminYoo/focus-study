@@ -90,6 +90,14 @@ import FamilyControls
         model.end()
         XCTAssertNil(model.completedSessionID)
     }
+    func testCompletionKeepsTheSessionsOwnLengthAfterTheSettingChanges() throws {
+        let (model, _, _, shield, engine) = fixture()
+        _ = try engine.start(now: Date().addingTimeInterval(-2400), length: 2400, authorized: { true }, apply: { shield.applied = true }, matches: { true })
+        model.services.settings.lengthMinutes = 25
+        model.refresh()
+        XCTAssertEqual(model.completedLength, 2400)
+        model.dismissCompletion(); XCTAssertNil(model.completedLength)
+    }
     func testStartBlockerNamesTheFirstUnmetCondition() throws {
         let (model, history, _, shield, engine) = fixture()
         let selection = try XCTUnwrap(model.services.selection as? ModelTestSelection)
