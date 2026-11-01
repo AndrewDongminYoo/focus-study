@@ -4,7 +4,8 @@
 
 FocusStudy is a provisional product name for an iOS 17+ app built with SwiftUI, Observation, and SwiftData.
 It provides individual Screen Time authorization, app and website selection, focus sessions whose length is a personal setting from 25 to 50 minutes in 5-minute steps (see the [M1 design](docs/specs/2026-10-31-m1-launch-flow-design.md)), local session history, and an isolated usage report.
-Keep changes within this baseline unless the task explicitly expands it: no pause, parental management, Android client, accounts, backend, AI, or rewards.
+A session has up to 3 breaks of exactly 3 minutes, each after a waiting screen, and a deadline after which it counts as unfocused (see the [M2 design](docs/specs/2026-11-01-m2-break-pass-design.md)).
+Keep changes within this baseline unless the task explicitly expands it: no other pause, parental management, Android client, accounts, backend, AI, or rewards.
 Preserve existing Korean UI text; use English for code identifiers and technical documentation.
 
 ## Sources and project generation
@@ -47,9 +48,9 @@ Keep new plans, specs, and notes under `docs/plans/`, `docs/specs/`, and `docs/n
 | `App/AuthorizationService.swift`, `App/SelectionRepository.swift`, `App/SelectionEditor.swift` | Individual authorization, private token persistence, draft selection validation                                             |
 | `App/SessionRecord.swift`                                                                      | SwiftData session records, terminal import and acknowledgement                                                              |
 | `App/UsageReportHost.swift`                                                                    | Report context/filter and explicit content recreation on reload                                                             |
-| `Shared/`                                                                                      | Screen Time SDK-independent control types, state machine, file locking, recovery, validation, and time rules                |
-| `Integration/ScreenTimeAdapters.swift`                                                         | FamilyControls, DeviceActivity, ManagedSettings, and App Group adapters                                                     |
-| `Monitor/FocusMonitor.swift`                                                                   | Extension callbacks delegated to the shared session engine                                                                  |
+| `Shared/`                                                                                      | SDK-independent control types, session and break transitions, deadline rule, file locking, recovery, validation, time rules |
+| `Integration/ScreenTimeAdapters.swift`, `Integration/BreakSelectionFile.swift`                 | FamilyControls, DeviceActivity, ManagedSettings, and App Group adapters; the session-scoped break selection copy            |
+| `Monitor/FocusMonitor.swift`                                                                   | Extension callbacks delegated to the shared session engine, including the re-block on a break activity's end warning        |
 | `Report/`                                                                                      | Extension-only usage aggregation and token-row rendering                                                                    |
 | `Presentation/UsageSummarySection.swift`                                                       | Shared total/unavailable rendering; the app uses synthetic values only in DEBUG fixtures                                    |
 | `App/Debug/UITestFixtures.swift`                                                               | Synthetic authorization, selection, monitoring, storage failures, and report lifecycle/state probes                         |

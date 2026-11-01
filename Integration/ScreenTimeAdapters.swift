@@ -19,22 +19,57 @@ enum GroupConfiguration {
 }
 final class ScreenTimeMonitoring: MonitoringClient {
     private let center = DeviceActivityCenter()
-    var registeredSessionIDs: [UUID] { center.activities.compactMap(Self.sessionID) }
+    var registeredSessionIDs: [UUID] { Array(Set(center.activities.compactMap(Self.sessionID))) }
+    /// The session of both `focus.<UUID>` and `focus.<UUID>.break.<n>`: the 36 characters after `focus.`.
     static func sessionID(_ activity: DeviceActivityName) -> UUID? {
-        guard activity.rawValue.hasPrefix("focus.") else { return nil }
-        return UUID(uuidString: String(activity.rawValue.dropFirst(6)))
+        let raw = activity.rawValue
+        guard raw.hasPrefix("focus.") else { return nil }
+        let rest = raw.dropFirst(6)
+        guard let id = UUID(uuidString: String(rest.prefix(36))) else { return nil }
+        let suffix = rest.dropFirst(36)
+        return suffix.isEmpty || suffix.hasPrefix(".break.") ? id : nil
+    }
+    /// `n` for `focus.<UUID>.break.<n>`, and `nil` for every other name.
+    static func breakIndex(_ activity: DeviceActivityName) -> Int? {
+        guard sessionID(activity) != nil else { return nil }
+        let suffix = activity.rawValue.dropFirst(6 + 36)
+        guard suffix.hasPrefix(".break."), let index = Int(suffix.dropFirst(7)), index > 0 else { return nil }
+        return index
     }
     func register(id: UUID, start: Date, end: Date) throws {
+        // `startMonitoring` with an existing name overwrites its schedule.
         try center.startMonitoring(name(id), during: Self.schedule(start: start, end: end, calendar: .current))
     }
     static func schedule(start: Date, end: Date, calendar: Calendar) -> DeviceActivitySchedule {
-        let fields: Set<Calendar.Component> = [.era, .year, .month, .day, .hour, .minute, .second, .timeZone]
         let roundedEnd = Date(timeIntervalSince1970: ceil(end.timeIntervalSince1970))
         return DeviceActivitySchedule(intervalStart: calendar.dateComponents(fields, from: start), intervalEnd: calendar.dateComponents(fields, from: roundedEnd), repeats: false)
     }
+    /// The break interval is 15 minutes, the system minimum; the warning re-blocks after the break length.
+    static func breakSchedule(start: Date, end: Date, warning: TimeInterval, calendar: Calendar) -> DeviceActivitySchedule {
+        let roundedEnd = Date(timeIntervalSince1970: ceil(end.timeIntervalSince1970))
+        let seconds = Int(warning.rounded(.down))
+        return DeviceActivitySchedule(intervalStart: calendar.dateComponents(fields, from: start), intervalEnd: calendar.dateComponents(fields, from: roundedEnd),
+                                      repeats: false, warningTime: DateComponents(minute: seconds / 60, second: seconds % 60))
+    }
+    private static let fields: Set<Calendar.Component> = [.era, .year, .month, .day, .hour, .minute, .second, .timeZone]
     func isRegistered(id: UUID) -> Bool { center.activities.contains(name(id)) }
-    func stop(id: UUID) { center.stopMonitoring([name(id)]) }
+    func stop(id: UUID) {
+        let breaks = center.activities.filter { Self.sessionID($0) == id && Self.breakIndex($0) != nil }
+        center.stopMonitoring([name(id)] + breaks + (1...BreakTiming.maxBreaks).map { breakName(id, $0) })
+    }
+    func registerBreak(id: UUID, index: Int, start: Date, end: Date, warning: TimeInterval) throws {
+        try center.startMonitoring(breakName(id, index), during: Self.breakSchedule(start: start, end: end, warning: warning, calendar: .current))
+    }
+    func isBreakRegistered(id: UUID, index: Int) -> Bool { center.activities.contains(breakName(id, index)) }
+    var registeredBreaks: [(id: UUID, index: Int)] {
+        center.activities.compactMap { activity in
+            guard let id = Self.sessionID(activity), let index = Self.breakIndex(activity) else { return nil }
+            return (id: id, index: index)
+        }
+    }
+    func stopBreak(id: UUID, index: Int) { center.stopMonitoring([breakName(id, index)]) }
     private func name(_ id: UUID) -> DeviceActivityName { DeviceActivityName("focus.\(id.uuidString)") }
+    private func breakName(_ id: UUID, _ index: Int) -> DeviceActivityName { DeviceActivityName("focus.\(id.uuidString).break.\(index)") }
 }
 final class ScreenTimeShield: ShieldClient {
     private let store = ManagedSettingsStore(named: ManagedSettingsStore.Name("focusSession"))

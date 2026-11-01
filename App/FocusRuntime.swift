@@ -19,17 +19,19 @@ import SwiftData
         #else
         let monitoring = systemMonitoring
         #endif
-        let engine = SessionControl(store: SharedControlStore(directory: try GroupConfiguration.directory()), monitoring: monitoring, shield: shield)
+        let group = try GroupConfiguration.directory()
+        // The app and the Monitor re-block from the same frozen copy in the App Group.
+        let breakSelection = BreakSelectionFile(directory: group, shield: shield)
+        let engine = SessionControl(store: SharedControlStore(directory: group), monitoring: monitoring, shield: shield, breakSelection: breakSelection)
         #if DEBUG
         let diagnostics = diagnosticMonitoring.map { DeviceDiagnostics(monitoring: $0, engine: engine, hasAccess: authorization.hasAccessNow) }
         #endif
         return FocusRuntime(recovery: StartupRecovery(engine: engine), hasAccess: authorization.hasAccessNow, loadStorage: {
             let directory = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent("PrivateSelection")
-            #if DEBUG
             var services = FocusServices(authorization: authorization, selection: try SelectionRepository(directory: directory), engine: engine, applySelection: shield.apply, matchesSelection: shield.matches)
+            services.saveBreakSelection = { try breakSelection.save($0, id: $1) }
+            #if DEBUG
             services.diagnostics = diagnostics
-            #else
-            let services = FocusServices(authorization: authorization, selection: try SelectionRepository(directory: directory), engine: engine, applySelection: shield.apply, matchesSelection: shield.matches)
             #endif
             let container = try ModelContainer(for: SessionRecord.self, configurations: ModelConfiguration(cloudKitDatabase: .none))
             return (services, container)

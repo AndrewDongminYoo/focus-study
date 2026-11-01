@@ -5,7 +5,7 @@ final class SessionControlTests: XCTestCase {
     let now = Date(timeIntervalSince1970: 1_800_000_000)
     func fixture() -> (SessionControl, MemoryControlStore, FakeMonitoring, FakeShield) {
         let store = MemoryControlStore(), monitor = FakeMonitoring(), shield = FakeShield()
-        return (SessionControl(store: store, monitoring: monitor, shield: shield), store, monitor, shield)
+        return (SessionControl(store: store, monitoring: monitor, shield: shield, breakSelection: FakeBreakSelection()), store, monitor, shield)
     }
     func testStartUses25MinuteNonRepeatingIntervalAndCommitsActive() throws {
         let (engine, store, monitor, shield) = fixture()
@@ -57,14 +57,14 @@ final class SessionControlTests: XCTestCase {
     func testEarlyCallbackDoesNotEndActiveSession() throws {
         let (engine, store, _, shield) = fixture()
         let a = try engine.start(now: now, authorized: { true }, apply: { shield.apply() }, matches: { true })
-        try engine.handleCallback(activityName: a.activityName, now: now.addingTimeInterval(1499), authorized: true)
+        try engine.handleCallback(activityName: a.activityName, kind: .didEnd, now: now.addingTimeInterval(1499), authorized: true)
         XCTAssertEqual(store.envelope.session?.phase, .active); XCTAssertTrue(shield.applied)
     }
     func testExpiryClearsOnlyOwnMonitoringAndPreservesObservationTime() throws {
         let (engine, store, monitor, shield) = fixture()
         let a = try engine.start(now: now, authorized: { true }, apply: { shield.apply() }, matches: { true })
         let unrelated = UUID(); monitor.intervals[unrelated] = (now, now.addingTimeInterval(3000))
-        try engine.handleCallback(activityName: a.activityName, now: now.addingTimeInterval(1510), authorized: true)
+        try engine.handleCallback(activityName: a.activityName, kind: .didEnd, now: now.addingTimeInterval(1510), authorized: true)
         XCTAssertEqual(store.envelope.session?.reason, .expired)
         XCTAssertEqual(store.envelope.session?.observedAt, now.addingTimeInterval(1510))
         XCTAssertFalse(shield.applied); XCTAssertNotNil(monitor.intervals[unrelated]); XCTAssertNil(monitor.intervals[a.id])
@@ -75,7 +75,7 @@ final class SessionControlTests: XCTestCase {
         try engine.finish(id: a.id, reason: .earlyExit, now: now.addingTimeInterval(1))
         try engine.acknowledgeTerminal(id: a.id)
         let b = try engine.start(now: now.addingTimeInterval(2), authorized: { true }, apply: { shield.apply() }, matches: { true })
-        try engine.handleCallback(activityName: a.activityName, now: now.addingTimeInterval(1700), authorized: true)
+        try engine.handleCallback(activityName: a.activityName, kind: .didEnd, now: now.addingTimeInterval(1700), authorized: true)
         try engine.finish(id: a.id, reason: .earlyExit, now: now.addingTimeInterval(1700))
         XCTAssertEqual(store.envelope.session?.id, b.id); XCTAssertEqual(store.envelope.session?.phase, .active); XCTAssertTrue(shield.applied)
     }
@@ -131,7 +131,7 @@ final class SessionControlTests: XCTestCase {
         store.failAllWrites = true
         XCTAssertThrowsError(try engine.finish(id: a.id, reason: .earlyExit, now: now.addingTimeInterval(10)))
         XCTAssertEqual(store.envelope.session?.phase, .active); XCTAssertFalse(shield.applied)
-        let restarted = SessionControl(store: store, monitoring: monitor, shield: shield)
+        let restarted = SessionControl(store: store, monitoring: monitor, shield: shield, breakSelection: FakeBreakSelection())
         XCTAssertThrowsError(try restarted.reconcile(now: now.addingTimeInterval(11), authorized: true))
         store.failAllWrites = false
         let result = try restarted.reconcile(now: restoredAt, authorized: true)
@@ -145,7 +145,7 @@ final class SessionControlTests: XCTestCase {
         XCTAssertThrowsError(try engine.snapshot()); XCTAssertFalse(shield.applied)
         XCTAssertNil(monitor.intervals[a.id])
         store.failRead = false
-        let restarted = SessionControl(store: store, monitoring: monitor, shield: shield)
+        let restarted = SessionControl(store: store, monitoring: monitor, shield: shield, breakSelection: FakeBreakSelection())
         let result = try restarted.reconcile(now: now.addingTimeInterval(10), authorized: true)
         XCTAssertEqual(result.session?.phase, .terminal); XCTAssertEqual(result.session?.reason, .recoveryInterrupted)
     }
@@ -166,11 +166,25 @@ final class MemoryControlStore: ControlStore, LockedControl {
 final class FakeMonitoring: MonitoringClient {
     var registeredSessionIDs: [UUID] { Array(intervals.keys) }
     var intervals: [UUID: (Date, Date)] = [:], failRegistration = false, hideRegistration = false
+    var breaks = Set<String>()
     func register(id: UUID, start: Date, end: Date) throws {
         if failRegistration { throw FixtureFailure.injected }; intervals[id] = (start, end)
     }
     func isRegistered(id: UUID) -> Bool { !hideRegistration && intervals[id] != nil }
-    func stop(id: UUID) { intervals.removeValue(forKey: id) }
+    func stop(id: UUID) { intervals.removeValue(forKey: id); breaks = breaks.filter { !$0.hasPrefix(id.uuidString) } }
+    func registerBreak(id: UUID, index: Int, start: Date, end: Date, warning: TimeInterval) throws { breaks.insert("\(id.uuidString).\(index)") }
+    func isBreakRegistered(id: UUID, index: Int) -> Bool { breaks.contains("\(id.uuidString).\(index)") }
+    var registeredBreaks: [(id: UUID, index: Int)] { breaks.compactMap { key in
+        let parts = key.split(separator: "."); return UUID(uuidString: String(parts[0])).map { ($0, Int(parts[1])!) }
+    } }
+    func stopBreak(id: UUID, index: Int) { breaks.remove("\(id.uuidString).\(index)") }
+}
+final class FakeBreakSelection: BreakSelectionStore {
+    var copies = Set<UUID>()
+    func restoreShield(id: UUID) -> Bool { copies.contains(id) }
+    func exists(id: UUID) -> Bool { copies.contains(id) }
+    func remove(id: UUID) { copies.remove(id) }
+    func removeAll(except id: UUID?) { copies = copies.filter { $0 == id } }
 }
 final class FakeShield: ShieldClient {
     var applied = false, clears = 0

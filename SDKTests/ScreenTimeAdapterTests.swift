@@ -23,6 +23,35 @@ final class ScreenTimeAdapterTests: XCTestCase {
         XCTAssertEqual(calendar.date(from: schedule.intervalStart), start); XCTAssertEqual(calendar.date(from: schedule.intervalEnd), end)
         XCTAssertEqual(schedule.intervalEnd.day, 27)
     }
+    func testBreakScheduleIsFifteenMinutesWithTwelveMinuteWarning() {
+        let calendar = Calendar(identifier: .gregorian), start = Date(timeIntervalSince1970: 1_800_000_000)
+        let schedule = ScreenTimeMonitoring.breakSchedule(start: start, end: start.addingTimeInterval(BreakTiming.breakActivityLength), warning: BreakTiming.standard.breakWarning, calendar: calendar)
+        XCTAssertFalse(schedule.repeats)
+        XCTAssertEqual(calendar.date(from: schedule.intervalEnd)?.timeIntervalSince(calendar.date(from: schedule.intervalStart)!), 900)
+        XCTAssertEqual(schedule.warningTime?.minute, 12); XCTAssertEqual(schedule.warningTime?.second, 0)
+        let short = ScreenTimeMonitoring.breakSchedule(start: start, end: start.addingTimeInterval(900), warning: 897, calendar: calendar)
+        XCTAssertEqual(short.warningTime?.minute, 14); XCTAssertEqual(short.warningTime?.second, 57)
+    }
+    func testSessionIDParsesFocusAndBreakNamesAndBreakIndexRejectsOthers() {
+        let id = UUID()
+        let focus = DeviceActivityName("focus.\(id.uuidString)"), breakTwo = DeviceActivityName("focus.\(id.uuidString).break.2")
+        XCTAssertEqual(ScreenTimeMonitoring.sessionID(focus), id); XCTAssertEqual(ScreenTimeMonitoring.sessionID(breakTwo), id)
+        XCTAssertNil(ScreenTimeMonitoring.breakIndex(focus)); XCTAssertEqual(ScreenTimeMonitoring.breakIndex(breakTwo), 2)
+        for other in ["focus.bad", "other.\(id.uuidString)", "focus.\(id.uuidString)x", "focus.\(id.uuidString).break.x"] {
+            XCTAssertNil(ScreenTimeMonitoring.breakIndex(DeviceActivityName(other)), other)
+        }
+        XCTAssertNil(ScreenTimeMonitoring.sessionID(DeviceActivityName("focus.bad")))
+        XCTAssertNil(ScreenTimeMonitoring.sessionID(DeviceActivityName("other.\(id.uuidString)")))
+        XCTAssertNil(ScreenTimeMonitoring.sessionID(DeviceActivityName("focus.\(id.uuidString)x")))
+    }
+    func testFocusScheduleFromStartedAtIsAtLeastTheFocusLength() {
+        // A resume with less than 15 minutes of focus left registers from `startedAt`.
+        let calendar = Calendar(identifier: .gregorian)
+        var session = ControlSession(startedAt: Date(timeIntervalSince1970: 1_800_000_000)); session.phase = .active; session.pausedSeconds = 200; session.deadlineCredit = 195
+        let schedule = ScreenTimeMonitoring.schedule(start: session.startedAt, end: min(session.focusEnd, session.deadline(timing: .standard)), calendar: calendar)
+        let length = calendar.date(from: schedule.intervalEnd)!.timeIntervalSince(calendar.date(from: schedule.intervalStart)!)
+        XCTAssertGreaterThanOrEqual(length, session.length); XCTAssertGreaterThanOrEqual(length, 900)
+    }
 }
 @MainActor final class SelectionRepositoryTests: XCTestCase {
     func testNewSelectionIncludesEntireCategoryForPicker() throws {

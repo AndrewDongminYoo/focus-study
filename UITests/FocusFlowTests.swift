@@ -16,7 +16,7 @@ final class FocusFlowTests: XCTestCase {
         app.buttons["startupEnd"].tap(); app.buttons["startupRetry"].tap()
         XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: 8)); XCTAssertTrue(app.buttons["start"].isEnabled)
         openToday(app)
-        XCTAssertTrue(app.staticTexts["중도 종료"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["집중 종료"].waitForExistence(timeout: 8))
     }
     func testTodaySummaryCountsOnlyCompletedSessions() {
         let app = app("expiring")
@@ -132,7 +132,7 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["종료하기"].waitForExistence(timeout: 5)); app.buttons["종료하기"].tap()
         XCTAssertTrue(app.buttons["selection"].waitForExistence(timeout: 5)); XCTAssertTrue(app.buttons["selection"].isEnabled)
         openToday(app)
-        XCTAssertTrue(app.staticTexts["중도 종료"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["집중 종료"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.descendants(matching: .any)["completion"].exists)
     }
     func testCountdownSpeaksRemainingTimeAndScalesWithTextSize() {
@@ -160,7 +160,68 @@ final class FocusFlowTests: XCTestCase {
         // Newer iOS shows the dialog as a popover without its cancel button; tapping outside dismisses it.
         let cancel = app.buttons["계속 집중하기"]
         if cancel.exists { cancel.tap() } else { app.otherElements["PopoverDismissRegion"].tap() }
-        XCTAssertTrue(app.buttons["end"].waitForExistence(timeout: 5)); XCTAssertFalse(app.staticTexts["중도 종료"].exists)
+        // The `end` button itself reads "집중 종료", so the check is that the session is still counting down.
+        XCTAssertTrue(app.buttons["end"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["countdown"].exists); XCTAssertFalse(app.descendants(matching: .any)["completion"].exists)
+    }
+    private func shortBreaks(_ mode: String = "approved") -> XCUIApplication { app(mode, extra: ["--break-timing", "short"]) }
+    func testBreakFlowReBlocksAndResumes() {
+        let app = shortBreaks(); app.buttons["start"].tap()
+        XCTAssertTrue(app.buttons["breakStart"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["breaksLeft"].label, "쉬는 시간 3번 남았어요")
+        app.buttons["breakStart"].tap()
+        // The short 1-second wait can pass between UI test polls, so accept the wait or the break here.
+        // `testCancelWaitReturnsToFocusWithSameBreaksLeft` asserts `breakWait` with the 15-second standard wait.
+        let waitOrBreak = app.descendants(matching: .any).matching(NSPredicate(format: "identifier IN %@", ["breakWait", "breakCountdown"])).firstMatch
+        XCTAssertTrue(waitOrBreak.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["breakCountdown"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.buttons["selection"].exists); XCTAssertTrue(app.buttons["end"].exists)
+        captureReport(app, name: "break-countdown")
+        XCTAssertTrue(app.buttons["resume"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["deadlineNotice"].exists); XCTAssertTrue(app.buttons["end"].exists)
+        captureReport(app, name: "break-over")
+        app.buttons["resume"].tap()
+        let countdown = app.staticTexts["countdown"]
+        XCTAssertTrue(app.buttons["breakStart"].waitForExistence(timeout: 5)); XCTAssertTrue(countdown.exists)
+        XCTAssertEqual(app.staticTexts["breaksLeft"].label, "쉬는 시간 2번 남았어요")
+        let paused = countdown.label
+        expectation(for: NSPredicate(format: "label != %@", paused), evaluatedWith: countdown); waitForExpectations(timeout: 5)
+    }
+    func testCancelWaitReturnsToFocusWithSameBreaksLeft() {
+        // The standard 15-second wait leaves time to cancel.
+        let app = app(); app.buttons["start"].tap()
+        XCTAssertTrue(app.buttons["breakStart"].waitForExistence(timeout: 5)); app.buttons["breakStart"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["breakWait"].waitForExistence(timeout: 5))
+        captureReport(app, name: "break-wait")
+        app.buttons["breakWaitCancel"].tap()
+        XCTAssertTrue(app.buttons["breakStart"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["breaksLeft"].label, "쉬는 시간 3번 남았어요")
+        XCTAssertFalse(app.staticTexts["breakCountdown"].exists)
+    }
+    func testThirdBreakLeavesOnlyEnd() {
+        let app = shortBreaks(); app.buttons["start"].tap()
+        for _ in 0..<3 {
+            XCTAssertTrue(app.buttons["breakStart"].waitForExistence(timeout: 5)); app.buttons["breakStart"].tap()
+            XCTAssertTrue(app.buttons["resume"].waitForExistence(timeout: 15)); app.buttons["resume"].tap()
+        }
+        XCTAssertTrue(app.staticTexts["countdown"].waitForExistence(timeout: 5)); XCTAssertTrue(app.buttons["end"].exists)
+        XCTAssertFalse(app.buttons["breakStart"].exists); XCTAssertFalse(app.staticTexts["breaksLeft"].exists)
+    }
+    func testMissedDeadlineRecordsUnfocusedSession() {
+        // 10 seconds of focus left: a break taken at once and never resumed reaches the deadline about 19 seconds after launch.
+        let app = shortBreaks("ending-soon")
+        XCTAssertTrue(app.buttons["breakStart"].waitForExistence(timeout: 5)); app.buttons["breakStart"].tap()
+        XCTAssertTrue(app.staticTexts["breakCountdown"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.buttons["resume"].waitForExistence(timeout: 10))
+        let notice = app.staticTexts["deadlineNotice"]
+        expectation(for: NSPredicate(format: "label CONTAINS '기록되지 않아요'"), evaluatedWith: notice); waitForExpectations(timeout: 15)
+        captureReport(app, name: "deadline-notice")
+        let summary = app.buttons["todaySummary"]
+        XCTAssertTrue(summary.waitForExistence(timeout: 30))
+        XCTAssertEqual(summary.label, "오늘 집중 0분 · 0회")
+        XCTAssertFalse(app.descendants(matching: .any)["completion"].exists)
+        summary.tap()
+        XCTAssertTrue(app.staticTexts["시간 초과로 집중에서 제외"].waitForExistence(timeout: 5))
     }
     func testExpiredSessionShowsCompletionUntilDismissed() {
         let app = app("expiring")

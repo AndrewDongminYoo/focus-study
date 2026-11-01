@@ -10,7 +10,64 @@ final class SharedControlStoreTests: XCTestCase {
         let s = ControlSession(startedAt: Date(timeIntervalSince1970: 100))
         try store.withExclusiveAccess { locked in var envelope = try locked.load(); envelope.session = s; try locked.save(envelope) }
         let actual = try store.withExclusiveAccess { try $0.load() }
-        XCTAssertEqual(actual.session?.id, s.id); XCTAssertEqual(actual.schemaVersion, 1)
+        XCTAssertEqual(actual.session?.id, s.id); XCTAssertEqual(actual.schemaVersion, 2)
+    }
+    private let start = Date(timeIntervalSinceReferenceDate: 800_000_000)
+    /// The JSON that the M1 build writes: schema version 1, no break keys, dates as seconds since the reference date.
+    private func writeM1Envelope(id: UUID = UUID(), version: Int = 1, extra: String = "", phase: String = "active") throws {
+        let json = #"{"schemaVersion":\#(version),"session":{"id":"\#(id.uuidString)","startedAt":\#(start.timeIntervalSinceReferenceDate),"expiresAt":\#(start.timeIntervalSinceReferenceDate + 1500),"phase":"\#(phase)"\#(extra)}}"#
+        try Data(json.utf8).write(to: directory.appendingPathComponent("control.json"))
+    }
+    private func rawVersion() throws -> Int? {
+        let object = try JSONSerialization.jsonObject(with: Data(contentsOf: directory.appendingPathComponent("control.json"))) as? [String: Any]
+        return object?["schemaVersion"] as? Int
+    }
+    func testVersion1EnvelopeFromM1BuildLoadsWithoutBreaks() throws {
+        try writeM1Envelope()
+        let session = try XCTUnwrap(SharedControlStore(directory: directory).withExclusiveAccess { try $0.load() }.session)
+        XCTAssertEqual(session.breaksTaken ?? 0, 0); XCTAssertFalse(session.isPaused)
+        XCTAssertEqual(TimeRules.remaining(session: session, now: start.addingTimeInterval(60)), 1440)
+        XCTAssertNil(session.timedEnd(at: start.addingTimeInterval(1499), timing: .standard))
+        XCTAssertEqual(session.timedEnd(at: start.addingTimeInterval(1500), timing: .standard), .expired)
+    }
+    func testSaveWritesVersion2AndUnknownVersionIsRejected() throws {
+        let store = SharedControlStore(directory: directory)
+        var envelope = ControlEnvelope(); envelope.session = ControlSession(startedAt: start)
+        try store.withExclusiveAccess { try $0.save(envelope) }
+        XCTAssertEqual(try rawVersion(), 2)
+        try writeM1Envelope(version: 3)
+        XCTAssertThrowsError(try store.withExclusiveAccess { try $0.load() }) { XCTAssertEqual($0 as? ControlIssue, .unsupportedSchema) }
+    }
+    func testSavingALoadedVersion1EnvelopeWritesVersion2() throws {
+        try writeM1Envelope()
+        let store = SharedControlStore(directory: directory)
+        try store.withExclusiveAccess { locked in try locked.save(try locked.load()) }
+        XCTAssertEqual(try rawVersion(), 2)
+    }
+    func testStoreRejectsInvalidBreakShapes() throws {
+        let p = #","pausedAt":\#(start.timeIntervalSinceReferenceDate + 100)"#
+        let shapes: [(phase: String, extra: String)] = [
+            ("onBreak", p + #","breaksTaken":1"#),
+            ("waiting", p + #","waitEndsAt":\#(start.timeIntervalSinceReferenceDate + 115),"breaksTaken":3"#),
+            ("active", p),
+            ("active", #","breaksTaken":4"#),
+            ("active", #","pausedSeconds":-1"#),
+        ]
+        let store = SharedControlStore(directory: directory)
+        for version in [1, 2] {
+            for shape in shapes {
+                try writeM1Envelope(version: version, extra: shape.extra, phase: shape.phase)
+                XCTAssertThrowsError(try store.withExclusiveAccess { try $0.load() }, "\(version) \(shape)") { XCTAssertEqual($0 as? ControlIssue, .invalidState) }
+            }
+        }
+    }
+    func testStoreAcceptsValidBreakShapes() throws {
+        let p = #","pausedAt":\#(start.timeIntervalSinceReferenceDate + 100)"#
+        let store = SharedControlStore(directory: directory)
+        for (phase, extra) in [("waiting", p + #","waitEndsAt":\#(start.timeIntervalSinceReferenceDate + 115)"#), ("onBreak", p + #","breaksTaken":1,"breakEndsAt":1"#), ("breakOver", p + #","breaksTaken":3,"breakEndsAt":1"#)] {
+            try writeM1Envelope(version: 2, extra: extra, phase: phase)
+            XCTAssertEqual(try store.withExclusiveAccess { try $0.load() }.session?.phase.rawValue, phase)
+        }
     }
     func testStoreLoadsEveryAllowedLengthIncludingLegacy1500() throws {
         let store = SharedControlStore(directory: directory)

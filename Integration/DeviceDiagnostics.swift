@@ -17,6 +17,12 @@ import Observation
     }
     func isRegistered(id: UUID) -> Bool { base.isRegistered(id: id) }
     func stop(id: UUID) { base.stop(id: id) }
+    func registerBreak(id: UUID, index: Int, start: Date, end: Date, warning: TimeInterval) throws {
+        try base.registerBreak(id: id, index: index, start: start, end: end, warning: warning)
+    }
+    func isBreakRegistered(id: UUID, index: Int) -> Bool { base.isBreakRegistered(id: id, index: index) }
+    var registeredBreaks: [(id: UUID, index: Int)] { base.registeredBreaks }
+    func stopBreak(id: UUID, index: Int) { base.stopBreak(id: id, index: index) }
 }
 
 @MainActor @Observable final class DeviceDiagnostics {
@@ -43,7 +49,8 @@ import Observation
     }
     func replay(current: ControlSession?) throws {
         guard canReplay(current: current), let savedActivity else { throw ControlIssue.invalidState }
-        try engine.handleCallback(activityName: savedActivity, now: Date(), authorized: hasAccess())
+        // A stale focus activity delivers `.didEnd`; its name belongs to an earlier session, so nothing is registered for it.
+        try engine.handleCallback(activityName: savedActivity, kind: .didEnd, now: Date(), authorized: hasAccess())
         message = "이전 세션 콜백을 전달했습니다. 현재 세션과 제한이 유지되는지 확인해 주세요."
     }
 }

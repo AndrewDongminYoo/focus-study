@@ -12,7 +12,8 @@ import FocusCore
     var observedAt: Date
     var reasonRaw: String
     var reason: EndReason { EndReason(rawValue: reasonRaw) ?? .recoveryInterrupted }
-    var duration: TimeInterval { max(0, min(expiresAt.timeIntervalSince(startedAt), endedAt.timeIntervalSince(startedAt))) }
+    /// Only a completed session gives focus time; with breaks, the elapsed time of any other session is not focus time.
+    var focusDuration: TimeInterval { reason == .expired ? max(0, expiresAt.timeIntervalSince(startedAt)) : 0 }
     init(session: ControlSession) {
         id = session.id; startedAt = session.startedAt; expiresAt = session.expiresAt
         endedAt = session.recordedEnd ?? session.startedAt

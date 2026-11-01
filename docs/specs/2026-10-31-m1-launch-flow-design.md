@@ -158,3 +158,10 @@ Follow `AGENTS.md` and [README verification](../../README.md#실행과-검증).
 - How today's history and the usage report are presented, as long as the timer screen shows only the one-line summary.
 - Exact copy, written with the `user-facing-copy` skill in 해요체.
 - Updates to `AGENTS.md` and the 2026-10-26 design document so that they no longer state a fixed 25-minute session.
+
+## M2 reconciliation: 2026-11-01
+
+The [M2 design](2026-11-01-m2-break-pass-design.md) and the code that implements it are the authority for the timer screen during a session.
+The line above that says the active timer screen shows "the existing "중도 종료" button with its confirmation" records the M1 decision and no longer describes current behavior.
+The button with identifier `end` now reads "집중 종료" in every session phase, and its confirmation says that the session gives no focus time.
+The timer screen also shows the break button, the waiting screen, the break countdown, and "다시 집중하기" with the time left to complete before the deadline.

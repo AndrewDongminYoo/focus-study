@@ -7,7 +7,7 @@ import XCTest
         let monitor = DiagnosticMonitoring(base: base)
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let engine = SessionControl(store: SharedControlStore(directory: directory), monitoring: monitor, shield: shield)
+        let engine = SessionControl(store: SharedControlStore(directory: directory), monitoring: monitor, shield: shield, breakSelection: DiagnosticBreakSelectionSpy())
         let diagnostics = DeviceDiagnostics(monitoring: monitor, engine: engine, hasAccess: { true })
         diagnostics.armRegistrationFailure()
         var applied = false
@@ -43,7 +43,7 @@ import XCTest
         let monitor = DiagnosticMonitoring(base: base)
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let engine = SessionControl(store: SharedControlStore(directory: directory), monitoring: monitor, shield: shield)
+        let engine = SessionControl(store: SharedControlStore(directory: directory), monitoring: monitor, shield: shield, breakSelection: DiagnosticBreakSelectionSpy())
         let diagnostics = DeviceDiagnostics(monitoring: monitor, engine: engine, hasAccess: { false })
         let first = try engine.start(now: Date(), authorized: { true }, apply: {}, matches: { true })
         diagnostics.capture(first)
@@ -61,6 +61,14 @@ import XCTest
         XCTAssertEqual(base.stopped, stops)
         XCTAssertTrue(base.isRegistered(id: next.id))
     }
+    func testDiagnosticMonitoringForwardsBreakRegistration() throws {
+        let base = DiagnosticMonitoringSpy(), monitor = DiagnosticMonitoring(base: base), id = UUID()
+        try monitor.registerBreak(id: id, index: 2, start: Date(), end: Date().addingTimeInterval(900), warning: 720)
+        XCTAssertTrue(monitor.isBreakRegistered(id: id, index: 2)); XCTAssertEqual(base.breaks.first?.warning, 720)
+        XCTAssertEqual(monitor.registeredBreaks.map(\.index), [2])
+        monitor.stopBreak(id: id, index: 2)
+        XCTAssertFalse(base.isBreakRegistered(id: id, index: 2))
+    }
 }
 private enum DiagnosticFailure: Error { case registration }
 private final class DiagnosticMonitoringSpy: MonitoringClient {
@@ -70,7 +78,18 @@ private final class DiagnosticMonitoringSpy: MonitoringClient {
     var registeredSessionIDs: [UUID] { Array(current) }
     func register(id: UUID, start: Date, end: Date) throws { if shouldThrow { throw DiagnosticFailure.registration }; registered.append(id); current.insert(id) }
     func isRegistered(id: UUID) -> Bool { current.contains(id) }
-    func stop(id: UUID) { stopped.append(id); current.remove(id) }
+    func stop(id: UUID) { stopped.append(id); current.remove(id); breaks.removeAll { $0.id == id } }
+    var breaks: [(id: UUID, index: Int, warning: TimeInterval)] = []
+    func registerBreak(id: UUID, index: Int, start: Date, end: Date, warning: TimeInterval) throws { breaks.append((id, index, warning)) }
+    func isBreakRegistered(id: UUID, index: Int) -> Bool { breaks.contains { $0.id == id && $0.index == index } }
+    var registeredBreaks: [(id: UUID, index: Int)] { breaks.map { (id: $0.id, index: $0.index) } }
+    func stopBreak(id: UUID, index: Int) { breaks.removeAll { $0.id == id && $0.index == index } }
+}
+private final class DiagnosticBreakSelectionSpy: BreakSelectionStore {
+    func restoreShield(id: UUID) -> Bool { false }
+    func exists(id: UUID) -> Bool { false }
+    func remove(id: UUID) {}
+    func removeAll(except id: UUID?) {}
 }
 private final class DiagnosticShieldSpy: ShieldClient {
     var clearCount = 0

@@ -39,7 +39,27 @@ import FocusCore
         let (context, history) = try fixture()
         var s = ControlSession(startedAt: Date(timeIntervalSince1970: 1000), length: 3000); s.phase = .terminal; s.reason = .expired; s.observedAt = Date(timeIntervalSince1970: 5000)
         try history.importTerminal(s)
-        XCTAssertEqual(try context.fetch(FetchDescriptor<SessionRecord>()).first?.duration, 3000)
+        XCTAssertEqual(try context.fetch(FetchDescriptor<SessionRecord>()).first?.focusDuration, 3000)
+    }
+    private func imported(_ reason: EndReason, paused: TimeInterval = 0, observedAfterStart: TimeInterval) throws -> SessionRecord? {
+        let (context, history) = try fixture()
+        var s = ControlSession(startedAt: Date(timeIntervalSince1970: 1000)); s.phase = .terminal; s.reason = reason; s.pausedSeconds = paused
+        s.observedAt = s.startedAt.addingTimeInterval(observedAfterStart)
+        try history.importTerminal(s)
+        return try context.fetch(FetchDescriptor<SessionRecord>()).first
+    }
+    func testExpiredRecordAfterBreaksGivesTheFullFocusLength() throws {
+        var s = ControlSession(startedAt: Date(timeIntervalSince1970: 1000)); s.pausedSeconds = 400
+        let record = try imported(.expired, paused: 400, observedAfterStart: s.focusEnd.timeIntervalSince(s.startedAt))
+        XCTAssertEqual(record?.focusDuration, 1500)
+    }
+    func testEarlyExitAndDeadlineMissedGiveNoFocusTime() throws {
+        XCTAssertEqual(try imported(.earlyExit, observedAfterStart: 900)?.focusDuration, 0)
+        XCTAssertEqual(try imported(.deadlineMissed, paused: 900, observedAfterStart: 2100)?.focusDuration, 0)
+    }
+    func testDeadlineMissedReasonRoundTrips() throws {
+        let record = try imported(.deadlineMissed, observedAfterStart: 2100)
+        XCTAssertEqual(record?.reasonRaw, "deadlineMissed"); XCTAssertEqual(record?.reason, .deadlineMissed)
     }
     func testRecordCrossingMidnightBelongsToStartDay() throws {
         let (_, history) = try fixture(); var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(secondsFromGMT: 0)!
