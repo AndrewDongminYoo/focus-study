@@ -55,6 +55,36 @@ import ManagedSettings
         XCTAssertEqual(settings.draft.windows.last, EverydayWindow(kind: .fromSchool, start: 960, end: 990))
         XCTAssertTrue(settings.draft.isValid)
     }
+    func testDraftIssueNamesTheBrokenRule() {
+        let (settings, _, _, _) = fixture()
+        settings.refresh()
+        settings.draft.rangeEnd = 510
+        XCTAssertEqual(settings.draftIssue, "제한 끝을 제한 시작보다 1시간 이상 늦게 정해 주세요.", "a 30-minute range without windows")
+        settings.draft.rangeEnd = 1080; settings.draft.windows = [EverydayWindow(kind: .custom, start: 600, end: 610)]
+        XCTAssertEqual(settings.draftIssue, "잠시 풀어 두는 시간은 한 번에 15분에서 2시간까지 정할 수 있어요.", "a 10-minute window")
+        settings.draft.windows = [EverydaySchedule.template(.lunch)!, EverydayWindow(kind: .custom, start: 750, end: 810)]
+        XCTAssertEqual(settings.draftIssue, "잠시 풀어 두는 시간이 서로 겹쳐요. 겹치지 않게 바꿔 주세요.", "overlapping windows")
+        settings.draft.windows = [EverydayWindow(kind: .custom, start: 450, end: 510)]
+        XCTAssertEqual(settings.draftIssue, "잠시 풀어 두는 시간은 제한 시간 안에서 정할 수 있어요.", "a window before the range")
+        settings.draft.rangeEnd = 540; settings.draft.windows = [EverydayWindow(kind: .custom, start: 480, end: 540)]
+        XCTAssertEqual(settings.draftIssue, "잠시 풀어 두는 시간이 제한 시간을 모두 채우고 있어요. 제한할 시간을 남겨 주세요.", "windows cover the range")
+        settings.draft.rangeEnd = 1080; settings.draft.windows = []
+        XCTAssertNil(settings.draftIssue, "a valid draft that is off")
+    }
+    func testEveryScheduleIssueHasItsOwnMessage() {
+        let messages = EverydayScheduleIssue.allCases.map(EverydaySettingsModel.message(for:))
+        XCTAssertEqual(messages, [
+            "시간은 5분 단위로 정할 수 있어요.",
+            "제한 시간은 00:00부터 23:55 사이로 정할 수 있어요.",
+            "제한 끝을 제한 시작보다 1시간 이상 늦게 정해 주세요.",
+            "잠시 풀어 두는 시간은 3개까지 정할 수 있어요.",
+            "잠시 풀어 두는 시간은 한 번에 15분에서 2시간까지 정할 수 있어요.",
+            "잠시 풀어 두는 시간은 제한 시간 안에서 정할 수 있어요.",
+            "잠시 풀어 두는 시간이 서로 겹쳐요. 겹치지 않게 바꿔 주세요.",
+            "잠시 풀어 두는 시간이 제한 시간을 모두 채우고 있어요. 제한할 시간을 남겨 주세요.",
+        ])
+        XCTAssertEqual(Set(messages).count, messages.count)
+    }
     func testSaveInsideTheRangeShowsTheRefusalWithTheRangeEnd() {
         let (settings, layer, _, _) = fixture()
         storedLayer(layer, settings)

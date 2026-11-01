@@ -39,6 +39,32 @@ final class EverydayScheduleTests: XCTestCase {
         ]
         for (name, schedule) in breaches { XCTAssertFalse(schedule.isValid, name) }
     }
+    func testIssueNamesTheFirstBrokenRule() {
+        XCTAssertNil(layer().issue)
+        XCTAssertNil(layer(windows: [lunch, window(13 * 60, 13 * 60 + 15)]).issue, "touching windows")
+        let breaches: [(String, EverydaySchedule, EverydayScheduleIssue)] = [
+            ("range 59 minutes", layer(8 * 60, 8 * 60 + 59), .offGrid),
+            ("window off the grid", layer(windows: [window(12 * 60 + 2, 13 * 60 + 2)]), .offGrid),
+            ("negative start", layer(-5, 60), .outOfDay),
+            ("range end 24:00", layer(22 * 60, 24 * 60), .outOfDay),
+            ("range 55 minutes", layer(8 * 60, 8 * 60 + 55), .rangeTooShort),
+            ("range 30 minutes without windows", layer(8 * 60, 8 * 60 + 30), .rangeTooShort),
+            ("start after end", layer(18 * 60, 8 * 60), .rangeTooShort),
+            ("4 windows", layer(windows: [window(9 * 60, 9 * 60 + 15), window(10 * 60, 10 * 60 + 15), window(11 * 60, 11 * 60 + 15), lunch]), .tooManyWindows),
+            ("10-minute window", layer(windows: [window(12 * 60, 12 * 60 + 10)]), .windowLength),
+            ("125-minute window", layer(windows: [window(12 * 60, 14 * 60 + 5)]), .windowLength),
+            ("window that ends before it starts", layer(windows: [window(13 * 60, 12 * 60)]), .windowLength),
+            ("window before the range", layer(windows: [window(7 * 60 + 45, 8 * 60 + 15)]), .windowOutsideRange),
+            ("window after the range", layer(windows: [window(17 * 60 + 45, 18 * 60 + 15)]), .windowOutsideRange),
+            ("overlapping windows", layer(windows: [lunch, window(12 * 60 + 30, 13 * 60 + 30)]), .windowsOverlap),
+            ("windows cover the range", layer(8 * 60, 10 * 60, windows: [window(8 * 60, 9 * 60), window(9 * 60, 10 * 60)]), .windowsCoverRange),
+        ]
+        for (name, schedule, issue) in breaches {
+            XCTAssertEqual(schedule.issue, issue, name)
+            XCTAssertFalse(schedule.isValid, name)
+        }
+        XCTAssertEqual(Set(breaches.map { "\($0.2)" }).count, EverydayScheduleIssue.allCases.count, "every issue has a case")
+    }
     func testBlocksUsesHalfOpenIntervals() {
         let schedule = layer(windows: [lunch])
         let expected: [(Date, Bool)] = [

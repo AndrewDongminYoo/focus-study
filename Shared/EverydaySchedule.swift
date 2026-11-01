@@ -9,6 +9,25 @@ public struct EverydayWindow: Codable, Equatable {
     public var end: Int
     public init(kind: EverydayWindowKind, start: Int, end: Int) { self.kind = kind; self.start = start; self.end = end }
 }
+/// A broken rule of the spec section "Times", in the order that `EverydaySchedule.issue` checks them.
+public enum EverydayScheduleIssue: CaseIterable, Equatable {
+    /// A time is not on the 5-minute grid.
+    case offGrid
+    /// The range starts before 00:00 or ends after 23:55.
+    case outOfDay
+    /// The range is shorter than `minimumRange`, or ends before it starts.
+    case rangeTooShort
+    /// More than `maxWindows` windows.
+    case tooManyWindows
+    /// A window is shorter or longer than `windowLengths`.
+    case windowLength
+    /// A window starts before the range or ends after it.
+    case windowOutsideRange
+    /// Two windows overlap.
+    case windowsOverlap
+    /// The windows cover the whole range.
+    case windowsCoverRange
+}
 /// The schedule part of `everyday-layer.json`. The tokens are encoded in `Integration/` only.
 public struct EverydaySchedule: Codable, Equatable {
     public static let grid = 5
@@ -39,17 +58,22 @@ public struct EverydaySchedule: Codable, Equatable {
     // MARK: Rules
 
     /// Every rule of the spec section "Times".
-    public var isValid: Bool {
+    public var isValid: Bool { issue == nil }
+    /// The first rule of the spec section "Times" that the schedule breaks, or `nil` for a valid schedule.
+    public var issue: EverydayScheduleIssue? {
         let times = [rangeStart, rangeEnd] + windows.flatMap { [$0.start, $0.end] }
-        guard times.allSatisfy({ $0 % Self.grid == 0 }), rangeStart >= 0, rangeEnd <= Self.latestRangeEnd,
-              rangeEnd - rangeStart >= Self.minimumRange, windows.count <= Self.maxWindows else { return false }
+        guard times.allSatisfy({ $0 % Self.grid == 0 }) else { return .offGrid }
+        guard rangeStart >= 0, rangeEnd <= Self.latestRangeEnd else { return .outOfDay }
+        guard rangeEnd - rangeStart >= Self.minimumRange else { return .rangeTooShort }
+        guard windows.count <= Self.maxWindows else { return .tooManyWindows }
         let sorted = windows.sorted { $0.start < $1.start }
         for (index, window) in sorted.enumerated() {
-            guard Self.windowLengths.contains(window.end - window.start), window.start >= rangeStart, window.end <= rangeEnd else { return false }
-            if index > 0, sorted[index - 1].end > window.start { return false }
+            guard Self.windowLengths.contains(window.end - window.start) else { return .windowLength }
+            guard window.start >= rangeStart, window.end <= rangeEnd else { return .windowOutsideRange }
+            if index > 0, sorted[index - 1].end > window.start { return .windowsOverlap }
         }
         // Windows inside the range that do not overlap cover it only when their lengths add up to it.
-        return sorted.reduce(0) { $0 + $1.end - $1.start } < rangeEnd - rangeStart
+        return sorted.reduce(0) { $0 + $1.end - $1.start } < rangeEnd - rangeStart ? nil : .windowsCoverRange
     }
     /// The schedule part of the blocking rule: enabled, inside the range, outside every window.
     public func blocks(at now: Date, calendar: Calendar) -> Bool { blocks(second: Self.second(of: now, calendar: calendar)) }

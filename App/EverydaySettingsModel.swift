@@ -22,7 +22,7 @@ import Observation
     var counts: (apps: Int, websites: Int) { (draftSelection.applicationTokens.count, draftSelection.webDomainTokens.count) }
     /// The first problem of the draft, before any save.
     var draftIssue: String? {
-        guard draft.isValid else { return "겹치거나 제한 시간을 벗어난 시간이 있어요. 시간을 확인해 주세요." }
+        if let issue = draft.issue { return Self.message(for: issue) }
         if draft.enabled { return SelectionFeedback.draftIssue(appCount: counts.apps, websiteCount: counts.websites) }
         return nil
     }
@@ -125,6 +125,19 @@ import Observation
         let next = status.nextChange.map { Self.clock($0, calendar: calendar) }
         if status.blocksNow { return "지금 제한하고 있어요" + (next.map { " · \($0)까지" } ?? "") }
         return "켜져 있어요" + (next.map { " · \($0)부터 제한해요" } ?? "")
+    }
+    /// The draft line for the first broken rule of the schedule, in the terms of the screen.
+    static func message(for issue: EverydayScheduleIssue) -> String {
+        switch issue {
+        case .offGrid: "시간은 5분 단위로 정할 수 있어요."
+        case .outOfDay: "제한 시간은 00:00부터 23:55 사이로 정할 수 있어요."
+        case .rangeTooShort: "제한 끝을 제한 시작보다 1시간 이상 늦게 정해 주세요."
+        case .tooManyWindows: "잠시 풀어 두는 시간은 3개까지 정할 수 있어요."
+        case .windowLength: "잠시 풀어 두는 시간은 한 번에 15분에서 2시간까지 정할 수 있어요."
+        case .windowOutsideRange: "잠시 풀어 두는 시간은 제한 시간 안에서 정할 수 있어요."
+        case .windowsOverlap: "잠시 풀어 두는 시간이 서로 겹쳐요. 겹치지 않게 바꿔 주세요."
+        case .windowsCoverRange: "잠시 풀어 두는 시간이 제한 시간을 모두 채우고 있어요. 제한할 시간을 남겨 주세요."
+        }
     }
     static func time(_ minutes: Int) -> String { String(format: "%02d:%02d", minutes / 60, minutes % 60) }
     private static func clock(_ date: Date, calendar: Calendar) -> String {
