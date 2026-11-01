@@ -12,7 +12,7 @@ The implementation PR adds dated reconciliation sections to them (see [Supersede
 
 A focus session stops the student from opening distracting apps.
 Notifications still interrupt the study time: a message preview or a game alert pulls the student back to the phone.
-iOS already has a tool for this: a Focus, which lets through only the people and apps that the person allows.
+iOS already has a tool for this: a Focus, which filters notifications by the people and apps that the person allows.
 M4 connects the two.
 The student turns on one Focus, for example a Focus named "공부".
 With that one action, iOS filters notifications by the Focus's own allowed people and apps, and FocusStudy starts a focus session.
@@ -117,12 +117,12 @@ This document is the M4 design.
 
 ### Where the filter runs
 
-14. The intent type is in the main app target, not in a new App Intents extension. It runs in the background without opening the app and never requests a permission. The reasons:
+14. The intent type is in the main app target, not in a new App Intents extension. It is meant to run in the background without opening the app (see decision 15), and it never requests a permission. The reasons:
     - The focus-session selection is in the app's private storage (`PrivateSelection/selection.json`), not in the App Group. An extension would need a copy of the tokens in the App Group, which is a privacy boundary change.
     - The focus length is in the app's `UserDefaults`. The M1 design says that only the app reads it.
     - The history import needs the app's SwiftData store.
 15. The selected SDK decides the syntax for the execution target. In the iOS 27.1 SDK, `allowedExecutionTargets` and `IntentExecutionTargets` are available from iOS 27.0 only, and `supportedModes` from iOS 26.0. CI pins Xcode 26.6 (`.github/workflows/verify.yml`), and the deployment target is iOS 17.
-    So the design declares neither property. The intent type is compiled into the app target only, so the app process is the only process that can run it (Apple: "By default, an intent can be executed against any target"). `openAppWhenRun` keeps its default, so the system does not bring the app to the foreground.
+    So the design declares neither property. The intent type is compiled into the app target only, so the app process is the only process that can run it (Apple: "By default, an intent can be executed against any target"). `openAppWhenRun` keeps its default, but that value does not decide the runtime mode: "Code in your app bundle can run in either the foreground or background", and the location of the code, the type of the intent and the current system conditions also have an effect ([Configuring the runtime behavior of your app intents](https://developer.apple.com/documentation/appintents/configuring-the-runtime-behavior-of-your-app-intents)). So the design expects that the system does not bring the app to the foreground, and this is `[UNCERTAIN]` until device steps 2 to 5 pass.
     The plan has an SDK probe step before any of this syntax is written. What the Xcode 26.6 SDK contains is inferred from the availability attributes of the 27.1 SDK, not checked.
 
 ### Interaction with M2 and M3
@@ -402,7 +402,8 @@ The rows above assume that access stays approved and that no timed end is due, u
 This is the content, not the final copy.
 The implementation PR writes the Korean copy with the `user-facing-copy` skill, in 해요체, with short labels.
 
-1. What it does: turning on a chosen Focus starts a focus session with the person's focus length and selection, and iOS lets through only the people and apps that the Focus allows.
+1. What it does: turning on a chosen Focus starts a focus session with the person's focus length and selection, and iOS applies the notification settings of that Focus.
+   A Focus can let more through than its allowed people and apps: Time Sensitive notifications and repeated calls when the Focus allows them, a contact with Emergency Bypass, and Intelligent Breakthrough when it is on (see [Apple documentation](#apple-documentation-checked-2026-11-01)).
 2. Make a Focus for study in Settings > Focus, for example "공부".
 3. In that Focus, choose the allowed people, the allowed apps, and whether repeated calls come through.
 4. Add the filter: in that Focus, Add Filter > FocusStudy, and turn on the session option.
@@ -420,7 +421,7 @@ Forbidden promises:
 - That an allowed app sends only some of its notifications, for example "only medication reminders".
 - That messages from allowed people come through in every messenger. Messages and KakaoTalk are separate verification items.
 - That the app silences, reads or changes notifications or the Focus settings.
-- That nothing else comes through. Time Sensitive notifications, repeated calls, Emergency Bypass and Intelligent Breakthrough can let more through.
+- That nothing else comes through. Item 1 names what else can come through.
 - A button or link that implies it opens the Focus settings.
 
 ## Superseded lines
@@ -443,7 +444,7 @@ Do not try to trigger an emergency or government alert, and do not use Emergency
 Steps:
 
 1. Open Settings > Focus > (a test Focus) > Add Filter. Record whether FocusStudy is listed, and whether its filter has one switch that is off by default (unverified item 5).
-2. Turn the switch on. Force-quit the app. Turn the Focus on from Control Center. Record whether a session starts, when, and whether the shield appears (unverified items 2 and 3).
+2. Turn the switch on. Force-quit the app. Turn the Focus on from Control Center. Record whether a session starts, when, whether the app comes to the foreground, and whether the shield appears (unverified items 2 and 3).
 3. Repeat step 2 with the device locked, and with a Focus schedule that starts while the device is locked.
 4. Turn the Focus off. Record when the shield disappears, and the history row ("집중 종료").
 5. While the Focus stays on, end the session with "집중 종료", then edit the filter and restart the device. Record each `perform()` call (DEBUG call log) and that no second session starts.
