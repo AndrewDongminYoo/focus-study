@@ -4,11 +4,32 @@ import FamilyControls
 @MainActor final class FocusModelTests: XCTestCase {
     private func fixture(defaults: UserDefaults = UserDefaults(suiteName: UUID().uuidString)!) -> (FocusModel, ModelTestHistory, ModelTestStore, ModelTestShield, SessionControl) {
         let store = ModelTestStore(), shield = ModelTestShield(), monitoring = ModelTestMonitoring()
-        let engine = SessionControl(store: store, monitoring: monitoring, shield: shield)
+        let (model, history, _) = makeModel(store: store, monitoring: monitoring, shield: shield, defaults: defaults, timing: .standard)
+        return (model, history, store, shield, model.services.engine)
+    }
+    private func makeModel(store: ModelTestStore, monitoring: ModelTestMonitoring, shield: ModelTestShield, defaults: UserDefaults, timing: BreakTiming) -> (FocusModel, ModelTestHistory, ModelTestBreakSelection) {
+        let copies = ModelTestBreakSelection(); copies.onRestore = { shield.applied = true }
+        let engine = SessionControl(store: store, monitoring: monitoring, shield: shield, breakSelection: copies, timing: timing)
         var services = FocusServices(authorization: ModelTestAuthorization(), selection: ModelTestSelection(), engine: engine, applySelection: { _ in shield.applied = true }, matchesSelection: { _ in shield.applied }, isFixture: true)
         services.settings = FocusSettings(defaults: defaults)
+        services.saveBreakSelection = { selection, id in copies.saved.append((selection, id)); copies.copies.insert(id) }
         let history = ModelTestHistory(acknowledge: engine.acknowledgeTerminal)
-        return (FocusModel(services: services, history: history), history, store, shield, engine)
+        return (FocusModel(services: services, history: history), history, copies)
+    }
+    /// Waits of 0 seconds and a 50-millisecond break, so that the model's own clock drives every phase.
+    private func breakFixture(slack: TimeInterval = 600) -> (FocusModel, ModelTestBreakSelection, ModelTestShield) {
+        let shield = ModelTestShield()
+        let (model, _, copies) = makeModel(store: ModelTestStore(), monitoring: ModelTestMonitoring(), shield: shield, defaults: UserDefaults(suiteName: UUID().uuidString)!,
+                                           timing: BreakTiming(waits: [0, 0, 0], breakLength: 0.05, slack: slack, staleWaitGrace: 5))
+        model.completeOnboarding(); model.start()
+        XCTAssertTrue(model.isActive)
+        return (model, copies, shield)
+    }
+    /// One break from the request to the re-block.
+    private func takeBreak(_ model: FocusModel) {
+        model.requestBreak(); XCTAssertEqual(model.current?.phase, .waiting)
+        model.tick(); XCTAssertEqual(model.current?.phase, .onBreak)
+        usleep(80_000); model.tick(); XCTAssertEqual(model.current?.phase, .breakOver)
     }
     private func doubles(_ model: FocusModel) -> (ModelTestAuthorization, ModelTestSelection) {
         (model.services.authorization as! ModelTestAuthorization, model.services.selection as! ModelTestSelection)
@@ -110,6 +131,76 @@ import FamilyControls
         _ = try engine.start(now: Date(), authorized: { true }, apply: { shield.applied = true }, matches: { true })
         model.refresh(); XCTAssertNil(model.startBlocker)
     }
+    func testRequestBreakPausesRemaining() throws {
+        let (model, _, store, shield, engine) = fixture()
+        let session = try engine.start(now: Date().addingTimeInterval(-300), authorized: { true }, apply: { shield.applied = true }, matches: { true })
+        model.refresh(); XCTAssertEqual(model.remaining, 1200)
+        model.requestBreak()
+        XCTAssertEqual(store.envelope.session?.phase, .waiting); XCTAssertTrue(model.isInSession); XCTAssertFalse(model.isActive)
+        let paused = model.remaining
+        usleep(1_100_000); model.tick()
+        XCTAssertEqual(model.remaining, paused); XCTAssertEqual(model.current?.id, session.id)
+        XCTAssertNotNil(model.waitProgress); XCTAssertTrue(shield.applied)
+    }
+    func testLeavingForegroundCancelsWaitAndKeepsBreaksLeft() {
+        let (model, copies, shield) = breakFixture()
+        model.requestBreak(); XCTAssertEqual(model.current?.phase, .waiting)
+        model.sceneDidLeaveForeground()
+        XCTAssertEqual(model.current?.phase, .active); XCTAssertEqual(model.breaksLeft, 3)
+        XCTAssertTrue(copies.saved.isEmpty); XCTAssertTrue(shield.applied)
+    }
+    func testTickStartsBreakAfterWaitWithFrozenSelection() {
+        let (model, copies, shield) = breakFixture()
+        let id = model.current?.id
+        model.requestBreak(); model.tick()
+        XCTAssertEqual(model.current?.phase, .onBreak); XCTAssertEqual(model.current?.breaksTaken, 1)
+        XCTAssertEqual(copies.saved.map(\.1), [id].compactMap { $0 })
+        XCTAssertEqual(copies.saved.first?.0.applicationTokens, model.services.selection.selection.applicationTokens)
+        XCTAssertEqual(copies.saved.first?.0.webDomainTokens, model.services.selection.selection.webDomainTokens)
+        XCTAssertFalse(shield.applied); XCTAssertNotNil(model.breakRemaining)
+    }
+    func testSelectionIsLockedDuringBreakAndAfterReBlock() {
+        let (model, _, _) = breakFixture()
+        model.requestBreak(); model.tick()
+        XCTAssertEqual(model.current?.phase, .onBreak); XCTAssertTrue(model.isInSession)
+        XCTAssertThrowsError(try model.saveSelection(FamilyActivitySelection()))
+        usleep(80_000); model.tick()
+        XCTAssertEqual(model.current?.phase, .breakOver); XCTAssertTrue(model.isInSession)
+        XCTAssertThrowsError(try model.saveSelection(FamilyActivitySelection()))
+    }
+    func testResumeContinuesCountdownFromPausedValue() {
+        let (model, _, shield) = breakFixture()
+        takeBreak(model)
+        XCTAssertTrue(shield.applied)
+        let paused = model.remaining
+        model.resume()
+        XCTAssertEqual(model.current?.phase, .active)
+        XCTAssertLessThanOrEqual(abs(model.remaining - paused), 1)
+    }
+    func testResumeRemainingReachesZeroWhenSessionCanNoLongerComplete() {
+        let (roomy, _, _) = breakFixture()
+        takeBreak(roomy)
+        XCTAssertGreaterThan(roomy.resumeRemaining ?? 0, 590)
+        let (late, _, _) = breakFixture(slack: 0)
+        takeBreak(late)
+        XCTAssertEqual(late.resumeRemaining, 0)
+    }
+    func testNoBreakActionAfterThirdBreak() {
+        let (model, _, _) = breakFixture()
+        for _ in 0..<3 { takeBreak(model); model.resume() }
+        XCTAssertEqual(model.breaksLeft, 0); XCTAssertEqual(model.current?.phase, .active)
+        let before = model.current
+        model.requestBreak()
+        XCTAssertEqual(model.current, before); XCTAssertNil(model.errorMessage)
+    }
+}
+private final class ModelTestBreakSelection: BreakSelectionStore {
+    var copies = Set<UUID>(), saved: [(FamilyActivitySelection, UUID)] = []
+    var onRestore: () -> Void = {}
+    func restoreShield(id: UUID) -> Bool { guard copies.contains(id) else { return false }; onRestore(); return true }
+    func exists(id: UUID) -> Bool { copies.contains(id) }
+    func remove(id: UUID) { copies.remove(id) }
+    func removeAll(except id: UUID?) { copies = copies.filter { $0 == id } }
 }
 private enum ModelTestError: Error { case storage }
 private final class ModelTestStore: ControlStore, LockedControl {
@@ -122,7 +213,12 @@ private final class ModelTestMonitoring: MonitoringClient {
     var ids = Set<UUID>(); var registeredSessionIDs: [UUID] { Array(ids) }
     func register(id: UUID, start: Date, end: Date) throws { ids.insert(id) }
     func isRegistered(id: UUID) -> Bool { ids.contains(id) }
-    func stop(id: UUID) { ids.remove(id) }
+    func stop(id: UUID) { ids.remove(id); breaks.removeAll { $0.id == id } }
+    var breaks: [(id: UUID, index: Int)] = []
+    func registerBreak(id: UUID, index: Int, start: Date, end: Date, warning: TimeInterval) throws { breaks.append((id, index)) }
+    func isBreakRegistered(id: UUID, index: Int) -> Bool { breaks.contains { $0.id == id && $0.index == index } }
+    var registeredBreaks: [(id: UUID, index: Int)] { breaks }
+    func stopBreak(id: UUID, index: Int) { breaks.removeAll { $0.id == id && $0.index == index } }
 }
 private final class ModelTestShield: ShieldClient {
     var applied = false

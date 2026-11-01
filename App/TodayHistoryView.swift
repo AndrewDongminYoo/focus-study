@@ -12,7 +12,9 @@ struct TodayHistoryView: View {
                     ForEach(model.records, id: \.id) { record in
                         HStack {
                             VStack(alignment: .leading) { Text(record.startedAt, style: .time); Text(reasonText(record)).font(.caption).foregroundStyle(.secondary) }
-                            Spacer(); Text("\(Int(record.duration) / 60)분 \(Int(record.duration) % 60)초").monospacedDigit()
+                            Spacer()
+                            // Only a completed session shows a duration; other rows show their reason only.
+                            if record.reason == .expired { Text("\(Int(record.focusDuration) / 60)분 \(Int(record.focusDuration) % 60)초").monospacedDigit() }
                         }
                     }
                 }
@@ -35,11 +37,12 @@ struct TodayHistoryView: View {
     private func reasonText(_ record: SessionRecord) -> String {
         switch record.reason {
         case .expired: "\(Int(record.expiresAt.timeIntervalSince(record.startedAt)) / 60)분 만료"
-        case .earlyExit: "중도 종료"
+        case .earlyExit: "집중 종료"
         case .authorizationRevoked: "접근 철회로 중단"
         case .startFailed: "시작 실패"
         case .clockChanged: "시각 변경으로 중단"
         case .recoveryInterrupted: "중단된 세션 정리"
+        case .deadlineMissed: "시간 초과로 집중에서 제외"
         }
     }
 }

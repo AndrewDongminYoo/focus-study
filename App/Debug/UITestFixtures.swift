@@ -26,15 +26,36 @@ private final class FixtureMonitoring: MonitoringClient {
     init(fail: Bool) { self.fail = fail }
     func register(id: UUID, start: Date, end: Date) throws { if fail { throw ControlIssue.io }; registered.insert(id) }
     func isRegistered(id: UUID) -> Bool { registered.contains(id) }
-    func stop(id: UUID) { registered.remove(id) }
+    func stop(id: UUID) { registered.remove(id); breaks.removeAll { $0.id == id } }
+    /// Break registrations stay in memory; the fixture has no Monitor, so the app's timer tick re-blocks.
+    var breaks: [(id: UUID, index: Int)] = []
+    func registerBreak(id: UUID, index: Int, start: Date, end: Date, warning: TimeInterval) throws { breaks.append((id, index)) }
+    func isBreakRegistered(id: UUID, index: Int) -> Bool { breaks.contains { $0.id == id && $0.index == index } }
+    var registeredBreaks: [(id: UUID, index: Int)] { breaks }
+    func stopBreak(id: UUID, index: Int) { breaks.removeAll { $0.id == id && $0.index == index } }
 }
 private final class FixtureShield: ShieldClient { func clear() {} }
+/// In-memory selection copies; a restore never touches real restrictions.
+private final class FixtureBreakSelection: BreakSelectionStore {
+    var copies = Set<UUID>()
+    func restoreShield(id: UUID) -> Bool { copies.contains(id) }
+    func exists(id: UUID) -> Bool { copies.contains(id) }
+    func remove(id: UUID) { copies.remove(id) }
+    func removeAll(except id: UUID?) { copies = copies.filter { $0 == id } }
+}
 extension FocusServices {
     static func fixture(arguments: [String]) -> FocusServices {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("FocusFixture-\(UUID().uuidString)")
-        let engine = SessionControl(store: SharedControlStore(directory: directory), monitoring: FixtureMonitoring(fail: arguments.contains("registration-failure")), shield: FixtureShield())
+        // `--break-timing short` shortens waits, the break, the slack and the grace, but not the focus length.
+        var timing = BreakTiming.standard
+        if let index = arguments.firstIndex(of: "--break-timing"), index + 1 < arguments.count, arguments[index + 1] == "short" {
+            timing = BreakTiming(waits: [1, 2, 4], breakLength: 3, slack: 5, staleWaitGrace: 2)
+        }
+        let breakSelection = FixtureBreakSelection()
+        let engine = SessionControl(store: SharedControlStore(directory: directory), monitoring: FixtureMonitoring(fail: arguments.contains("registration-failure")), shield: FixtureShield(), breakSelection: breakSelection, timing: timing)
         let onboarding = arguments.contains("onboarding")
         var services = FocusServices(authorization: FixtureAuthorization(denied: arguments.contains("denied"), notRequested: arguments.contains("not-requested") || onboarding), selection: FixtureSelection(selected: arguments.contains("--selected") && !onboarding), engine: engine, applySelection: { _ in }, matchesSelection: { _ in true }, isFixture: true)
+        services.saveBreakSelection = { _, id in breakSelection.copies.insert(id) }
         // In-memory settings: `onboarding` starts a new person; every other mode is a person who finished onboarding.
         let settings = FocusSettings(defaults: UserDefaults(suiteName: "FocusFixture-\(UUID().uuidString)")!)
         if let index = arguments.firstIndex(of: "--length"), index + 1 < arguments.count, let minutes = Int(arguments[index + 1]) { settings.lengthMinutes = minutes }
@@ -56,6 +77,11 @@ extension FocusRuntime {
             // A session with the configured length that started 3 seconds before its end, so the UI test sees the real expiry path.
             let length = services.settings.lengthSeconds
             _ = try services.engine.start(now: Date().addingTimeInterval(-(length - 3)), length: length, authorized: { true }, apply: {}, matches: { true })
+        }
+        if arguments.contains("ending-soon") {
+            // 10 seconds of focus left, so that a break taken at once reaches the short-timing deadline in about 19 seconds.
+            let length = services.settings.lengthSeconds
+            _ = try services.engine.start(now: Date().addingTimeInterval(-(length - 10)), length: length, authorized: { true }, apply: {}, matches: { true })
         }
         var attempts = 0
         return FocusRuntime(recovery: StartupRecovery(engine: services.engine), hasAccess: services.authorization.hasAccessNow, loadStorage: {
