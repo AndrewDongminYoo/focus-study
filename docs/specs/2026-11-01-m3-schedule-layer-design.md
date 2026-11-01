@@ -234,17 +234,17 @@ The rule depends on the focus layer only through the last line.
 
 ### Everyday convergence
 
-The convergence is one step that every lock section runs once at its end, except the read-only `snapshot()` and the new read-only `everydayStatus(now:)`.
+The convergence is one step that every lock section runs once at its end, except the read-only `snapshot()` and the new read-only `everydayStatus(now:authorized:)`.
 It also runs when the focus part of the same section threw, with one exception: when the section's read of `control.json` threw, the section has no envelope, so no convergence step runs and only the [control-state read failure](#control-state-read-failure) path clears the everyday store.
 It runs for every callback name, because it depends only on the stored files and the time, never on the caller.
 In order:
 
-1. **Read** `everyday-layer.json`. On a read failure, clear the everyday store, skip step 2, and record the issue for `everydayStatus(now:)`.
+1. **Read** `everyday-layer.json`. On a read failure, clear the everyday store, skip step 2, and record the issue for `everydayStatus(now:authorized:)`.
 2. **Registrations.**
    - If the section knows that access is not approved: stop every everyday activity.
    - Otherwise, if the stored layer is on, and the section is an app section or a Monitor section that `intervalDidEnd(for:)` or `intervalWillEndWarning(for:)` started: register every activity of the stored revision that `DeviceActivityCenter.activities` does not list. A section that `intervalDidStart(for:)` started never registers, as in the M2 rule [Callback with nothing due](2026-11-01-m2-break-pass-design.md#callback-with-nothing-due).
    - Then, if every activity of the stored revision is registered (or the stored layer is off, or no file exists): stop every everyday activity of another revision.
-   - A registration that throws is recorded for `everydayStatus(now:)`. The activities of the earlier revision then stay, because they are the only source of callbacks until the stored revision is complete.
+   - A registration that throws is recorded for `everydayStatus(now:authorized:)`. The activities of the earlier revision then stay, because they are the only source of callbacks until the stored revision is complete.
 3. **Store.** Evaluate [The blocking rule](#the-blocking-rule) against the envelope that the section stored last.
    - If it gives "block" and the store does not match the stored selection: apply the stored selection. If the store still does not match, keep what was applied and record the issue.
    - If it gives "not block" and the store has a shield setting: clear the everyday store.
@@ -258,7 +258,7 @@ Rules for the convergence:
   - A stop of an activity with an ongoing interval sends `intervalDidEnd(for:)`. That section can register only activities of the stored revision that are missing, and their `intervalDidStart(for:)` sections register nothing. So one stop leads to at most one more round of registrations.
 - No repair in [Gaps between steps](#gaps-between-steps) needs a registration from an `intervalDidStart(for:)` section. The save registers before its write, and an app section registers again after access comes back or after a registration failure. A Monitor `intervalDidEnd(for:)` section also retries a failed registration.
 - Every stop names its activities. The convergence never calls `stopMonitoring` with an empty array, because an empty array stops every activity, also the focus and break activities.
-- Sections without an authorization value (the M2 break transitions, `finish`, `acknowledgeTerminal`) skip the access condition. The next section with a value applies it.
+- Sections without an authorization value (the M2 break transitions, `finish`, `acknowledgeTerminal`) skip the access condition. The next section with a value applies it. The two new app sections, `saveEveryday` and `everydayStatus(now:authorized:)`, take a value, as `start` and `reconcile` do.
 - The lock sections in the app run on launch, on foreground, on a day, time zone or clock change, on every session action, and while a session runs. Outside a session, the app does not tick, so the Monitor callbacks keep the layer current.
 
 ### Callback routing in `handleCallback`
@@ -281,11 +281,13 @@ M3 adds a route for `everyday.` names, before that check:
 
 `saveEveryday` is one `withExclusiveAccess` section on `SessionControl`. The app builds the new settings, and the section makes them durable in this order:
 
-1. **Check.** Read the envelope and run the M2 cleanup. Refuse with `ControlIssue.busy` if a stored session is in a phase other than `terminal`. Read the stored everyday file. Check the new settings against [Times](#times) and [Selection](#selection). Apply [Editing rules](#editing-rules) against the stored file. If the stored file is unreadable, treat it as no stored layer, so the person can set the layer up again.
+1. **Check.** Read the envelope and run the M2 cleanup. Read the access value inside the lock, as `start` does, and refuse with `ControlIssue.unauthorized` if access is not approved. Refuse with `ControlIssue.busy` if a stored session is in a phase other than `terminal`. Read the stored everyday file. Check the new settings against [Times](#times) and [Selection](#selection). Apply [Editing rules](#editing-rules) against the stored file. If the stored file is unreadable, treat it as no stored layer, so the person can set the layer up again.
 2. **Register** every activity of the new revision (none if the new layer is off).
 3. **Write** the new file. This is the commit point.
 4. **Stop** every everyday activity of another revision.
 5. **Converge** the store (convergence step 3, against the new file).
+
+A save when access is not approved is refused, also a turn-off. It registers nothing, writes nothing and does not change the store. The section then knows that access is not approved, so its convergence stops every everyday activity and clears the store, as the "Access not approved" columns of [Stored states and side artifacts](#stored-states-and-side-artifacts) give. The stored file stays, and the next app section with access applies it again. The person approves access first, then saves.
 
 If step 2 or 3 throws: stop the activities of the new revision that step 2 registered, keep the stored file, and throw a retryable error.
 The store does not change in that case.
@@ -348,7 +350,7 @@ M3 also clears the everyday store.
 The section has no envelope, so no step of the [everyday convergence](#everyday-convergence) runs: it reads no everyday file, registers nothing, stops no everyday activity and applies nothing. A default empty envelope must not stand in for the missing one, because the blocking rule would then give "block" and apply the everyday shield again right after this path cleared it.
 The everyday activities stay, so that a later callback can apply the layer again when `control.json` is readable.
 It never applies a shield to recover, as in the 2026-10-26 design.
-This path is the shared `read()` of every lock section, so it also runs in `snapshot()` and `everydayStatus(now:)` when they cannot read `control.json`, as the M2 path does for `snapshot()`.
+This path is the shared `read()` of every lock section, so it also runs in `snapshot()` and `everydayStatus(now:authorized:)` when they cannot read `control.json`, as the M2 path does for `snapshot()`.
 
 #### Start
 
@@ -404,7 +406,7 @@ The focus restrictions follow the M2 [break artifacts](2026-11-01-m2-break-pass-
 
 | Gap                                                                                                      | Everyday file | Everyday activities                      | Everyday store                         | Repair and direction                                                                                                                                            |
 | -------------------------------------------------------------------------------------------------------- | ------------- | ---------------------------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Save, step 1 refuses or throws                                                                           | earlier       | earlier                                  | earlier state                          | Nothing changed.                                                                                                                                                |
+| Save, step 1 refuses or throws                                                                           | earlier       | earlier                                  | earlier state                          | Nothing changed by the save. After a refusal for access, the convergence of the section gives the row "Access revoked".                                         |
 | Save, exit after step 2, or step 2 or 3 throws                                                           | earlier       | earlier, and new ones after an exit      | earlier state                          | The next section registers what the stored revision is missing, then stops the new ones. A thrown error stops them at once. No change in blocking.              |
 | Save, exit after step 3 or 4                                                                             | new           | new, and earlier ones after step 3       | earlier state, looser than the new one | The `intervalDidStart(for:)` that step 2 sent repairs it after the lock. Otherwise the next section. Looser until then, never looser than the earlier settings. |
 | Save, store does not match after step 5                                                                  | new           | new                                      | partly applied                         | Each later section applies again, and the settings show the issue.                                                                                              |
@@ -450,10 +452,10 @@ The focus restrictions follow the M2 [break artifacts](2026-11-01-m2-break-pass-
 
 ### Status for the app
 
-`everydayStatus(now:)` is a read-only lock section, as `snapshot()` is. It returns:
+`everydayStatus(now:authorized:)` is a read-only lock section, as `snapshot()` is. It returns:
 
 - The stored schedule, or none.
-- Whether the layer blocks now ([The blocking rule](#the-blocking-rule)), and the next time that the result changes.
+- Whether the layer blocks now ([The blocking rule](#the-blocking-rule), with the access value that the app passes), and the next time that the result changes. When access is not approved, the layer does not block, and there is no next change.
 - An issue, if any: the file is unreadable, a registration failed, or the store does not match.
 
 The settings row and the everyday settings screen use it. The timer screen does not.
