@@ -11,8 +11,10 @@ final class FocusMonitor: DeviceActivityMonitor {
         let shield = ScreenTimeShield()
         do {
             let directory = try GroupConfiguration.directory()
+            // Every name reaches the engine: the everyday convergence depends only on the stored files and the time.
             let engine = SessionControl(store: SharedControlStore(directory: directory), monitoring: ScreenTimeMonitoring(), shield: shield,
-                                        breakSelection: BreakSelectionFile(directory: directory, shield: shield))
+                                        breakSelection: BreakSelectionFile(directory: directory, shield: shield),
+                                        everyday: EverydayLayerFile(directory: directory, shield: ScreenTimeEverydayShield()))
             try engine.handleCallbackRetryingLock(activityName: activity.rawValue, kind: kind, now: Date.init,
                                                   authorized: { ScreenTimeAccess.isApproved(AuthorizationCenter.shared.authorizationStatus) })
         } catch {

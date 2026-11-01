@@ -70,6 +70,38 @@ final class ScreenTimeMonitoring: MonitoringClient {
     func stopBreak(id: UUID, index: Int) { center.stopMonitoring([breakName(id, index)]) }
     private func name(_ id: UUID) -> DeviceActivityName { DeviceActivityName("focus.\(id.uuidString)") }
     private func breakName(_ id: UUID, _ index: Int) -> DeviceActivityName { DeviceActivityName("focus.\(id.uuidString).break.\(index)") }
+
+    // MARK: Everyday layer
+
+    /// Time components only, so that the system uses `Calendar.current` and the wall clock every day.
+    static func everydaySchedule(start: Int, end: Int) -> DeviceActivitySchedule {
+        DeviceActivitySchedule(intervalStart: DateComponents(hour: start / 60, minute: start % 60, second: 0),
+                               intervalEnd: DateComponents(hour: end / 60, minute: end % 60, second: 0), repeats: true)
+    }
+    static func everydayActivityName(revision: UUID, part: EverydayPart) -> DeviceActivityName {
+        switch part {
+        case .range: DeviceActivityName("everyday.\(revision.uuidString).range")
+        case .window(let n): DeviceActivityName("everyday.\(revision.uuidString).window.\(n)")
+        }
+    }
+    /// The revision and the part of `everyday.<UUID>.range` and `everyday.<UUID>.window.<n>` (`n` 1-3), and `nil` for every other name.
+    static func everydayName(_ activity: DeviceActivityName) -> (revision: UUID, part: EverydayPart)? {
+        let raw = activity.rawValue
+        guard raw.hasPrefix("everyday.") else { return nil }
+        let rest = raw.dropFirst(9)
+        guard let revision = UUID(uuidString: String(rest.prefix(36))) else { return nil }
+        let suffix = rest.dropFirst(36)
+        if suffix == ".range" { return (revision, .range) }
+        guard suffix.hasPrefix(".window."), let n = Int(suffix.dropFirst(8)), (1...EverydaySchedule.maxWindows).contains(n),
+              suffix.dropFirst(8) == "\(n)" else { return nil }
+        return (revision, .window(n))
+    }
+    func registerEveryday(revision: UUID, part: EverydayPart, start: Int, end: Int) throws {
+        try center.startMonitoring(Self.everydayActivityName(revision: revision, part: part), during: Self.everydaySchedule(start: start, end: end))
+    }
+    var registeredEveryday: [(revision: UUID, part: EverydayPart)] { center.activities.compactMap(Self.everydayName) }
+    /// One name per call: `stopMonitoring([])` would stop every activity, also the focus and break activities.
+    func stopEveryday(revision: UUID, part: EverydayPart) { center.stopMonitoring([Self.everydayActivityName(revision: revision, part: part)]) }
 }
 final class ScreenTimeShield: ShieldClient {
     private let store = ManagedSettingsStore(named: ManagedSettingsStore.Name("focusSession"))
@@ -80,5 +112,18 @@ final class ScreenTimeShield: ShieldClient {
     func matches(_ selection: FamilyActivitySelection) -> Bool {
         (store.shield.applications ?? []) == selection.applicationTokens && (store.shield.webDomains ?? []) == selection.webDomainTokens
     }
+    func clear() { store.clearAllSettings() }
+}
+/// The everyday layer's own store; the focus layer never writes it.
+final class ScreenTimeEverydayShield {
+    private let store = ManagedSettingsStore(named: ManagedSettingsStore.Name("everydayLayer"))
+    func apply(_ selection: FamilyActivitySelection) {
+        store.shield.applications = selection.applicationTokens.isEmpty ? nil : selection.applicationTokens
+        store.shield.webDomains = selection.webDomainTokens.isEmpty ? nil : selection.webDomainTokens
+    }
+    func matches(_ selection: FamilyActivitySelection) -> Bool {
+        (store.shield.applications ?? []) == selection.applicationTokens && (store.shield.webDomains ?? []) == selection.webDomainTokens
+    }
+    var hasShield: Bool { store.shield.applications != nil || store.shield.webDomains != nil }
     func clear() { store.clearAllSettings() }
 }

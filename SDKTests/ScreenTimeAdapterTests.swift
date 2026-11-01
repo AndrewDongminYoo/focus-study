@@ -44,6 +44,38 @@ final class ScreenTimeAdapterTests: XCTestCase {
         XCTAssertNil(ScreenTimeMonitoring.sessionID(DeviceActivityName("other.\(id.uuidString)")))
         XCTAssertNil(ScreenTimeMonitoring.sessionID(DeviceActivityName("focus.\(id.uuidString)x")))
     }
+    func testEverydayScheduleRepeatsWithTimeComponentsOnly() {
+        let schedule = ScreenTimeMonitoring.everydaySchedule(start: 8 * 60, end: 12 * 60 + 35)
+        XCTAssertTrue(schedule.repeats); XCTAssertNil(schedule.warningTime)
+        for components in [schedule.intervalStart, schedule.intervalEnd] {
+            XCTAssertNil(components.era); XCTAssertNil(components.year); XCTAssertNil(components.month); XCTAssertNil(components.day)
+            XCTAssertNil(components.calendar); XCTAssertNil(components.timeZone); XCTAssertEqual(components.second, 0)
+        }
+        XCTAssertEqual(schedule.intervalStart.hour, 8); XCTAssertEqual(schedule.intervalStart.minute, 0)
+        XCTAssertEqual(schedule.intervalEnd.hour, 12); XCTAssertEqual(schedule.intervalEnd.minute, 35)
+    }
+    func testEverydayNameParsesRangeAndWindowsAndRejectsOthers() {
+        let revision = UUID()
+        let range = ScreenTimeMonitoring.everydayName(DeviceActivityName("everyday.\(revision.uuidString).range"))
+        XCTAssertEqual(range?.revision, revision); XCTAssertEqual(range?.part, .range)
+        let window = ScreenTimeMonitoring.everydayName(DeviceActivityName("everyday.\(revision.uuidString).window.2"))
+        XCTAssertEqual(window?.revision, revision); XCTAssertEqual(window?.part, .window(2))
+        for other in ["everyday.\(revision.uuidString).window.4", "everyday.\(revision.uuidString).window.0", "everyday.\(revision.uuidString).window.02",
+                      "everyday.bad.range", "everyday.\(revision.uuidString).ranged", "focus.\(revision.uuidString)"] {
+            XCTAssertNil(ScreenTimeMonitoring.everydayName(DeviceActivityName(other)), other)
+        }
+        for part in [EverydayPart.range, .window(1), .window(3)] {
+            let name = ScreenTimeMonitoring.everydayActivityName(revision: revision, part: part)
+            XCTAssertEqual(ScreenTimeMonitoring.everydayName(name)?.part, part)
+        }
+    }
+    func testSessionIDIgnoresEverydayNames() {
+        let revision = UUID()
+        for name in ["everyday.\(revision.uuidString).range", "everyday.\(revision.uuidString).window.1"] {
+            XCTAssertNil(ScreenTimeMonitoring.sessionID(DeviceActivityName(name)), name)
+            XCTAssertNil(ScreenTimeMonitoring.breakIndex(DeviceActivityName(name)), name)
+        }
+    }
     func testFocusScheduleFromStartedAtIsAtLeastTheFocusLength() {
         // A resume with less than 15 minutes of focus left registers from `startedAt`.
         let calendar = Calendar(identifier: .gregorian)
