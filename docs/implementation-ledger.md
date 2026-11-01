@@ -180,3 +180,13 @@ Final review fix pass (2026-10-31): the migration now reads only the selection, 
 A launch-time access read could not be retried, and a wrong read would keep an existing user in onboarding.
 In DEBUG diagnostic runs, the timer screen keeps the settings button during a session so README device procedure 2 can save a session's callback.
 After the fix pass, the full iOS scheme, `swift test` and the unsigned device Release build passed locally.
+
+## M2 break pass and deadline: 2026-11-01
+
+The [M2 design](specs/2026-11-01-m2-break-pass-design.md) and [M2 plan](plans/2026-11-01-m2-break-pass.md) were implemented in one worktree; the spec is the authority where the plan differs.
+The operator approved the selection copy in the App Group on 2026-11-01, so the Monitor can re-block without the app; the 2026-10-26 design has a dated reconciliation for that data boundary.
+`Shared/` adds the `waiting`, `onBreak` and `breakOver` phases, optional break fields, schema version 2 (version 1 still loads), the timed-end rule that compares the focus end with the deadline, and the break transitions with the cleanup of break artifacts in every lock section.
+`BreakTiming.standard` holds the production timing; the DEBUG argument `--break-timing short` and the fixture mode `ending-soon` exist only for UI tests.
+The race check compiles `Shared/BreakTiming.swift`, so the README command and CI list it, and it adds a stale break callback that must leave a newer break unchanged.
+Only `.expired` records give focus time, and the "중도 종료" button and history label became "집중 종료".
+Nothing in M2 was checked on a physical device or on an iOS 17 runtime; the device matrix lists the M2 rows as unverified.
