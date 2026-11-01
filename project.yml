@@ -61,6 +61,7 @@ targets:
         App/SelectionFeedback.swift,
         App/FocusSettings.swift,
         App/SessionRecord.swift,
+        App/EverydaySettingsModel.swift,
         App/FocusModel.swift,
         App/AuthorizationService.swift,
       ]

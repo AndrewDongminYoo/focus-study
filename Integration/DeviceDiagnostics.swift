@@ -1,5 +1,6 @@
 #if DEBUG
 import Foundation
+import FamilyControls
 import Observation
 
 /// Opt-in wrapper: the real registration happens before the injected one-shot error.
@@ -23,16 +24,32 @@ import Observation
     func isBreakRegistered(id: UUID, index: Int) -> Bool { base.isBreakRegistered(id: id, index: index) }
     var registeredBreaks: [(id: UUID, index: Int)] { base.registeredBreaks }
     func stopBreak(id: UUID, index: Int) { base.stopBreak(id: id, index: index) }
+    func registerEveryday(revision: UUID, part: EverydayPart, start: Int, end: Int) throws {
+        try base.registerEveryday(revision: revision, part: part, start: start, end: end)
+    }
+    var registeredEveryday: [(revision: UUID, part: EverydayPart)] { base.registeredEveryday }
+    func stopEveryday(revision: UUID, part: EverydayPart) { base.stopEveryday(revision: revision, part: part) }
 }
 
 @MainActor @Observable final class DeviceDiagnostics {
     let monitoring: DiagnosticMonitoring
     private let engine: SessionControl
     private let hasAccess: () -> Bool
+    private let everydayShield: ScreenTimeEverydayShield?
     private var savedActivity: String?
     private(set) var message: String?
-    init(monitoring: DiagnosticMonitoring, engine: SessionControl, hasAccess: @escaping () -> Bool) {
-        self.monitoring = monitoring; self.engine = engine; self.hasAccess = hasAccess
+    init(monitoring: DiagnosticMonitoring, engine: SessionControl, hasAccess: @escaping () -> Bool, everydayShield: ScreenTimeEverydayShield? = nil) {
+        self.monitoring = monitoring; self.engine = engine; self.hasAccess = hasAccess; self.everydayShield = everydayShield
+    }
+    var canApplyEveryday: Bool { everydayShield != nil }
+    /// Device step 9 of the M3 spec: applies a chosen selection to `everydayLayer` without the union check.
+    /// The next lock section converges the store to the stored everyday file again.
+    func applyEverydayWithoutUnionCheck(_ selection: FamilyActivitySelection) {
+        guard let everydayShield else { return }
+        everydayShield.apply(selection)
+        message = everydayShield.matches(selection)
+            ? "매일 제한 store에 선택을 합집합 검사 없이 적용했습니다. 실제로 제한된 앱을 기록해 주세요."
+            : "매일 제한 store가 선택과 일치하지 않습니다. 결과를 기록해 주세요."
     }
     func armRegistrationFailure() {
         monitoring.armFailure()
