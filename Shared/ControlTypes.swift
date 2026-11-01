@@ -50,7 +50,7 @@ public struct ControlSession: Codable, Equatable {
     }
 }
 struct ControlEnvelope: Codable { var schemaVersion = 2; var session: ControlSession? }
-enum ControlIssue: Error { case unauthorized, busy, pendingHistory, verificationFailed, lockTimeout, io, unsupportedSchema, invalidState, breakUnavailable }
+enum ControlIssue: Error { case unauthorized, busy, pendingHistory, verificationFailed, lockTimeout, io, unsupportedSchema, invalidState, breakUnavailable, everydayLocked }
 enum CallbackKind { case didStart, didEnd, willEndWarning }
 protocol LockedControl {
     func load() throws -> ControlEnvelope
@@ -70,7 +70,14 @@ protocol MonitoringClient {
     func isBreakRegistered(id: UUID, index: Int) -> Bool
     var registeredBreaks: [(id: UUID, index: Int)] { get }
     func stopBreak(id: UUID, index: Int)
+    /// A repeating activity `everyday.<revision>.range` or `everyday.<revision>.window.<n>`; times are minutes after midnight.
+    func registerEveryday(revision: UUID, part: EverydayPart, start: Int, end: Int) throws
+    var registeredEveryday: [(revision: UUID, part: EverydayPart)] { get }
+    /// Stops one named everyday activity. It never stops all activities.
+    func stopEveryday(revision: UUID, part: EverydayPart)
 }
+enum EverydayPart: Hashable { case range, window(Int) }
+/// Clears `focusSession` only; the everyday layer has its own store.
 protocol ShieldClient { func clear() }
 /// The session-scoped selection copy that lets the Monitor re-block without the app.
 protocol BreakSelectionStore {
@@ -81,3 +88,21 @@ protocol BreakSelectionStore {
     /// `nil` deletes every copy.
     func removeAll(except id: UUID?)
 }
+/// The everyday file and the `everydayLayer` store. Only the schedule part reaches `Shared/`.
+protocol EverydayLayerStore {
+    /// `nil` when no layer is set up; throws for an unreadable or invalid file.
+    func load() throws -> EverydaySchedule?
+    func storeMatches() -> Bool
+    /// Applies the stored selection and returns `true` only when the store matches it.
+    func applyStored() -> Bool
+    var hasShield: Bool { get }
+    func clearShield()
+}
+struct EverydayStatus: Equatable {
+    var schedule: EverydaySchedule?
+    var blocksNow: Bool
+    var nextChange: Date?
+    var issue: EverydayIssue?
+}
+/// `notCleared`: the store keeps a shield while the layer does not block. `unchecked`: the app could not take the lock for the status, so it keeps the last status it read.
+enum EverydayIssue: Equatable { case unreadable, registrationFailed, notApplied, notCleared, unchecked }

@@ -9,6 +9,6 @@ final class StartupRecovery {
     }
     func endCurrent(now: Date) throws {
         guard let current = try engine.snapshot().session, current.phase != .terminal else { return }
-        try engine.finish(id: current.id, reason: current.reason ?? current.timedEnd(at: now, timing: engine.timing) ?? .earlyExit, now: current.observedAt ?? now)
+        try engine.finish(id: current.id, reason: current.reason ?? current.timedEnd(at: now, timing: engine.timing) ?? .earlyExit, now: now, endedAt: current.observedAt)
     }
 }

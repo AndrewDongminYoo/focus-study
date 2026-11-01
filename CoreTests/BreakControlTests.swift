@@ -67,6 +67,10 @@ private final class World: ControlStore, LockedControl, MonitoringClient, Shield
     func isBreakRegistered(id: UUID, index: Int) -> Bool { state.breaks[BreakKey(id: id, index: index)] != nil }
     var registeredBreaks: [(id: UUID, index: Int)] { state.breaks.keys.map { (id: $0.id, index: $0.index) } }
     func stopBreak(id: UUID, index: Int) { state.breaks[BreakKey(id: id, index: index)] = nil; record() }
+    // The M2 world has no everyday layer; `EverydayControlTests` covers it.
+    func registerEveryday(revision: UUID, part: EverydayPart, start: Int, end: Int) throws {}
+    var registeredEveryday: [(revision: UUID, part: EverydayPart)] { [] }
+    func stopEveryday(revision: UUID, part: EverydayPart) {}
     func clear() { state.shieldOn = false; state.clears += 1; record() }
     func restoreShield(id: UUID) -> Bool {
         restoreCalls += 1
@@ -83,7 +87,7 @@ private final class World: ControlStore, LockedControl, MonitoringClient, Shield
 final class BreakControlTests: XCTestCase {
     private let t0 = Date(timeIntervalSince1970: 1_800_000_000)
     private func at(_ offset: TimeInterval) -> Date { t0.addingTimeInterval(offset) }
-    private func engine(_ world: World) -> SessionControl { SessionControl(store: world, monitoring: world, shield: world, breakSelection: world) }
+    private func engine(_ world: World) -> SessionControl { SessionControl(store: world, monitoring: world, shield: world, breakSelection: world, everyday: FakeEverydayStore()) }
     private func stored(_ world: World) -> ControlSession { world.state.envelope.session! }
     private func focusName(_ id: UUID) -> String { "focus.\(id.uuidString)" }
     private func breakName(_ id: UUID, _ index: Int) -> String { "focus.\(id.uuidString).break.\(index)" }
@@ -500,7 +504,7 @@ final class BreakControlTests: XCTestCase {
         let json = #"{"schemaVersion":1,"session":{"id":"\#(id.uuidString)","startedAt":\#(start.timeIntervalSinceReferenceDate),"expiresAt":\#(start.timeIntervalSinceReferenceDate + 1500),"phase":"active"}}"#
         try Data(json.utf8).write(to: file)
         let world = World(); world.state.focus[id] = Registration(start: start, end: start.addingTimeInterval(1500))
-        let engine = SessionControl(store: SharedControlStore(directory: directory), monitoring: world, shield: world, breakSelection: world)
+        let engine = SessionControl(store: SharedControlStore(directory: directory), monitoring: world, shield: world, breakSelection: world, everyday: FakeEverydayStore())
         _ = try engine.requestBreak(id: id, now: start.addingTimeInterval(60))
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
         XCTAssertEqual(object["schemaVersion"] as? Int, 2)

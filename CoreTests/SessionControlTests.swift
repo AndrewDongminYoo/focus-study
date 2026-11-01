@@ -5,7 +5,7 @@ final class SessionControlTests: XCTestCase {
     let now = Date(timeIntervalSince1970: 1_800_000_000)
     func fixture() -> (SessionControl, MemoryControlStore, FakeMonitoring, FakeShield) {
         let store = MemoryControlStore(), monitor = FakeMonitoring(), shield = FakeShield()
-        return (SessionControl(store: store, monitoring: monitor, shield: shield, breakSelection: FakeBreakSelection()), store, monitor, shield)
+        return (SessionControl(store: store, monitoring: monitor, shield: shield, breakSelection: FakeBreakSelection(), everyday: FakeEverydayStore()), store, monitor, shield)
     }
     func testStartUses25MinuteNonRepeatingIntervalAndCommitsActive() throws {
         let (engine, store, monitor, shield) = fixture()
@@ -131,7 +131,7 @@ final class SessionControlTests: XCTestCase {
         store.failAllWrites = true
         XCTAssertThrowsError(try engine.finish(id: a.id, reason: .earlyExit, now: now.addingTimeInterval(10)))
         XCTAssertEqual(store.envelope.session?.phase, .active); XCTAssertFalse(shield.applied)
-        let restarted = SessionControl(store: store, monitoring: monitor, shield: shield, breakSelection: FakeBreakSelection())
+        let restarted = SessionControl(store: store, monitoring: monitor, shield: shield, breakSelection: FakeBreakSelection(), everyday: FakeEverydayStore())
         XCTAssertThrowsError(try restarted.reconcile(now: now.addingTimeInterval(11), authorized: true))
         store.failAllWrites = false
         let result = try restarted.reconcile(now: restoredAt, authorized: true)
@@ -145,7 +145,7 @@ final class SessionControlTests: XCTestCase {
         XCTAssertThrowsError(try engine.snapshot()); XCTAssertFalse(shield.applied)
         XCTAssertNil(monitor.intervals[a.id])
         store.failRead = false
-        let restarted = SessionControl(store: store, monitoring: monitor, shield: shield, breakSelection: FakeBreakSelection())
+        let restarted = SessionControl(store: store, monitoring: monitor, shield: shield, breakSelection: FakeBreakSelection(), everyday: FakeEverydayStore())
         let result = try restarted.reconcile(now: now.addingTimeInterval(10), authorized: true)
         XCTAssertEqual(result.session?.phase, .terminal); XCTAssertEqual(result.session?.reason, .recoveryInterrupted)
     }
@@ -178,6 +178,19 @@ final class FakeMonitoring: MonitoringClient {
         let parts = key.split(separator: "."); return UUID(uuidString: String(parts[0])).map { ($0, Int(parts[1])!) }
     } }
     func stopBreak(id: UUID, index: Int) { breaks.remove("\(id.uuidString).\(index)") }
+    var everyday: [(revision: UUID, part: EverydayPart)] = []
+    func registerEveryday(revision: UUID, part: EverydayPart, start: Int, end: Int) throws { everyday.append((revision, part)) }
+    var registeredEveryday: [(revision: UUID, part: EverydayPart)] { everyday }
+    func stopEveryday(revision: UUID, part: EverydayPart) { everyday.removeAll { $0.revision == revision && $0.part == part } }
+}
+/// An everyday layer in memory; without a schedule, no layer is set up.
+final class FakeEverydayStore: EverydayLayerStore {
+    var schedule: EverydaySchedule?, shieldOn = false
+    func load() throws -> EverydaySchedule? { schedule }
+    func storeMatches() -> Bool { shieldOn }
+    func applyStored() -> Bool { shieldOn = true; return true }
+    var hasShield: Bool { shieldOn }
+    func clearShield() { shieldOn = false }
 }
 final class FakeBreakSelection: BreakSelectionStore {
     var copies = Set<UUID>()

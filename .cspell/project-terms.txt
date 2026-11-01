@@ -1,6 +1,8 @@
 393JTTV68D
 appex
 ASSETCATALOG_COMPILER_APPICON_NAME
+autoupdating
+BEGINSWITH
 cfbundle
 codesign
 codesigning
@@ -40,5 +42,6 @@ xcprivacy
 xcrun
 xctest
 XCUIApplication
+XCUIElement
 xcuserdata
 xcuserstate
