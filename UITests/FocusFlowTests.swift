@@ -39,6 +39,67 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["countdown"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["countdown"].label, "남은 시간 45분 0초")
     }
+    /// The everyday layer opens from its row in the settings sheet.
+    private func openEveryday(_ app: XCUIApplication) -> XCUIElement {
+        XCTAssertTrue(app.buttons["settingsButton"].waitForExistence(timeout: 8)); app.buttons["settingsButton"].tap()
+        XCTAssertTrue(app.buttons["everydayRow"].waitForExistence(timeout: 5)); app.buttons["everydayRow"].tap()
+        let status = app.staticTexts["everydayStatus"]
+        XCTAssertTrue(status.waitForExistence(timeout: 5))
+        return status
+    }
+    /// A `Toggle` in a `Form` can take the tap on its label without flipping; the inner switch is the fallback.
+    private func flip(_ toggle: XCUIElement) {
+        let before = toggle.value as? String
+        toggle.tap()
+        if toggle.value as? String == before { toggle.switches.firstMatch.tap() }
+        XCTAssertNotEqual(toggle.value as? String, before)
+    }
+    func testEverydayLayerTurnsOnFromSettings() {
+        let app = app()
+        let status = openEveryday(app)
+        XCTAssertEqual(status.label, "꺼져 있어요")
+        app.buttons["everydaySelection"].tap()
+        XCTAssertTrue(app.buttons["fixtureSelect"].waitForExistence(timeout: 5)); app.buttons["fixtureSelect"].tap(); app.buttons["pickerSave"].tap()
+        flip(app.switches["everydayToggle"])
+        app.buttons["everydaySave"].tap()
+        expectation(for: NSPredicate(format: "label BEGINSWITH '켜져 있어요' OR label BEGINSWITH '지금 제한하고 있어요'"), evaluatedWith: status)
+        waitForExpectations(timeout: 5)
+        XCTAssertFalse(app.staticTexts["everydayRefusal"].exists)
+        captureReport(app, name: "everyday-settings")
+    }
+    func testLooserEditInsideTheRangeIsRefused() {
+        let app = app(extra: ["--everyday-fixture", "blocking"])
+        let status = openEveryday(app)
+        XCTAssertTrue(status.label.hasPrefix("지금 제한하고 있어요"), status.label)
+        flip(app.switches["everydayToggle"])
+        app.buttons["everydaySave"].tap()
+        let refusal = app.staticTexts["everydayRefusal"]
+        XCTAssertTrue(refusal.waitForExistence(timeout: 5))
+        XCTAssertTrue(refusal.label.hasPrefix("제한 시간에는 더 엄격하게만 바꿀 수 있어요."), refusal.label)
+        XCTAssertTrue(status.label.hasPrefix("지금 제한하고 있어요"), status.label)
+    }
+    func testThreeWindowsAreTheLimit() {
+        let app = app()
+        _ = openEveryday(app)
+        let add = app.buttons["everydayAddWindow"]
+        for template in ["점심", "등교", "하교"] {
+            XCTAssertTrue(add.isEnabled, template); add.tap()
+            XCTAssertTrue(app.buttons[template].waitForExistence(timeout: 5), template); app.buttons[template].tap()
+        }
+        XCTAssertTrue(app.descendants(matching: .any)["everydayWindow.3"].waitForExistence(timeout: 5))
+        // Three window rows push the button below the fold, and the Form renders only visible rows.
+        for _ in 0..<4 where !add.exists { app.swipeUp() }
+        XCTAssertTrue(add.exists)
+        XCTAssertFalse(add.isEnabled)
+    }
+    func testTimerScreenIsUnchangedWithTheLayerOn() {
+        let app = app(extra: ["--everyday-fixture", "blocking"])
+        XCTAssertTrue(app.staticTexts["countdown"].waitForExistence(timeout: 8))
+        for identifier in ["start", "settingsButton", "todaySummary"] { XCTAssertTrue(app.buttons[identifier].exists, identifier) }
+        for identifier in ["everydayRow", "everydayStatus", "everydayToggle", "everydaySave"] {
+            XCTAssertFalse(app.descendants(matching: .any)[identifier].exists, identifier)
+        }
+    }
     func testCompletionCopyUsesSessionLength() {
         let app = app("expiring", extra: ["--length", "40"])
         // The Label exposes its icon and text under the same identifier, in a runtime-dependent order (iOS 26.5 lists the icon, labelled "Selected", first).

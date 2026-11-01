@@ -13,6 +13,12 @@ import Observation
     var settings = FocusSettings()
     /// Writes the session-scoped selection copy for a break. Without one, no break can start, so the shield is never cleared.
     var saveBreakSelection: (FamilyActivitySelection, UUID) throws -> Void = { _, _ in throw ControlIssue.io }
+    /// The stored everyday selection; an unreadable everyday file gives `nil`, because the layer then blocks nothing.
+    var everydaySelection: () -> FamilyActivitySelection? = { nil }
+    /// `true` when the new everyday selection holds every app and website of the stored one.
+    var everydayContains: (FamilyActivitySelection) throws -> Bool = { _ in true }
+    /// Writes `everyday-layer.json`; it runs inside the engine's save section.
+    var writeEveryday: (EverydaySchedule, FamilyActivitySelection) throws -> Void = { _, _ in throw ControlIssue.io }
     #if DEBUG
     var diagnostics: DeviceDiagnostics?
     #endif
@@ -33,6 +39,8 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
     private(set) var completedSessionID: UUID?
     /// That session's own length; today's records can miss it (a session that crossed midnight, a history failure).
     private(set) var completedLength: TimeInterval?
+    /// The everyday layer for the settings row. The timer screen does not show it.
+    private(set) var everydayStatus: EverydayStatus?
     var access: AccessStatus { services.authorization.status }
     var isActive: Bool { current?.phase == .active }
     /// Focusing or paused for a break: the selection editor and the settings stay locked.
@@ -110,6 +118,15 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
             // A history failure does not invalidate a confirmed control session or its early-exit action.
             errorMessage = "기록을 불러오지 못했어요. 다시 확인해 주세요. 진행 중인 세션은 종료할 수 있어요."
         }
+        refreshEveryday()
+    }
+    /// Its own `do`/`catch`: a lock timeout against a Monitor everyday callback never changes `current` or `errorMessage`.
+    func refreshEveryday() {
+        do { everydayStatus = try services.engine.everydayStatus(now: Date(), authorized: access == .approved) }
+        catch {
+            var kept = everydayStatus ?? EverydayStatus(schedule: nil, blocksNow: false, nextChange: nil, issue: nil)
+            kept.issue = .unchecked; everydayStatus = kept
+        }
     }
 
     func start() {
@@ -181,6 +198,7 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
     }
     func saveSelection(_ selection: FamilyActivitySelection) throws {
         guard !isInSession, !isStarting else { throw ControlIssue.busy }
+        try SelectionFeedback.validateUnion(selection, services.everydaySelection())
         try services.selection.save(selection)
     }
 }

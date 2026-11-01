@@ -1,6 +1,7 @@
 #if DEBUG
 import Foundation
 import FamilyControls
+import ManagedSettings
 import Observation
 import SwiftData
 import SwiftUI
@@ -33,8 +34,53 @@ private final class FixtureMonitoring: MonitoringClient {
     func isBreakRegistered(id: UUID, index: Int) -> Bool { breaks.contains { $0.id == id && $0.index == index } }
     var registeredBreaks: [(id: UUID, index: Int)] { breaks }
     func stopBreak(id: UUID, index: Int) { breaks.removeAll { $0.id == id && $0.index == index } }
+    /// Everyday registrations stay in memory; nothing reaches `DeviceActivityCenter`.
+    var everyday: [(revision: UUID, part: EverydayPart)] = []
+    func registerEveryday(revision: UUID, part: EverydayPart, start: Int, end: Int) throws {
+        if !everyday.contains(where: { $0.revision == revision && $0.part == part }) { everyday.append((revision, part)) }
+    }
+    var registeredEveryday: [(revision: UUID, part: EverydayPart)] { everyday }
+    func stopEveryday(revision: UUID, part: EverydayPart) { everyday.removeAll { $0.revision == revision && $0.part == part } }
 }
 private final class FixtureShield: ShieldClient { func clear() {} }
+/// The everyday file and store in memory, with a synthetic shield flag; it never touches real restrictions.
+final class FixtureEverydayLayer: EverydayLayerStore {
+    var schedule: EverydaySchedule?
+    var selection = FamilyActivitySelection(includeEntireCategory: true)
+    private(set) var shieldOn = false
+    func load() throws -> EverydaySchedule? { schedule }
+    func storeMatches() -> Bool { shieldOn }
+    func applyStored() -> Bool { shieldOn = schedule != nil; return shieldOn }
+    var hasShield: Bool { shieldOn }
+    func clearShield() { shieldOn = false }
+    func contains(_ new: FamilyActivitySelection) -> Bool {
+        selection.applicationTokens.isSubset(of: new.applicationTokens) && selection.webDomainTokens.isSubset(of: new.webDomainTokens)
+    }
+    func write(_ schedule: EverydaySchedule, selection: FamilyActivitySelection) { self.schedule = schedule; self.selection = selection }
+    /// One synthetic app token, decoded from opaque bytes; it is never applied to a real store.
+    static func sampleSelection() -> FamilyActivitySelection {
+        var selection = FamilyActivitySelection(includeEntireCategory: true)
+        if let token = try? JSONDecoder().decode(ApplicationToken.self, from: JSONEncoder().encode(["data": Data([7])])) { selection.applicationTokens = [token] }
+        return selection
+    }
+    /// `--everyday-fixture blocking`: a layer whose range started 5 minutes before launch on the 5-minute grid and lasts 2 hours.
+    static func blocking(now: Date, calendar: Calendar) -> FixtureEverydayLayer {
+        let parts = calendar.dateComponents([.hour, .minute], from: now)
+        let minute = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+        let start = max(0, min(minute / EverydaySchedule.grid * EverydaySchedule.grid - 5, EverydaySchedule.latestRangeEnd - 120))
+        let layer = FixtureEverydayLayer()
+        layer.schedule = EverydaySchedule(revision: UUID(), enabled: true, rangeStart: start, rangeEnd: start + 120, windows: [])
+        layer.selection = sampleSelection()
+        return layer
+    }
+    /// A fixed-offset calendar in which launch falls between 12:00 and 13:00, so that a fixture range never reaches 23:55 or midnight, whatever the wall clock.
+    static func noonCalendar(now: Date) -> Calendar {
+        let utcHour = Int(now.timeIntervalSince1970) % 86_400 / 3600
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: (12 - utcHour) * 3600) ?? .gmt
+        return calendar
+    }
+}
 /// In-memory selection copies; a restore never touches real restrictions.
 private final class FixtureBreakSelection: BreakSelectionStore {
     var copies = Set<UUID>()
@@ -52,10 +98,19 @@ extension FocusServices {
             timing = BreakTiming(waits: [1, 2, 4], breakLength: 3, slack: 5, staleWaitGrace: 2)
         }
         let breakSelection = FixtureBreakSelection()
-        let engine = SessionControl(store: SharedControlStore(directory: directory), monitoring: FixtureMonitoring(fail: arguments.contains("registration-failure")), shield: FixtureShield(), breakSelection: breakSelection, timing: timing)
+        var everyday = FixtureEverydayLayer()
+        // The engine and the status line read the layer in this calendar, not the device time zone.
+        let now = Date(), calendar = FixtureEverydayLayer.noonCalendar(now: now)
+        if let index = arguments.firstIndex(of: "--everyday-fixture"), index + 1 < arguments.count, arguments[index + 1] == "blocking" {
+            everyday = .blocking(now: now, calendar: calendar)
+        }
+        let engine = SessionControl(store: SharedControlStore(directory: directory), monitoring: FixtureMonitoring(fail: arguments.contains("registration-failure")), shield: FixtureShield(), breakSelection: breakSelection, everyday: everyday, timing: timing, calendar: calendar)
         let onboarding = arguments.contains("onboarding")
         var services = FocusServices(authorization: FixtureAuthorization(denied: arguments.contains("denied"), notRequested: arguments.contains("not-requested") || onboarding), selection: FixtureSelection(selected: arguments.contains("--selected") && !onboarding), engine: engine, applySelection: { _ in }, matchesSelection: { _ in true }, isFixture: true)
         services.saveBreakSelection = { _, id in breakSelection.copies.insert(id) }
+        services.everydaySelection = { everyday.schedule == nil ? nil : everyday.selection }
+        services.everydayContains = { everyday.contains($0) }
+        services.writeEveryday = { everyday.write($0, selection: $1) }
         // In-memory settings: `onboarding` starts a new person; every other mode is a person who finished onboarding.
         let settings = FocusSettings(defaults: UserDefaults(suiteName: "FocusFixture-\(UUID().uuidString)")!)
         if let index = arguments.firstIndex(of: "--length"), index + 1 < arguments.count, let minutes = Int(arguments[index + 1]) { settings.lengthMinutes = minutes }

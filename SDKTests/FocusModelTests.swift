@@ -1,5 +1,6 @@
 import XCTest
 import FamilyControls
+import ManagedSettings
 
 @MainActor final class FocusModelTests: XCTestCase {
     private func fixture(defaults: UserDefaults = UserDefaults(suiteName: UUID().uuidString)!) -> (FocusModel, ModelTestHistory, ModelTestStore, ModelTestShield, SessionControl) {
@@ -9,7 +10,7 @@ import FamilyControls
     }
     private func makeModel(store: ModelTestStore, monitoring: ModelTestMonitoring, shield: ModelTestShield, defaults: UserDefaults, timing: BreakTiming) -> (FocusModel, ModelTestHistory, ModelTestBreakSelection) {
         let copies = ModelTestBreakSelection(); copies.onRestore = { shield.applied = true }
-        let engine = SessionControl(store: store, monitoring: monitoring, shield: shield, breakSelection: copies, timing: timing)
+        let engine = SessionControl(store: store, monitoring: monitoring, shield: shield, breakSelection: copies, everyday: ModelTestEverydayLayer(), timing: timing)
         var services = FocusServices(authorization: ModelTestAuthorization(), selection: ModelTestSelection(), engine: engine, applySelection: { _ in shield.applied = true }, matchesSelection: { _ in shield.applied }, isFixture: true)
         services.settings = FocusSettings(defaults: defaults)
         services.saveBreakSelection = { selection, id in copies.saved.append((selection, id)); copies.copies.insert(id) }
@@ -185,6 +186,31 @@ import FamilyControls
         takeBreak(late)
         XCTAssertEqual(late.resumeRemaining, 0)
     }
+    func testFocusSelectionSaveRefusesAUnionOver50() throws {
+        let (model, _, _, _, _) = fixture()
+        let (_, selection) = doubles(model)
+        var everyday = FamilyActivitySelection(); everyday.applicationTokens = syntheticApps(0..<49)
+        var services = model.services; services.everydaySelection = { everyday }
+        let guarded = FocusModel(services: services, history: ModelTestHistory(acknowledge: services.engine.acknowledgeTerminal))
+        var draft = FamilyActivitySelection(); draft.applicationTokens = syntheticApps(100..<102)
+        XCTAssertThrowsError(try guarded.saveSelection(draft)) { XCTAssertEqual($0 as? SelectionUnionLimit, SelectionUnionLimit(issue: .tooManyApps)) }
+        XCTAssertEqual(selection.saves, 0)
+        everyday.applicationTokens = syntheticApps(0..<50); draft.applicationTokens = syntheticApps(0..<50)
+        try guarded.saveSelection(draft)
+        XCTAssertEqual(selection.saves, 1)
+    }
+    func testEverydayStatusFailureLeavesTheSessionAndErrorUnchanged() throws {
+        let (model, _, store, _, _) = fixture()
+        model.completeOnboarding(); model.start()
+        let session = try XCTUnwrap(model.current); XCTAssertEqual(session.phase, .active)
+        // `refresh()` takes the lock for the reconcile, the snapshot and then the everyday status.
+        store.lockTimeoutCalls = [store.calls + 3]
+        model.refresh()
+        XCTAssertEqual(model.current, session); XCTAssertNil(model.errorMessage)
+        XCTAssertEqual(model.everydayStatus?.issue, .unchecked)
+        model.refresh()
+        XCTAssertNil(model.everydayStatus?.issue)
+    }
     func testNoBreakActionAfterThirdBreak() {
         let (model, _, _) = breakFixture()
         for _ in 0..<3 { takeBreak(model); model.resume() }
@@ -194,7 +220,7 @@ import FamilyControls
         XCTAssertEqual(model.current, before); XCTAssertNil(model.errorMessage)
     }
 }
-private final class ModelTestBreakSelection: BreakSelectionStore {
+final class ModelTestBreakSelection: BreakSelectionStore {
     var copies = Set<UUID>(), saved: [(FamilyActivitySelection, UUID)] = []
     var onRestore: () -> Void = {}
     func restoreShield(id: UUID) -> Bool { guard copies.contains(id) else { return false }; onRestore(); return true }
@@ -202,14 +228,21 @@ private final class ModelTestBreakSelection: BreakSelectionStore {
     func remove(id: UUID) { copies.remove(id) }
     func removeAll(except id: UUID?) { copies = copies.filter { $0 == id } }
 }
-private enum ModelTestError: Error { case storage }
-private final class ModelTestStore: ControlStore, LockedControl {
+enum ModelTestError: Error { case storage }
+final class ModelTestStore: ControlStore, LockedControl {
     var envelope = ControlEnvelope(), failRead = false
-    func withExclusiveAccess<T>(_ body: (LockedControl) throws -> T) throws -> T { try body(self) }
+    /// The numbers of the lock sections that throw `lockTimeout` before their body runs.
+    var lockTimeoutCalls = Set<Int>()
+    private(set) var calls = 0
+    func withExclusiveAccess<T>(_ body: (LockedControl) throws -> T) throws -> T {
+        calls += 1
+        if lockTimeoutCalls.contains(calls) { throw ControlIssue.lockTimeout }
+        return try body(self)
+    }
     func load() throws -> ControlEnvelope { if failRead { throw ModelTestError.storage }; return envelope }
     func save(_ envelope: ControlEnvelope) throws { self.envelope = envelope }
 }
-private final class ModelTestMonitoring: MonitoringClient {
+final class ModelTestMonitoring: MonitoringClient {
     var ids = Set<UUID>(); var registeredSessionIDs: [UUID] { Array(ids) }
     func register(id: UUID, start: Date, end: Date) throws { ids.insert(id) }
     func isRegistered(id: UUID) -> Bool { ids.contains(id) }
@@ -219,26 +252,49 @@ private final class ModelTestMonitoring: MonitoringClient {
     func isBreakRegistered(id: UUID, index: Int) -> Bool { breaks.contains { $0.id == id && $0.index == index } }
     var registeredBreaks: [(id: UUID, index: Int)] { breaks }
     func stopBreak(id: UUID, index: Int) { breaks.removeAll { $0.id == id && $0.index == index } }
+    var everyday: [(revision: UUID, part: EverydayPart)] = []
+    func registerEveryday(revision: UUID, part: EverydayPart, start: Int, end: Int) throws { everyday.append((revision, part)) }
+    var registeredEveryday: [(revision: UUID, part: EverydayPart)] { everyday }
+    func stopEveryday(revision: UUID, part: EverydayPart) { everyday.removeAll { $0.revision == revision && $0.part == part } }
 }
-private final class ModelTestShield: ShieldClient {
+/// The everyday file and store in memory.
+final class ModelTestEverydayLayer: EverydayLayerStore {
+    var schedule: EverydaySchedule?, selection = FamilyActivitySelection(), shieldOn = false, unreadable = false
+    private(set) var writes = 0
+    func load() throws -> EverydaySchedule? { if unreadable { throw ModelTestError.storage }; return schedule }
+    func storeMatches() -> Bool { shieldOn }
+    func applyStored() -> Bool { shieldOn = true; return true }
+    var hasShield: Bool { shieldOn }
+    func clearShield() { shieldOn = false }
+    func contains(_ new: FamilyActivitySelection) -> Bool {
+        selection.applicationTokens.isSubset(of: new.applicationTokens) && selection.webDomainTokens.isSubset(of: new.webDomainTokens)
+    }
+    func write(_ schedule: EverydaySchedule, _ selection: FamilyActivitySelection) { self.schedule = schedule; self.selection = selection; unreadable = false; writes += 1 }
+}
+/// Synthetic Codable tokens for count tests, never Screen Time calls.
+func syntheticApps(_ range: Range<Int>) -> Set<ApplicationToken> {
+    Set(range.map { try! JSONDecoder().decode(ApplicationToken.self, from: JSONEncoder().encode(["data": Data([UInt8($0 / 256), UInt8($0 % 256), 9])])) })
+}
+final class ModelTestShield: ShieldClient {
     var applied = false
     func clear() { applied = false }
 }
-@MainActor private final class ModelTestHistory: SessionHistoryProviding {
+@MainActor final class ModelTestHistory: SessionHistoryProviding {
     var failFetch = false
     let acknowledge: (UUID) throws -> Void
     init(acknowledge: @escaping (UUID) throws -> Void) { self.acknowledge = acknowledge }
     func importTerminal(_ session: ControlSession) throws { try acknowledge(session.id) }
     func records(on date: Date, calendar: Calendar) throws -> [SessionRecord] { if failFetch { throw ModelTestError.storage }; return [] }
 }
-@MainActor private final class ModelTestAuthorization: AuthorizationProviding {
+@MainActor final class ModelTestAuthorization: AuthorizationProviding {
     var status: AccessStatus = .approved
     func requestIndividual() async {}
     func refresh() {}
     func hasAccessNow() -> Bool { status == .approved }
 }
-@MainActor private final class ModelTestSelection: SelectionStoring {
+@MainActor final class ModelTestSelection: SelectionStoring {
     var selection = FamilyActivitySelection()
     var counts: (apps: Int, websites: Int, categories: Int) = (1, 0, 0)
-    func save(_ selection: FamilyActivitySelection) throws {}
+    private(set) var saves = 0
+    func save(_ selection: FamilyActivitySelection) throws { saves += 1 }
 }
