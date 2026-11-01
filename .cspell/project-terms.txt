@@ -1,5 +1,6 @@
 393JTTV68D
 appex
+appintents
 ASSETCATALOG_COMPILER_APPICON_NAME
 autoupdating
 BEGINSWITH
@@ -19,6 +20,7 @@ gearshape
 GENERATE_INFOPLIST_FILE
 INFOPLIST_FILE
 iphoneos
+KakaoTalk
 kr.donminzzi.focusStudy.sdktests
 kr.donminzzi.focusStudy.uitests
 Onone
@@ -28,6 +30,7 @@ readback
 SDKROOT
 showsdks
 simctl
+Siri
 subheadline
 swiftc
 swiftinterface
