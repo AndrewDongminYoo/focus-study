@@ -37,7 +37,12 @@ private final class World: ControlStore, LockedControl, MonitoringClient, Shield
         let index = effects; effects += 1
         if throwAtEffect == index { throwAtEffect = nil; throw FixtureFailure.injected }
     }
-    func withExclusiveAccess<T>(_ body: (LockedControl) throws -> T) throws -> T { try body(self) }
+    /// Errors that the next lock sections throw before their body runs, one per section.
+    var lockFailures: [Error] = []
+    func withExclusiveAccess<T>(_ body: (LockedControl) throws -> T) throws -> T {
+        if !lockFailures.isEmpty { throw lockFailures.removeFirst() }
+        return try body(self)
+    }
     func load() throws -> ControlEnvelope { if failReads { throw FixtureFailure.injected }; return state.envelope }
     func save(_ envelope: ControlEnvelope) throws {
         try mayThrow()
@@ -312,6 +317,50 @@ final class BreakControlTests: XCTestCase {
         XCTAssertEqual(stored(world).phase, .breakOver); XCTAssertTrue(world.state.shieldOn)
         XCTAssertTrue(world.state.breaks.isEmpty); XCTAssertTrue(world.state.copies.isEmpty)
         XCTAssertEqual(world.state.focus[id]?.end, at(2295))
+    }
+    /// Returns the given times in order, so a test sees which attempt read which time.
+    private func clock(_ times: [Date]) -> (now: () -> Date, calls: () -> Int) {
+        var index = 0
+        return ({ defer { index += 1 }; return times[min(index, times.count - 1)] }, { index })
+    }
+    func testWarningCallbackRetriesLockTimeoutAndStillReBlocks() throws {
+        let world = World(); let (engine, id) = try started(world)
+        try takeBreak(engine, world, id, at: 100)
+        world.lockFailures = [ControlIssue.lockTimeout]
+        let clock = clock([at(290), at(291)]); var pauses: [TimeInterval] = []
+        try engine.handleCallbackRetryingLock(activityName: breakName(id, 1), kind: .willEndWarning, now: clock.now, authorized: { true }, sleep: { pauses.append($0) })
+        XCTAssertEqual(pauses, [0.25]); XCTAssertEqual(clock.calls(), 2)
+        XCTAssertEqual(stored(world).phase, .breakOver); XCTAssertTrue(world.state.shieldOn)
+        XCTAssertTrue(world.state.breaks.isEmpty); XCTAssertTrue(world.state.copies.isEmpty)
+    }
+    func testFocusEndCallbackRetriesLockTimeoutWithFreshTime() throws {
+        let world = World(); let (engine, id) = try started(world)
+        world.lockFailures = [ControlIssue.lockTimeout]
+        // The first time is before the focus end, so only the fresh time of the retry can end the session.
+        let clock = clock([at(1499), at(1500)]); var pauses: [TimeInterval] = []
+        try engine.handleCallbackRetryingLock(activityName: focusName(id), kind: .didEnd, now: clock.now, authorized: { true }, sleep: { pauses.append($0) })
+        XCTAssertEqual(pauses, [0.25]); XCTAssertEqual(stored(world).reason, .expired)
+        XCTAssertFalse(world.state.shieldOn); XCTAssertNil(world.state.focus[id])
+    }
+    func testCallbackRetryStopsAfterFourLockTimeouts() throws {
+        let world = World(); let (engine, id) = try started(world)
+        try takeBreak(engine, world, id, at: 100)
+        world.lockFailures = Array(repeating: ControlIssue.lockTimeout, count: 5)
+        let before = world.state; var pauses: [TimeInterval] = []
+        XCTAssertThrowsError(try engine.handleCallbackRetryingLock(activityName: breakName(id, 1), kind: .willEndWarning, now: { self.at(290) }, authorized: { true }, sleep: { pauses.append($0) })) {
+            XCTAssertEqual($0 as? ControlIssue, .lockTimeout)
+        }
+        XCTAssertEqual(pauses.count, 4); XCTAssertTrue(world.lockFailures.isEmpty); XCTAssertEqual(world.state, before)
+    }
+    func testCallbackRetryIgnoresOtherErrors() throws {
+        let world = World(); let (engine, id) = try started(world)
+        try takeBreak(engine, world, id, at: 100)
+        world.lockFailures = [ControlIssue.io, ControlIssue.lockTimeout]
+        let before = world.state; var pauses: [TimeInterval] = []
+        XCTAssertThrowsError(try engine.handleCallbackRetryingLock(activityName: breakName(id, 1), kind: .willEndWarning, now: { self.at(290) }, authorized: { true }, sleep: { pauses.append($0) })) {
+            XCTAssertEqual($0 as? ControlIssue, .io)
+        }
+        XCTAssertTrue(pauses.isEmpty); XCTAssertEqual(world.lockFailures.count, 1); XCTAssertEqual(world.state, before)
     }
     func testStaleBreakCallbackDoesNotTouchNewerBreak() throws {
         let world = World(); let (engine, id) = try started(world)

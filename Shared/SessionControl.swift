@@ -92,6 +92,16 @@ final class SessionControl {
             try registerStoredEnd(&envelope, locked: locked, now: now)
         }
     }
+    /// A Monitor callback is often the only trigger of its timed change, so a lock timeout retries with a fresh time before the callback returns.
+    /// The store throws `lockTimeout` before the section runs, so a failed attempt changed nothing. Worst case with the defaults: 5 lock waits of 0.25 s and 4 pauses of 0.25 s, about 2.25 s.
+    func handleCallbackRetryingLock(activityName: String, kind: CallbackKind, now: () -> Date, authorized: () -> Bool, retries: Int = 4, pause: TimeInterval = 0.25,
+                                    sleep: (TimeInterval) -> Void = { Thread.sleep(forTimeInterval: $0) }) throws {
+        var attempt = 0
+        while true {
+            do { return try handleCallback(activityName: activityName, kind: kind, now: now(), authorized: authorized()) }
+            catch ControlIssue.lockTimeout where attempt < retries { attempt += 1; sleep(pause) }
+        }
+    }
 
     // MARK: Break transitions
 

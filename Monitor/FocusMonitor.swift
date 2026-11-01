@@ -13,9 +13,10 @@ final class FocusMonitor: DeviceActivityMonitor {
             let directory = try GroupConfiguration.directory()
             let engine = SessionControl(store: SharedControlStore(directory: directory), monitoring: ScreenTimeMonitoring(), shield: shield,
                                         breakSelection: BreakSelectionFile(directory: directory, shield: shield))
-            try engine.handleCallback(activityName: activity.rawValue, kind: kind, now: Date(), authorized: ScreenTimeAccess.isApproved(AuthorizationCenter.shared.authorizationStatus))
+            try engine.handleCallbackRetryingLock(activityName: activity.rawValue, kind: kind, now: Date.init,
+                                                  authorized: { ScreenTimeAccess.isApproved(AuthorizationCenter.shared.authorizationStatus) })
         } catch {
-            // No sensitive logging; lock failures retry on a later lifecycle event.
+            // No sensitive logging; a lock timeout was already retried a few times, and other failures wait for a later lifecycle event or an app reconcile.
         }
     }
 }
