@@ -6,6 +6,7 @@ FocusStudy is a provisional product name for an iOS 17+ app built with SwiftUI, 
 It provides individual Screen Time authorization, app and website selection, focus sessions whose length is a personal setting from 25 to 50 minutes in 5-minute steps (see the [M1 design](docs/specs/2026-10-31-m1-launch-flow-design.md)), local session history, and an isolated usage report.
 A session has up to 3 breaks of exactly 3 minutes, each after a waiting screen, and a deadline after which it counts as unfocused (see the [M2 design](docs/specs/2026-11-01-m2-break-pass-design.md)).
 An everyday blocking layer has its own selection, one daily range and at most 3 unblocked windows; it runs every day without the app, blocks together with the focus layer, and a break lifts it (see the [M3 design](docs/specs/2026-11-01-m3-schedule-layer-design.md)).
+A Focus filter, designed for M4 and not built yet, starts a normal focus session when an iOS Focus with its session option turns on and ends that session when the Focus turns off; iOS filters notifications by the Focus's own settings, which the app neither reads nor changes (see the [M4 design](docs/specs/2026-11-01-m4-focus-filter-design.md)).
 Keep changes within this baseline unless the task explicitly expands it: no other pause, parental management, Android client, accounts, backend, AI, or rewards.
 Preserve existing Korean UI text; use English for code identifiers and technical documentation.
 
@@ -27,10 +28,12 @@ Use these current documentation paths:
 - [M1 launch flow and focus length design](docs/specs/2026-10-31-m1-launch-flow-design.md), which supersedes the original design on session length and launch flow
 - [M2 break pass and deadline design](docs/specs/2026-11-01-m2-break-pass-design.md)
 - [M3 everyday schedule blocking layer design](docs/specs/2026-11-01-m3-schedule-layer-design.md)
+- [M4 Focus filter design](docs/specs/2026-11-01-m4-focus-filter-design.md)
 - [Implementation plan](docs/plans/2026-10-26-focus-study.md)
 - [M1 implementation plan](docs/plans/2026-10-31-m1-launch-flow.md)
 - [M2 implementation plan](docs/plans/2026-11-01-m2-break-pass.md)
 - [M3 implementation plan](docs/plans/2026-11-01-m3-schedule-layer.md)
+- [M4 implementation plan](docs/plans/2026-11-01-m4-focus-filter.md)
 - [Implementation decisions](docs/implementation-ledger.md)
 - [Review regressions](docs/notes/independent-review.md)
 - [Physical-device acceptance](docs/notes/screen-time-device-matrix.md)
