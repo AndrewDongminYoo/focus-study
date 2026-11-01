@@ -190,3 +190,17 @@ The operator approved the selection copy in the App Group on 2026-11-01, so the 
 The race check compiles `Shared/BreakTiming.swift`, so the README command and CI list it, and it adds a stale break callback that must leave a newer break unchanged.
 Only `.expired` records give focus time, and the "중도 종료" button and history label became "집중 종료".
 Nothing in M2 was checked on a physical device or on an iOS 17 runtime; the device matrix lists the M2 rows as unverified.
+
+## M3 everyday schedule blocking layer: 2026-11-01
+
+The [M3 design](specs/2026-11-01-m3-schedule-layer-design.md) and [M3 plan](plans/2026-11-01-m3-schedule-layer.md) were implemented in one worktree; the spec is the authority where the plan differs.
+The operator approved the everyday selection in the App Group on 2026-11-01; the 2026-10-26 design and the M2 design have dated reconciliation sections for the changed lines.
+`Shared/` adds `EverydaySchedule` with its time rules and the blocking rule, and `SessionControl` runs the everyday convergence at the end of every lock section except `snapshot()` and `everydayStatus(now:authorized:)`, evaluating the envelope that the section loaded or saved last.
+`saveEveryday` registers the new revision, writes the file, then stops the other revisions; inside today's range it accepts only stricter edits.
+`Integration/` adds `everyday-layer.json` (schema version 1), the named store `everydayLayer` and repeating schedules with time components only; the Monitor passes every callback name to the engine.
+The race check compiles `Shared/EverydaySchedule.swift` and adds a stale everyday callback that must not undo a newer save.
+Both selections together are limited to 50 distinct apps and 50 distinct websites, checked when either selection is saved.
+The DEBUG argument `--everyday-fixture blocking` exists only for UI tests, and the DEBUG diagnostics add an action that applies a selection to `everydayLayer` without the union check for device step 9.
+The fixture engine uses a fixed-offset calendar in which launch falls between 12:00 and 13:00, so a UI test that starts from 23:55 to midnight on the device clock still gets a range that contains it; the status line renders in the engine's calendar.
+`everydayStatus` takes its next change from the whole blocking rule (`EverydayRules.nextChange`): during a break that is `breakEndsAt` when the schedule blocks then, and otherwise the next schedule edge after it.
+Nothing in M3 was checked on a physical device or on an iOS 17 runtime; the device matrix lists the M3 rows as unverified.

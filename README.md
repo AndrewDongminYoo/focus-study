@@ -13,7 +13,7 @@ Xcode 프로젝트는 `FocusStudy.xcodeproj`입니다.
 
 ```sh
 swift test
-xcrun swiftc Shared/ControlTypes.swift Shared/SharedControlStore.swift Shared/SessionControl.swift Shared/FocusLength.swift Shared/BreakTiming.swift Tests/Fixtures/ControlRaceHelper.swift -o /tmp/focus-control-race
+xcrun swiftc Shared/ControlTypes.swift Shared/SharedControlStore.swift Shared/SessionControl.swift Shared/FocusLength.swift Shared/BreakTiming.swift Shared/EverydaySchedule.swift Tests/Fixtures/ControlRaceHelper.swift -o /tmp/focus-control-race
 /tmp/focus-control-race --verify
 xcodebuild build -project FocusStudy.xcodeproj -scheme FocusStudy -destination 'generic/platform=iOS Simulator' -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO
 ```
@@ -25,12 +25,12 @@ xcodebuild test -project FocusStudy.xcodeproj -scheme FocusStudy -destination "p
 xcodebuild build -project FocusStudy.xcodeproj -scheme FocusStudy -configuration Release -destination 'generic/platform=iOS' -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO
 ```
 
-| 검증                   | 범위와 한계                                                                                                                                                              |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `swift test`           | `CoreTests/`, `HistoryTests/`, `ReportTests/`의 제어 로직, SwiftData 기록, 합성 보고서 집계를 검사합니다.                                                                |
-| 경합 helper            | 실제 파일 잠금과 합성 monitoring/shield를 사용하는 두 프로세스를 검사하며 `PASS: stale A cannot clear B`와 `PASS: stale break 1 cannot touch break 2`를 출력해야 합니다. |
-| iOS scheme             | `FocusSDKTests`와 `FocusUITests`에서 SDK adapter/repository/model 및 DEBUG 합성 UI를 검사합니다.                                                                         |
-| unsigned Release build | fixture를 제외한 App/Monitor/Report의 기기 아키텍처 컴파일을 검사합니다.                                                                                                 |
+| 검증                   | 범위와 한계                                                                                                                                                                                                                       |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `swift test`           | `CoreTests/`, `HistoryTests/`, `ReportTests/`의 제어 로직, SwiftData 기록, 합성 보고서 집계를 검사합니다.                                                                                                                         |
+| 경합 helper            | 실제 파일 잠금과 합성 monitoring/shield를 사용하는 두 프로세스를 검사하며 `PASS: stale A cannot clear B`, `PASS: stale break 1 cannot touch break 2`, `PASS: stale everyday revision cannot undo a newer save`를 출력해야 합니다. |
+| iOS scheme             | `FocusSDKTests`와 `FocusUITests`에서 SDK adapter/repository/model 및 DEBUG 합성 UI를 검사합니다.                                                                                                                                  |
+| unsigned Release build | fixture를 제외한 App/Monitor/Report의 기기 아키텍처 컴파일을 검사합니다.                                                                                                                                                          |
 
 SDK 또는 UI만 확인할 때는 test 명령에 `-only-testing:FocusSDKTests` 또는 `-only-testing:FocusUITests`를 추가합니다.
 이 검증은 실제 Screen Time 권한·차단·콜백 동작의 증거가 아닙니다.
@@ -41,6 +41,8 @@ SDK 또는 UI만 확인할 때는 test 명령에 `-only-testing:FocusSDKTests` �
 `--break-timing short`는 쉬는 시간 대기를 1·2·4초, 쉬는 시간을 3초, 마감 여유를 5초, 대기 유예를 2초로 줄이며 집중 시간은 줄이지 않습니다.
 `--ui-testing ending-soon`은 설정한 길이의 합성 세션을 집중 종료 10초 전부터 시작하며, `--break-timing short`와 함께 쓰면 바로 쉬고 다시 집중하지 않은 세션이 실행 후 약 19초에 마감에 닿습니다.
 `--ui-testing expiring`은 설정한 길이의 합성 세션을 만료 3초 전부터 시작해 완료 화면을 확인합니다.
+`--everyday-fixture blocking`은 실행 5분 전(5분 단위)에 시작해 2시간 동안 이어지는 합성 매일 제한을 합성 앱 1개와 함께 저장합니다. 메모리 안의 store와 monitoring만 쓰며 실제 제한을 적용하지 않습니다.
+fixture 엔진과 상태 줄은 실행 시각이 12시와 13시 사이가 되는 고정 UTC 오프셋 시간대로 매일 제한을 계산하므로, 기기 시각과 관계없이 범위가 23:55나 자정에 닿지 않습니다.
 
 ### 보고서 상태와 실기기 진단
 

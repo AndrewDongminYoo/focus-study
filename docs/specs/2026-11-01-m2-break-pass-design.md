@@ -461,3 +461,14 @@ Follow `AGENTS.md` and [README verification](../../README.md#실행과-검증).
 - The look of the waiting button fill, with motion that respects Reduce Motion.
 - The layout of the break, re-block and deadline states on the timer screen.
 - Exact copy, written with the `user-facing-copy` skill in 해요체.
+
+## M3 reconciliation: 2026-11-01
+
+The [M3 design](2026-11-01-m3-schedule-layer-design.md) and the code that implements it are the authority for the everyday layer and for the steps it adds to M2.
+The lines below stay as the M2 decision of 2026-11-01 and do not describe the current behavior.
+
+- [Transitions](#transitions), transition 3 step 6 and transition 6 step 2, "Clear this app's named store": this means `focusSession` only. The everyday layer has its own store, `everydayLayer`, which the focus layer never writes or clears.
+- Transition 4 step 2, "Apply the shield from the break selection copy": after the focus shield, the re-block also applies the everyday shield when the M3 blocking rule without its break line gives "block", so both layers come back before the save of `breakOver`. Step 3 still checks only the focus store.
+- Transition 6: a new step runs after step 4 and before step 5. It reads the everyday file and sets the everyday store for the phase that is stored (convergence steps 1 and 3 only), so the everyday layer blocks again by its schedule, also after an end during a break. The registrations wait for the convergence at the end of the section.
+- [Process lock and recovery contract](#process-lock-and-recovery-contract), the control-state read failure: it also clears the everyday store. It reads no everyday file and registers, stops or applies nothing for the everyday layer, and the everyday activities stay.
+- [Callback identity](#callback-identity), "A name that is not the current session's focus activity or its current break activity (`n == breaksTaken`) changes nothing.": an `everyday.` name runs the reconcile order when the stored session is `onBreak` and `now >= breakEndsAt`, so a late break re-blocks. In every other phase an everyday name does not reach the focus part. Every lock section except `snapshot()` and `everydayStatus(now:authorized:)` then runs the everyday convergence.
