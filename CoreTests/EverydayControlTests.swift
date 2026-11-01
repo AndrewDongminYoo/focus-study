@@ -336,6 +336,7 @@ final class EverydayControlTests: XCTestCase {
             ("move the range end earlier", layer(8 * 60, 17 * 60), s1, t0),
             ("lengthen lunch during lunch", layer(windows: [EverydayWindow(kind: .lunch, start: 12 * 60, end: 13 * 60 + 30)]), s1, clock(12, 30)),
             ("remove an app", layer(), ["site1"], t0),
+            ("move the range start past now during lunch", layer(13 * 60, 18 * 60, windows: []), s1, clock(12, 30)),
         ]
         for (name, schedule, selection, now) in looser {
             let world = EverydayWorld()
@@ -349,6 +350,42 @@ final class EverydayControlTests: XCTestCase {
         let (engine, _) = try onLayer(world)
         try save(engine, world, layer(7 * 60, 19 * 60, windows: []), s2, at: t0)
         XCTAssertEqual(world.state.store, s2, "an accepted edit applies at once")
+    }
+    func testSaveRefusesARangeEndPulledBackToATrailingWindow() throws {
+        let world = EverydayWorld(), engine = engine(world)
+        let late = EverydayWindow(kind: .custom, start: 17 * 60, end: 18 * 60)
+        try save(engine, world, layer(windows: [lunch, late]), s1, at: clock(7, 0))
+        let stored = world.state.file?.schedule
+        // The blocked times are the same, but the lock would end at 17:00 instead of the stored 18:00.
+        XCTAssertThrowsError(try save(engine, world, layer(8 * 60, 17 * 60), s1, at: t0)) { XCTAssertEqual($0 as? ControlIssue, .everydayLocked) }
+        XCTAssertEqual(world.state.file?.schedule, stored)
+    }
+    func testAcceptedEditsKeepTheLockUntilTheStoredRangeEnd() throws {
+        let world = EverydayWorld()
+        let (engine, _) = try onLayer(world)
+        let short = EverydayWindow(kind: .lunch, start: 12 * 60, end: 12 * 60 + 45)
+        // Each edit is tried in turn; after each one, accepted or not, the layer must not turn off or lose an app before the stored range end.
+        let attempts: [(String, EverydaySchedule, Date, Bool)] = [
+            ("shorten lunch during lunch", layer(windows: [short]), clock(12, 30), true),
+            ("move the range start past now, same blocked times", layer(12 * 60 + 45, 18 * 60, windows: []), clock(12, 30), false),
+            ("move the range end later", layer(8 * 60, 19 * 60, windows: [short]), clock(12, 31), true),
+            ("move the range start to now", layer(12 * 60 + 30, 19 * 60, windows: []), clock(12, 32), true),
+            ("move the range start past now", layer(12 * 60 + 35, 19 * 60, windows: []), clock(12, 33), false),
+        ]
+        for (name, schedule, now, accepted) in attempts {
+            let before = world.state.file?.schedule
+            XCTAssertEqual((try? save(engine, world, schedule, s1, at: now)) != nil, accepted, name)
+            XCTAssertEqual(world.state.file?.schedule, accepted ? schedule : before, name)
+            XCTAssertThrowsError(try save(engine, world, layer(enabled: false), s1, at: now)) { XCTAssertEqual($0 as? ControlIssue, .everydayLocked, "turn off after: \(name)") }
+        }
+        let stored = world.state.file?.schedule
+        for now in [clock(12, 34), clock(17, 59, 59), clock(18, 0), clock(18, 59, 59)] {
+            XCTAssertThrowsError(try save(engine, world, layer(enabled: false), s1, at: now)) { XCTAssertEqual($0 as? ControlIssue, .everydayLocked, "\(now)") }
+            XCTAssertThrowsError(try save(engine, world, layer(windows: []), [], at: now)) { XCTAssertEqual($0 as? ControlIssue, .everydayLocked, "\(now)") }
+            XCTAssertEqual(world.state.file?.schedule, stored, "\(now)")
+        }
+        try save(engine, world, layer(enabled: false), s1, at: clock(19, 0))
+        XCTAssertEqual(world.state.file?.schedule.enabled, false, "editing opens again at the range end of the last accepted edit")
     }
     func testSaveOrderRegistersBeforeWriteAndStopsAfter() throws {
         let world = EverydayWorld()

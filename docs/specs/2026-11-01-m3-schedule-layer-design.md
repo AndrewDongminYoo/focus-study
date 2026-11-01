@@ -89,6 +89,14 @@ M3 must not block M4, but M3 does not build it.
   - The layer stays on.
   - The new selection contains every app and website of the stored selection.
   - At every time from now to the stored range end, the new schedule blocks wherever the stored schedule blocks.
+  - The new range contains now.
+  - The new range ends at or after the stored range end.
+- Reconciliation (2026-11-01, hosted review of the M3 PR): the last two conditions were added after the review found that two accepted saves could open editing before the stored range end.
+  At 12:30 during lunch, a range moved to 13:00-18:00 kept every blocked time, so it passed the first three conditions, and the next save was outside the new range and could turn the layer off.
+  The same gap opened when the range end was pulled back to the start of a window that ended at the range end.
+  With the two conditions, the lock end never moves earlier, so after any sequence of accepted edits, editing opens no earlier than the stored range end that the screen showed.
+  They also refuse an edit that keeps or adds blocked times but moves the range start past now during a window (for example, a range of 12:45-18:00 at 12:30 during lunch); the person can get the same blocking by shortening the window instead.
+  `SessionControl.saveEveryday` in `Shared/SessionControl.swift` is the authority, and `testAcceptedEditsKeepTheLockUntilTheStoredRangeEnd` and `testSaveRefusesARangeEndPulledBackToATrailingWindow` in `CoreTests/EverydayControlTests.swift` cover it.
 - Every other edit inside the range is refused, and the screen says when editing opens again (the stored range end). The person can still close the sheet without a change. The builder writes the copy with the `user-facing-copy` skill, in 해요체.
 - An accepted edit applies at once.
 - A refused edit is not saved for later. A "pending" setting would add a second stored schedule and its own transitions.

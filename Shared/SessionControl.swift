@@ -201,7 +201,9 @@ final class SessionControl {
             guard schedule.isValid else { throw ControlIssue.invalidState }
             // An unreadable file counts as no stored layer, so that the person can set the layer up again.
             if let stored = try? everyday.load(), stored.enabled, stored.isInsideRange(at: now, calendar: calendar) {
-                guard schedule.isAtLeastAsStrict(as: stored, from: now, calendar: calendar), try containsStoredSelection() else { throw ControlIssue.everydayLocked }
+                // The new range keeps `now` and ends no earlier, so the lock lasts until at least the stored range end after every accepted edit.
+                guard schedule.isAtLeastAsStrict(as: stored, from: now, calendar: calendar), schedule.isInsideRange(at: now, calendar: calendar),
+                      schedule.rangeEnd >= stored.rangeEnd, try containsStoredSelection() else { throw ControlIssue.everydayLocked }
             }
             let activities = schedule.enabled ? Self.everydayActivities(schedule) : []
             do {
