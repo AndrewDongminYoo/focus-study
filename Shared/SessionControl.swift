@@ -55,13 +55,20 @@ final class SessionControl {
     func endFromFocusFilter(now: Date, authorized: Bool) throws {
         try section(now: now, access: authorized) { locked in
             var envelope = try read(locked)
-            try cleanup(&envelope, locked: locked, now: now)
+            // Turning the Focus off is the person's end, so it must still lift the restrictions of a filter-started session when the cleanup or the reconcile cannot save (#53).
+            var caught: Error?
+            do { try cleanup(&envelope, locked: locked, now: now) } catch { caught = error }
             // Every later save of this section writes the cleared marker.
             envelope.filterActivation = nil
-            try reconcile(&envelope, locked: locked, now: now, authorized: authorized, clockChanged: false)
-            if let session = envelope.session, session.phase != .terminal, session.isFilterStarted {
-                try end(&envelope, locked: locked, reason: .earlyExit, now: now)
+            if caught == nil {
+                do { try reconcile(&envelope, locked: locked, now: now, authorized: authorized, clockChanged: false) } catch { caught = error }
             }
+            // An `end` inside the cleanup or the reconcile sets `terminal` in memory before its last save, so its own error never causes a second end.
+            if let session = envelope.session, session.phase != .terminal, session.isFilterStarted {
+                // The reconcile order after a caught error: access, then the timed end, else the person's end.
+                let reason: EndReason = caught == nil ? .earlyExit : !authorized ? .authorizationRevoked : session.timedEnd(at: now, timing: timing) ?? .earlyExit
+                try end(&envelope, locked: locked, reason: reason, now: now)
+            } else if let caught { throw caught }
             if var stored = locked.stored, stored.filterActivation != nil {
                 stored.filterActivation = nil; try locked.save(stored)
             }

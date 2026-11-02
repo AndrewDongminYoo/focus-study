@@ -286,6 +286,98 @@ final class FocusFilterControlTests: XCTestCase {
         XCTAssertTrue(world.state.everydayShield)
     }
 
+    // MARK: Off call after a caught error (#53)
+
+    /// A filter-started session that the off call released: no focus restriction, no break artifact and no marker is left.
+    private func assertReleased(_ world: FilterWorld, _ reason: EndReason, _ context: String, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertNil(world.throwAtEffect, "the injected failure did not happen: \(context)", file: file, line: line)
+        XCTAssertEqual(world.state.envelope.session?.phase, .terminal, context, file: file, line: line)
+        XCTAssertEqual(world.state.envelope.session?.reason, reason, context, file: file, line: line)
+        XCTAssertFalse(world.state.focusShield, "focus shield: \(context)", file: file, line: line)
+        XCTAssertTrue(world.state.focus.isEmpty, "focus activity: \(context)", file: file, line: line)
+        XCTAssertTrue(world.state.breaks.isEmpty, "break activity: \(context)", file: file, line: line)
+        XCTAssertTrue(world.state.copies.isEmpty, "break copy: \(context)", file: file, line: line)
+        XCTAssertNil(world.state.envelope.filterActivation, "marker: \(context)", file: file, line: line)
+        XCTAssertTrue(world.saved.allSatisfy { $0.filterActivation == nil }, "marker in a save: \(context)", file: file, line: line)
+    }
+    /// A stale wait at 130 s that an interrupted break start left: the break copy and the break activity exist in `waiting`.
+    private func interruptedBreakStart(origin: SessionOrigin) -> FilterWorld {
+        let world = stored(.waiting, origin: origin, marker: UUID()), id = world.state.envelope.session!.id
+        world.state.copies = [id]; world.state.breaks = ["\(id.uuidString).1"]
+        return world
+    }
+    func testOffCallReleasesAFilterSessionWhenTheReBlockSaveFails() throws {
+        // The break ended at 295 s, so the reconcile restores the focus shield and then throws at the save of `breakOver`, its first throwable effect.
+        let world = stored(.onBreak, origin: .focusFilter, marker: UUID())
+        world.throwAtEffect = world.effects
+        XCTAssertNoThrow(try engine(world).endFromFocusFilter(now: at(300), authorized: true))
+        XCTAssertTrue(world.log.contains("focus.restore"), "\(world.log)")
+        assertReleased(world, .earlyExit, "re-block")
+        XCTAssertEqual(world.saved.map { $0.session?.phase }, [.ending, .terminal])
+    }
+    func testOffCallReleasesAFilterSessionWhenTheCleanupSaveFails() throws {
+        // The wait cancel of the cleanup registers the focus end (effect 0), then saves `active` (effect 1).
+        for effect in [0, 1] {
+            let world = interruptedBreakStart(origin: .focusFilter)
+            world.throwAtEffect = effect
+            XCTAssertNoThrow(try engine(world).endFromFocusFilter(now: at(130), authorized: true), "effect \(effect)")
+            assertReleased(world, .earlyExit, "cleanup effect \(effect)")
+        }
+        // Without a break copy, the wait cancel of the reconcile throws instead.
+        for effect in [0, 1] {
+            let world = stored(.waiting, origin: .focusFilter, marker: UUID())
+            world.throwAtEffect = effect
+            XCTAssertNoThrow(try engine(world).endFromFocusFilter(now: at(130), authorized: true), "effect \(effect)")
+            assertReleased(world, .earlyExit, "reconcile effect \(effect)")
+        }
+    }
+    func testOffCallAfterACaughtErrorNeverEndsATimedOutSessionAsEarlyExit() throws {
+        // Before the focus end, the off call with the caught error gives the reason of the same call without it.
+        let clean = interruptedBreakStart(origin: .focusFilter), failing = interruptedBreakStart(origin: .focusFilter)
+        failing.throwAtEffect = 1
+        try engine(clean).endFromFocusFilter(now: at(130), authorized: true)
+        XCTAssertNoThrow(try engine(failing).endFromFocusFilter(now: at(130), authorized: true))
+        XCTAssertEqual(clean.state.envelope.session?.reason, .earlyExit)
+        assertReleased(failing, .earlyExit, "before the focus end")
+        // After the focus end (1525 s with the cancelled wait), the M2 registered-end rule ends the session before the Focus-off rule runs.
+        // So the Focus-off rule never records `.earlyExit` for a session whose time is up, and the end's own result propagates as today.
+        let expired = interruptedBreakStart(origin: .focusFilter)
+        try engine(expired).endFromFocusFilter(now: at(1600), authorized: true)
+        XCTAssertEqual(expired.state.envelope.session?.reason, .expired)
+        let late = interruptedBreakStart(origin: .focusFilter)
+        late.throwAtEffect = 1
+        XCTAssertThrowsError(try engine(late).endFromFocusFilter(now: at(1600), authorized: true))
+        XCTAssertNil(late.throwAtEffect)
+        XCTAssertEqual(late.state.envelope.session?.phase, .terminal); XCTAssertEqual(late.state.envelope.session?.reason, .recoveryInterrupted)
+        XCTAssertFalse(late.state.focusShield); XCTAssertTrue(late.state.focus.isEmpty); XCTAssertTrue(late.state.breaks.isEmpty); XCTAssertTrue(late.state.copies.isEmpty)
+        // The cleanup's own end saves before step 2, and the error stops step 5, so the activation check clears the marker.
+        XCTAssertNotNil(late.state.envelope.filterActivation)
+    }
+    func testOffCallKeepsTheAccessReasonAfterACaughtError() throws {
+        // Without access the reconcile ends the session before any wait cancel or re-block, so only a cleanup error reaches this rule.
+        let clean = interruptedBreakStart(origin: .focusFilter), failing = interruptedBreakStart(origin: .focusFilter)
+        failing.throwAtEffect = 1
+        try engine(clean).endFromFocusFilter(now: at(130), authorized: false)
+        XCTAssertNoThrow(try engine(failing).endFromFocusFilter(now: at(130), authorized: false))
+        XCTAssertEqual(clean.state.envelope.session?.reason, .authorizationRevoked)
+        assertReleased(failing, .authorizationRevoked, "access")
+    }
+    func testOffCallStillThrowsForAManualSessionWhenReconcileFails() throws {
+        let reBlock = stored(.onBreak, origin: .manual, marker: UUID())
+        reBlock.throwAtEffect = reBlock.effects
+        XCTAssertThrowsError(try engine(reBlock).endFromFocusFilter(now: at(300), authorized: true))
+        XCTAssertNil(reBlock.throwAtEffect)
+        XCTAssertEqual(reBlock.state.envelope.session?.phase, .onBreak); XCTAssertNil(reBlock.state.envelope.session?.reason)
+        XCTAssertTrue(reBlock.state.focusShield); XCTAssertNotNil(reBlock.state.focus[reBlock.state.envelope.session!.id])
+        XCTAssertFalse(reBlock.log.contains("focus.clear"), "\(reBlock.log)")
+        let cleanup = interruptedBreakStart(origin: .manual)
+        cleanup.throwAtEffect = 1
+        XCTAssertThrowsError(try engine(cleanup).endFromFocusFilter(now: at(130), authorized: true))
+        XCTAssertNil(cleanup.throwAtEffect)
+        XCTAssertEqual(cleanup.state.envelope.session?.phase, .waiting); XCTAssertNil(cleanup.state.envelope.session?.reason)
+        XCTAssertTrue(cleanup.state.focusShield); XCTAssertNotNil(cleanup.state.focus[cleanup.state.envelope.session!.id])
+    }
+
     // MARK: Activation check
 
     func testClearFilterActivationComparesTheStoredMarker() throws {
@@ -459,22 +551,36 @@ final class FocusFilterControlTests: XCTestCase {
             let now: Date
             /// The marker and the stored phase that the gap table allows.
             let rule: (ControlSession?, UUID?) -> Bool
+            /// The stricter rule after one thrown effect, when the table gives one.
+            var thrown: ((ControlSession?, UUID?) -> Bool)? = nil
         }
         let filterSession: () throws -> FilterWorld = {
             let world = FilterWorld(); _ = try self.on(self.engine(world), world, at: self.t0); return world
         }
+        let filterBreak: () throws -> FilterWorld = {
+            let world = try filterSession(), engine = self.engine(world), id = world.state.envelope.session!.id
+            let waiting = try engine.requestBreak(id: id, now: self.at(100))
+            try engine.startBreak(id: id, now: waiting.waitEndsAt!, saveSelection: { try world.saveCopy(id) })
+            return world
+        }
+        // A thrown error in the end section, also in its cleanup or reconcile, ends the filter-started session (#53).
+        let ended: (ControlSession?, UUID?) -> Bool = { $0?.phase == .terminal && $0?.origin == .focusFilter && $1 == nil }
+        // A process exit after a save of the reconcile that does not end the session leaves that phase with the marker cleared.
+        let exitedAfterReconcile: (ControlSession?, UUID?) -> Bool = { $0?.origin == .focusFilter && ($0?.phase != .terminal || $1 == nil) }
         let scenarios = [
             Scenario(name: "start", setup: { FilterWorld() }, run: { try self.on($0, $1, at: self.t0) }, now: at(1), rule: { ($1 != nil) == ($0 != nil) }),
             Scenario(name: "refusal", setup: { FilterWorld() }, run: { try self.on($0, $1, at: self.t0, ready: false) }, now: at(1), rule: { session, _ in session == nil }),
             Scenario(name: "end", setup: filterSession, run: { engine, _ in try engine.endFromFocusFilter(now: self.at(200), authorized: true) }, now: at(201),
-                     rule: { ($1 == nil) == ($0?.phase == .terminal) && $0?.origin == .focusFilter }),
-            Scenario(name: "end during a break", setup: {
+                     rule: { ($1 == nil) == ($0?.phase == .terminal) && $0?.origin == .focusFilter }, thrown: ended),
+            Scenario(name: "end during a break", setup: filterBreak, run: { engine, _ in try engine.endFromFocusFilter(now: self.at(200), authorized: true) }, now: at(201),
+                     rule: { ($1 == nil) == ($0?.phase == .terminal) && $0?.origin == .focusFilter }, thrown: ended),
+            Scenario(name: "end after the break end", setup: filterBreak, run: { engine, _ in try engine.endFromFocusFilter(now: self.at(300), authorized: true) },
+                     now: at(301), rule: exitedAfterReconcile, thrown: ended),
+            Scenario(name: "end in an interrupted break start", setup: {
                 let world = try filterSession(), engine = self.engine(world), id = world.state.envelope.session!.id
-                let waiting = try engine.requestBreak(id: id, now: self.at(100))
-                try engine.startBreak(id: id, now: waiting.waitEndsAt!, saveSelection: { try world.saveCopy(id) })
+                _ = try engine.requestBreak(id: id, now: self.at(100)); try world.saveCopy(id)
                 return world
-            }, run: { engine, _ in try engine.endFromFocusFilter(now: self.at(200), authorized: true) }, now: at(201),
-                     rule: { ($1 == nil) == ($0?.phase == .terminal) && $0?.origin == .focusFilter }),
+            }, run: { engine, _ in try engine.endFromFocusFilter(now: self.at(130), authorized: true) }, now: at(131), rule: exitedAfterReconcile, thrown: ended),
             Scenario(name: "off with a manual session", setup: {
                 let world = FilterWorld(), engine = self.engine(world)
                 _ = try self.manual(engine, world, at: self.t0); _ = try self.on(engine, world, at: self.at(1))
@@ -513,7 +619,7 @@ final class FocusFilterControlTests: XCTestCase {
                 thrown.throwAtEffect = thrown.effects + offset
                 try? scenario.run(engine, thrown)
                 _ = try? engine.reconcile(now: scenario.now, authorized: true)
-                assertGapTable(thrown, scenario.rule, "\(scenario.name) throw \(offset)")
+                assertGapTable(thrown, scenario.thrown ?? scenario.rule, "\(scenario.name) throw \(offset)")
             }
         }
     }

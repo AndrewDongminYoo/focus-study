@@ -93,6 +93,10 @@ This document is the M4 design.
    - `SessionRecord` and `TodayHistoryView` need no new label.
    - A new raw value of `EndReason` would make `control.json` unreadable to a build that does not know it, and the read failure path clears both stores (see [Earlier builds](#earlier-builds)).
    - The off call runs the M2 reconcile order first, so a session whose focus end has passed ends as `.expired` (or `.deadlineMissed`), not as `.earlyExit`. This is the rule of `StartupRecovery.endCurrent`: the timed end wins, else `.earlyExit`.
+   - Reconciliation (2026-11-02, issue #53): the guarantee of "집중 종료", that the person's end lifts the restrictions also when the cleanup cannot save, now also holds for this end.
+     When the cleanup or the reconcile of the off call throws, a filter-started session that is not `terminal` still ends (see [Filter end](#filter-end-focus-off)).
+     The precedence stays: `.authorizationRevoked` without access, else the timed reason (`.expired` or `.deadlineMissed`) when the session's time is up, else `.earlyExit`.
+     A stale wait whose time is up and whose wait cancel cannot save ends earlier, by the M2 registered-end rule, as `.recoveryInterrupted` (see the last item of the [Filter end](#filter-end-focus-off) reconciliation).
 
 ### Refused starts
 
@@ -274,6 +278,20 @@ The handler runs one lock section (`endFromFocusFilter`), then step 5 of the sta
 4. If the stored session is still not `terminal` and its origin is `focusFilter`: end it with M2 transition 6 and `.earlyExit`. The save of `ending` writes the cleared marker. The M3 everyday step of transition 6 runs as usual.
 5. If the stored envelope still has a marker after steps 3 and 4: save the envelope without it.
 
+Reconciliation (2026-11-02, issue #53): a thrown error in step 1 or step 3 no longer stops the section before step 4 when the session in memory is a filter-started session that is not `terminal`.
+
+- Step 2 clears the marker in memory also after a step 1 error, and step 3 does not run after a step 1 error.
+- Step 4 ends the session with M2 transition 6 and this reason: `.authorizationRevoked` without access, else the session's timed end (`timedEnd`) when it is not nil, else `.earlyExit`.
+- When that end completes, the section does not throw, as `finish()` drops the cleanup error when it ends the session.
+  When the end itself throws, its error propagates.
+- An `end` inside step 1 or step 3 sets `terminal` in memory before its last save, so its error never causes a second end, and it propagates as before.
+- After a failed save of `breakOver`, the session in memory is still `onBreak` with the focus shield restored; transition 6 clears that shield, stops the focus and break activities and removes the break copy.
+- A manual session, or a section without a filter-started session, keeps the earlier behavior: the error of step 1 or step 3 propagates.
+- With the M2 transitions of this design, a caught error leaves only a `waiting` session (a failed wait cancel) or an `onBreak` session (a failed save of `breakOver`).
+  The M2 registered-end rule and the re-block check the timed end first, so the reason in these cases is `.authorizationRevoked` or `.earlyExit`; the timed branch keeps the precedence for any later transition.
+- One caught-error path records neither the timed reason nor `.earlyExit`: a stale wait whose time is up and whose wait cancel cannot save.
+  The M2 registered-end rule inside the cleanup ends it as `.recoveryInterrupted` and releases the restrictions, its error propagates, and the activation check clears the marker, as for any caller of the cleanup.
+
 A `terminal` session that this section leaves is imported by the next app refresh or by the next filter start, step 2.
 
 #### Activation check (app launch and foreground)
@@ -326,6 +344,9 @@ In DEBUG fixture mode (`--ui-testing`), that place gives the fixture runtime, as
 | History import in the on call | Retried with the same rule for the lock timeout | Refusal `history`, shown in the settings sheet.                                                                                                                                                            | looser    |
 | Activation check              | Runs on every launch and foreground             | Nothing to recover. The next launch or foreground runs it again.                                                                                                                                           | -         |
 
+Reconciliation (2026-11-02, issue #53), row "Off call": an off call whose cleanup or reconcile throws no longer keeps a filter-started session, because the section still ends it (see [Filter end](#filter-end-focus-off)).
+The row still holds for a lost call, for a lock timeout after the retries, and for a process exit before the section's first save.
+
 Residual risk: if the off call is lost and the person does not open the app before the next activation, that activation starts no session.
 The design accepts this.
 The guide tells the person what to expect, and the settings sheet does not show a refusal for a repeated call.
@@ -352,6 +373,16 @@ The focus restrictions follow the M1 start rules and the M2 [break artifacts](20
 | End section, the saves of both `ending` and `terminal` fail                   | earlier phase              | set                     | cleared and stopped                  | M2 reconcile step 5 ends the session as `.recoveryInterrupted` later. The activation check clears the marker.                                                  |
 | End section, the marker-only save (step 5) fails                              | as before                  | set                     | as before                            | The activation check clears the marker.                                                                                                                        |
 | Activation check, exit between steps 1 and 3, or a throw in step 3            | as before                  | as before               | as before                            | The next launch or foreground checks again.                                                                                                                    |
+
+Reconciliation (2026-11-02, issue #53), for the end section:
+
+- Row "End section, exit or throw before any save": a thrown error in the cleanup or the reconcile now ends a filter-started session as the [Filter end](#filter-end-focus-off) reconciliation states, and the saves of `ending` and `terminal` write the cleared marker.
+  A process exit before the section's first save stays as a lost off call.
+  A manual session keeps the row as written.
+- Row "End section, the saves of both `ending` and `terminal` fail": the outcome does not change, and it applies also to the end after a caught error.
+- A gap that the table did not list: a process exit after a save of the cleanup or the reconcile that does not end the session, for example a wait cancel or the save of `breakOver`.
+  The stored phase is that phase, the focus activity stays registered, and the marker is as before after a cleanup save and cleared after a reconcile save (the row "none, `focusFilter`" of [Calls and decisions](#calls-and-decisions)).
+  The session runs to its timed end, as after a lost off call, or until the person ends it.
 
 ### Guards across sequences of calls
 
