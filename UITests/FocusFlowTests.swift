@@ -41,11 +41,17 @@ final class FocusFlowTests: XCTestCase {
     }
     /// The everyday layer opens from its row in the settings sheet.
     private func openEveryday(_ app: XCUIApplication) -> XCUIElement {
-        XCTAssertTrue(app.buttons["settingsButton"].waitForExistence(timeout: 8)); app.buttons["settingsButton"].tap()
-        XCTAssertTrue(app.buttons["everydayRow"].waitForExistence(timeout: 5)); app.buttons["everydayRow"].tap()
+        XCTAssertTrue(app.buttons["settingsButton"].waitForExistence(timeout: ready)); app.buttons["settingsButton"].tap()
+        XCTAssertTrue(app.buttons["everydayRow"].waitForExistence(timeout: ready)); app.buttons["everydayRow"].tap()
         let status = app.staticTexts["everydayStatus"]
-        XCTAssertTrue(status.waitForExistence(timeout: 5))
+        XCTAssertTrue(status.waitForExistence(timeout: ready))
         return status
+    }
+    /// Precondition waits only absorb CI runner stalls (about 17 s on one wait, 20 s to synthesize one tap and 34 s at launch were measured),
+    /// so they share this timeout; assertions about behavior keep their own.
+    private let ready: TimeInterval = 30
+    private func waitHittable(_ element: XCUIElement) {
+        expectation(for: NSPredicate(format: "isHittable == true"), evaluatedWith: element); waitForExpectations(timeout: ready)
     }
     /// A `Toggle` in a `Form` can take the tap on its label without flipping; the inner switch is the fallback.
     private func flip(_ toggle: XCUIElement) {
@@ -60,18 +66,19 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertEqual(status.label, "꺼져 있어요")
         let selection = app.buttons["everydaySelection"], fixtureSelect = app.buttons["fixtureSelect"]
         // A tap while the everyday screen still slides in can miss; tap again only when the sheet did not open and the row still takes a tap.
-        expectation(for: NSPredicate(format: "isHittable == true"), evaluatedWith: selection); waitForExpectations(timeout: 5)
+        waitHittable(selection)
         selection.tap()
+        // A late second tap only presents the same sheet again.
         if !fixtureSelect.waitForExistence(timeout: 3), selection.isHittable { selection.tap() }
-        XCTAssertTrue(fixtureSelect.waitForExistence(timeout: 5))
-        expectation(for: NSPredicate(format: "isHittable == true"), evaluatedWith: fixtureSelect); waitForExpectations(timeout: 5)
+        XCTAssertTrue(fixtureSelect.waitForExistence(timeout: ready))
+        waitHittable(fixtureSelect)
         fixtureSelect.tap(); app.buttons["pickerSave"].tap()
         // An empty draft makes the save below refuse, so a missed fixture tap fails here instead.
-        expectation(for: NSPredicate(format: "label CONTAINS '앱 1개'"), evaluatedWith: app.buttons["everydaySelection"]); waitForExpectations(timeout: 5)
+        expectation(for: NSPredicate(format: "label CONTAINS '앱 1개'"), evaluatedWith: app.buttons["everydaySelection"]); waitForExpectations(timeout: ready)
         // The count follows the draft while the sheet is still up, so wait for the sheet to go and the switch to take a tap.
-        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: fixtureSelect); waitForExpectations(timeout: 5)
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: fixtureSelect); waitForExpectations(timeout: ready)
         let toggle = app.switches["everydayToggle"]
-        expectation(for: NSPredicate(format: "isHittable == true"), evaluatedWith: toggle); waitForExpectations(timeout: 5)
+        waitHittable(toggle)
         flip(toggle)
         app.buttons["everydaySave"].tap()
         expectation(for: NSPredicate(format: "label BEGINSWITH '켜져 있어요' OR label BEGINSWITH '지금 제한하고 있어요'"), evaluatedWith: status)
@@ -306,11 +313,11 @@ final class FocusFlowTests: XCTestCase {
         // The start tap leaves 10 seconds of focus: a break taken at once and never resumed reaches the deadline about 19 seconds after the tap.
         let app = shortBreaks("ending-soon")
         let start = app.buttons["start"], breakStart = app.buttons["breakStart"]
-        XCTAssertTrue(start.waitForExistence(timeout: 8)); start.tap()
+        XCTAssertTrue(start.waitForExistence(timeout: ready)); start.tap()
         // A loaded host can drop a synthesized tap. `start()` is synchronous, so a delivered tap has shown the session controls before `tap()` returns;
         // tap again only when they are absent and `start` still takes a tap. The 10 seconds count from the tap that starts the session.
         if !breakStart.waitForExistence(timeout: 5), !app.buttons["end"].exists, start.exists, start.isHittable { start.tap() }
-        XCTAssertTrue(breakStart.waitForExistence(timeout: 5)); breakStart.tap()
+        XCTAssertTrue(breakStart.waitForExistence(timeout: ready)); breakStart.tap()
         XCTAssertTrue(app.staticTexts["breakCountdown"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.buttons["resume"].waitForExistence(timeout: 10))
         let notice = app.staticTexts["deadlineNotice"]
@@ -322,8 +329,9 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertFalse(app.descendants(matching: .any)["completion"].exists)
         // The summary appears while the timer screen swaps back, and a tap then can miss; tap again only when the history sheet
         // is not up and the summary still takes a tap (an open sheet covers it).
-        expectation(for: NSPredicate(format: "isHittable == true"), evaluatedWith: summary); waitForExpectations(timeout: 5)
+        waitHittable(summary)
         summary.tap()
+        // A late second tap only presents the same history sheet again.
         if !app.buttons["historyDone"].waitForExistence(timeout: 3), summary.isHittable { summary.tap() }
         XCTAssertTrue(app.staticTexts["시간 초과로 집중에서 제외"].waitForExistence(timeout: 5))
     }
