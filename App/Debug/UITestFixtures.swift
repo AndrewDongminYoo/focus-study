@@ -115,6 +115,10 @@ extension FocusServices {
         let settings = FocusSettings(defaults: UserDefaults(suiteName: "FocusFixture-\(UUID().uuidString)")!)
         if let index = arguments.firstIndex(of: "--length"), index + 1 < arguments.count, let minutes = Int(arguments[index + 1]) { settings.lengthMinutes = minutes }
         settings.hasCompletedOnboarding = !onboarding
+        // `--focus-filter-refusal <reason>`: a stored refusal for the settings guide; no Focus call runs.
+        if let index = arguments.firstIndex(of: "--focus-filter-refusal"), index + 1 < arguments.count, let reason = FocusFilterRefusal(rawValue: arguments[index + 1]) {
+            settings.recordFilterRefusal(reason, at: now)
+        }
         services.settings = settings
         return services
     }
@@ -139,7 +143,7 @@ extension FocusRuntime {
             _ = try services.engine.start(now: Date().addingTimeInterval(-(length - 10)), length: length, authorized: { true }, apply: {}, matches: { true })
         }
         var attempts = 0
-        return FocusRuntime(recovery: StartupRecovery(engine: services.engine), hasAccess: services.authorization.hasAccessNow, loadStorage: {
+        return FocusRuntime(recovery: StartupRecovery(engine: services.engine), hasAccess: services.authorization.hasAccessNow, holder: FocusRuntimeHolder(engine: services.engine, authorization: services.authorization, settings: services.settings) {
             attempts += 1
             if arguments.contains("startup-failure"), attempts == 1 { throw ControlIssue.io }
             let container = try ModelContainer(for: SessionRecord.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none))

@@ -39,6 +39,8 @@ import SwiftData
         }
         .task { if model == nil && errorMessage == nil { load() } }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            // The off call is one-shot, so each foreground repairs a marker that it left set.
+            if model != nil, let runtime { Task { await runtime.checkActivation() }; return }
             guard model == nil, let runtime else { return }
             do { try runtime.recovery.engine.reconcile(now: Date(), authorized: runtime.hasAccess()) }
             catch { errorMessage = "세션 상태를 확인하지 못했어요. 다시 확인해 주세요." }
@@ -46,21 +48,18 @@ import SwiftData
     }
     private func load() {
         do {
-            if runtime == nil {
-                #if DEBUG
-                if ProcessInfo.processInfo.arguments.contains("--ui-testing") { runtime = try .fixture(arguments: ProcessInfo.processInfo.arguments) }
-                else { runtime = try .real() }
-                #else
-                runtime = try .real()
-                #endif
-            }
+            if runtime == nil { runtime = try .process() }
             guard let runtime else { throw ControlIssue.io }
             let (services, created) = try runtime.prepare()
             let counts = services.selection.counts
             services.settings.migrateIfNeeded(hasSelection: counts.apps + counts.websites > 0)
             container = created
-            model = FocusModel(services: services, context: ModelContext(created))
+            let loaded = FocusModel(services: services, context: ModelContext(created))
+            // A filter call in this process refreshes the screen that is shown.
+            runtime.holder.refreshScreens = { [weak loaded] in loaded?.refresh() }
+            model = loaded
             errorMessage = nil
+            Task { await runtime.checkActivation() }
         } catch {
             errorMessage = runtime == nil ? "앱을 준비하지 못했어요. 다시 시도해 주세요." : "선택 항목이나 기록을 불러오지 못했어요. 현재 세션을 종료하거나 다시 시도해 주세요."
         }

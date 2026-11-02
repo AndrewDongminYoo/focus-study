@@ -43,6 +43,7 @@ SDK 또는 UI만 확인할 때는 test 명령에 `-only-testing:FocusSDKTests` �
 `--ui-testing expiring`은 설정한 길이의 합성 세션을 만료 3초 전부터 시작해 완료 화면을 확인합니다.
 `--everyday-fixture blocking`은 실행 5분 전(5분 단위)에 시작해 2시간 동안 이어지는 합성 매일 제한을 합성 앱 1개와 함께 저장합니다. 메모리 안의 store와 monitoring만 쓰며 실제 제한을 적용하지 않습니다.
 fixture 엔진과 상태 줄은 실행 시각이 12시와 13시 사이가 되는 고정 UTC 오프셋 시간대로 매일 제한을 계산하므로, 기기 시각과 관계없이 범위가 23:55나 자정에 닿지 않습니다.
+`--focus-filter-refusal <access|selection|busy|history|error>`는 실행 시 그 사유의 마지막 집중 모드 시작 거절을 메모리 설정에 저장해 설정의 집중 모드 안내에서 확인하게 합니다. 실제 집중 모드를 읽거나 바꾸지 않습니다.
 
 ### 보고서 상태와 실기기 진단
 

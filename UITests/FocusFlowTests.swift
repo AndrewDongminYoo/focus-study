@@ -100,6 +100,27 @@ final class FocusFlowTests: XCTestCase {
             XCTAssertFalse(app.descendants(matching: .any)[identifier].exists, identifier)
         }
     }
+    private func openFocusGuide(_ app: XCUIApplication) {
+        XCTAssertTrue(app.buttons["settingsButton"].waitForExistence(timeout: 8)); app.buttons["settingsButton"].tap()
+        XCTAssertTrue(app.buttons["focusGuideRow"].waitForExistence(timeout: 5)); app.buttons["focusGuideRow"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["focusGuide"].waitForExistence(timeout: 5))
+    }
+    func testFocusGuideOpensFromSettings() {
+        let app = app()
+        openFocusGuide(app)
+        XCTAssertFalse(app.staticTexts["focusFilterRefusal"].exists)
+    }
+    func testStoredRefusalShowsInTheGuide() {
+        let app = app(extra: ["--focus-filter-refusal", "busy"])
+        openFocusGuide(app)
+        XCTAssertTrue(app.staticTexts["focusFilterRefusal"].waitForExistence(timeout: 5))
+    }
+    func testTimerScreenIsUnchangedWithTheGuide() {
+        let app = app(extra: ["--focus-filter-refusal", "busy"])
+        XCTAssertTrue(app.staticTexts["countdown"].waitForExistence(timeout: 8))
+        for identifier in ["start", "settingsButton", "todaySummary"] { XCTAssertTrue(app.buttons[identifier].exists, identifier) }
+        for identifier in ["focusGuideRow", "focusGuide", "focusFilterRefusal"] { XCTAssertFalse(app.descendants(matching: .any)[identifier].exists, identifier) }
+    }
     func testCompletionCopyUsesSessionLength() {
         let app = app("expiring", extra: ["--length", "40"])
         // The Label exposes its icon and text under the same identifier, in a runtime-dependent order (iOS 26.5 lists the icon, labelled "Selected", first).
