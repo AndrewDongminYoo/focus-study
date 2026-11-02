@@ -218,3 +218,12 @@ Focus calls in one process run one at a time in the order they arrive: `@MainAct
 The activation check stays outside this order, because it only clears a marker that it compares.
 The DEBUG argument `--focus-filter-refusal <reason>` exists only for UI tests, and the DEBUG diagnostics add Focus on and off calls, a `current` read and the call log for device steps 5, 12 and 13.
 Nothing in M4 was checked on a physical device or on an iOS 17 runtime; the device matrix lists the M4 rows as unverified.
+
+2026-11-02, issue #53: the Focus off end keeps the person's-end guarantee of `finish()`, by the operator decision recorded on the issue.
+Before, `endFromFocusFilter` threw before its end when the cleanup or the reconcile threw, for example when the save of `breakOver` failed after the focus shield was restored, so a filter-started session kept its restrictions until its deadline or "집중 종료"; the off call is one-shot, so nothing retried it.
+Now a caught error in the cleanup or the reconcile still ends a filter-started session that is not `terminal` in memory, with transition 6 and `.authorizationRevoked` without access, else its timed end, else `.earlyExit`; the saves of that end write the cleared marker, and the section does not throw when the end completes.
+A manual session and a section without a filter-started session still propagate the error, and an `end` inside the cleanup or the reconcile is never followed by a second end.
+The M4 design has dated reconciliation lines for decision 7, "Filter end", the "Off call" row and the end-section gaps.
+`testOffCallReleasesAFilterSessionWhenTheReBlockSaveFails`, `testOffCallReleasesAFilterSessionWhenTheCleanupSaveFails`, `testOffCallAfterACaughtErrorNeverEndsATimedOutSessionAsEarlyExit` and `testOffCallKeepsTheAccessReasonAfterACaughtError` failed before the change with `XCTAssertNoThrow failed: threw error "injected"`, and the throw pass of `testInterruptionAtEveryStepKeepsTheGapTable` failed for the two new end scenarios (`end after the break end throw 0`, `end in an interrupted break start throw 0` and `throw 1`).
+`testOffCallStillThrowsForAManualSessionWhenReconcileFails` guards the unchanged manual path, so it passed before the change too.
+In the current transitions the timed branch of the reason is not reached: the M2 registered-end rule ends a stale wait whose time is up before the off call's rule runs (as `.recoveryInterrupted`, and the error propagates), and the re-block checks the timed end before its save.
