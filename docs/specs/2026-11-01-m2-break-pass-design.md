@@ -472,3 +472,10 @@ The lines below stay as the M2 decision of 2026-11-01 and do not describe the cu
 - Transition 6: a new step runs after step 4 and before step 5. It reads the everyday file and sets the everyday store for the phase that is stored (convergence steps 1 and 3 only), so the everyday layer blocks again by its schedule, also after an end during a break. The registrations wait for the convergence at the end of the section.
 - [Process lock and recovery contract](#process-lock-and-recovery-contract), the control-state read failure: it also clears the everyday store. It reads no everyday file and registers, stops or applies nothing for the everyday layer, and the everyday activities stay.
 - [Callback identity](#callback-identity), "A name that is not the current session's focus activity or its current break activity (`n == breaksTaken`) changes nothing.": an `everyday.` name runs the reconcile order when the stored session is `onBreak` and `now >= breakEndsAt`, so a late break re-blocks. In every other phase an everyday name does not reach the focus part. Every lock section except `snapshot()` and `everydayStatus(now:authorized:)` then runs the everyday convergence.
+
+## M4 reconciliation: 2026-11-02
+
+The [M4 design](2026-11-01-m4-focus-filter-design.md) and the code that implements it are the authority for the Focus filter.
+The line below stays as the M2 decision of 2026-11-01 and does not describe the current behavior.
+
+- [Session fields](#session-fields), the field table: `ControlSession` also has the optional `origin` (`manual` or `focusFilter`, missing = `manual`), set once in the save of `preparing`. `ControlEnvelope` also has the optional `filterActivation` (`UUID`), the Focus activation that the filter path has seen. Every lock section saves the envelope that it decoded, so both fields survive every M2 transition. The storage checks do not change.

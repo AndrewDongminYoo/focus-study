@@ -146,3 +146,12 @@ SwiftData `SessionRecord`는 UUID를 고유 키로 하고 시작/예정 만료/�
 - 타깃과 데이터 경계의 "App과 Monitor는 하나의 `ManagedSettingsStore(named: ManagedSettingsStore.Name("focusSession"))`만 사용한다."와 "이 store의 `clearAllSettings()`만 호출하며": App과 Monitor는 명명된 store 두 개를 쓴다. 집중 세션은 `focusSession`만, 매일 제한은 `everydayLayer`만 쓰고 지운다. 제어 상태를 읽지 못하면 두 store를 모두 지운다. 기본 store와 다른 앱의 제한은 여전히 바꾸지 않는다.
 - 같은 절의 "선택 토큰은 앱 내부 파일에만 저장한다"와 Monitor 행(M2 조정 절이 바꾼 범위 포함): 운영자가 2026-11-01에 승인한 대로, 매일 제한의 선택(앱 토큰과 웹 도메인 토큰만)과 일정은 App Group의 `SessionControl/everyday-layer.json`에 함께 저장한다. 이 파일이 매일 제한 선택의 유일한 사본이다. 앱이 잠금 안에서 쓰고 Monitor는 읽기만 하며, 파일 보호는 `control.json`과 같다. 이 파일은 매일 제한을 설정한 동안 계속 남는다. 집중 세션 선택은 앱 내부 파일에 그대로 두고, 사용량과 사이트 이름은 여전히 공유하지 않으며 Report에는 App Group 접근 권한이 없다.
 - 구현 후 복구 계약 보완의 "이 앱의 명명된 store와 `focus.<UUID>` namespace의 등록만 정리한다"와 "다른 namespace의 monitoring을 중지하지 않으며": 제어 상태를 읽지 못하면 `everydayLayer` store도 지운다. `everyday.<revision>.range`와 `everyday.<revision>.window.<n>` 등록은 그대로 둬서, 제어 상태를 다시 읽을 수 있을 때 다음 콜백이 매일 제한을 다시 적용할 수 있게 한다. 매일 제한의 수렴 단계는 다른 revision의 `everyday.` 등록을 이름으로 하나씩 중지하며, 빈 목록으로 `stopMonitoring`을 부르지 않는다. 다른 앱의 namespace는 여전히 중지하지 않는다.
+
+## M4 조정: 2026-11-02
+
+[M4 설계](2026-11-01-m4-focus-filter-design.md)와 그 설계를 구현한 코드가 집중 모드 필터에 대한 기준이다.
+아래 문장은 2026-10-26 당시의 결정으로 남겨 두며, 현재 동작을 설명하지 않는다.
+
+- 타깃과 데이터 경계의 "App Group에는 `ControlEnvelope.schemaVersion`과 선택적인 `session`을 저장한다.": envelope에는 선택적인 `filterActivation`(집중 모드 활성화 표시, `UUID`)도 저장한다. 집중 모드 이름은 저장하지 않으며 기기 밖으로 보내지 않는다. `schemaVersion`은 2로 남는다.
+- 같은 절의 "세션에는 UUID, 시작/만료 시각, 단계(`preparing/active/ending/terminal`), 종료 사유·관측 시각을 둔다.": 세션에는 선택적인 `origin`(`manual` 또는 `focusFilter`)도 둔다. 값이 없으면 `manual`이다.
+- 세션 상태와 원자성 5단계의 "종료는 ID 일치 확인 후": 집중 모드를 끌 때의 종료는 호출자가 가진 ID가 아니라 잠금 안에서 저장된 세션의 `origin`으로 대상을 고른다. `focusFilter` 세션만 이 규칙으로 끝나고, 종료 사유는 `.earlyExit`("집중 종료")이다.
