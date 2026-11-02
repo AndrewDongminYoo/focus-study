@@ -1,7 +1,9 @@
 393JTTV68D
 appex
 appintents
+assetcatalog
 ASSETCATALOG_COMPILER_APPICON_NAME
+ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME
 autoupdating
 BEGINSWITH
 cfbundle
@@ -31,6 +33,7 @@ SDKROOT
 showsdks
 simctl
 Siri
+srgb
 subheadline
 swiftc
 swiftinterface
@@ -39,6 +42,7 @@ udid
 UICT
 wholemodule
 WWDC
+xcassets
 xcodegen
 xcodeproj
 xcprivacy
