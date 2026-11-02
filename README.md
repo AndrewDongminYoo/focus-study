@@ -25,12 +25,12 @@ xcodebuild test -project FocusStudy.xcodeproj -scheme FocusStudy -destination "p
 xcodebuild build -project FocusStudy.xcodeproj -scheme FocusStudy -configuration Release -destination 'generic/platform=iOS' -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO
 ```
 
-| 검증                   | 범위와 한계                                                                                                                                                                                                                       |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `swift test`           | `CoreTests/`, `HistoryTests/`, `ReportTests/`의 제어 로직, SwiftData 기록, 합성 보고서 집계를 검사합니다.                                                                                                                         |
-| 경합 helper            | 실제 파일 잠금과 합성 monitoring/shield를 사용하는 두 프로세스를 검사하며 `PASS: stale A cannot clear B`, `PASS: stale break 1 cannot touch break 2`, `PASS: stale everyday revision cannot undo a newer save`를 출력해야 합니다. |
-| iOS scheme             | `FocusSDKTests`와 `FocusUITests`에서 SDK adapter/repository/model 및 DEBUG 합성 UI를 검사합니다.                                                                                                                                  |
-| unsigned Release build | fixture를 제외한 App/Monitor/Report의 기기 아키텍처 컴파일을 검사합니다.                                                                                                                                                          |
+| 검증                   | 범위와 한계                                                                                                                                                                                                                                                                      |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `swift test`           | `CoreTests/`, `HistoryTests/`, `ReportTests/`의 제어 로직, SwiftData 기록, 합성 보고서 집계를 검사합니다.                                                                                                                                                                        |
+| 경합 helper            | 실제 파일 잠금과 합성 monitoring/shield를 사용하는 두 프로세스를 검사하며 `PASS: stale A cannot clear B`, `PASS: stale break 1 cannot touch break 2`, `PASS: stale everyday revision cannot undo a newer save`, `PASS: focus off cannot end a manual session`을 출력해야 합니다. |
+| iOS scheme             | `FocusSDKTests`와 `FocusUITests`에서 SDK adapter/repository/model 및 DEBUG 합성 UI를 검사합니다.                                                                                                                                                                                 |
+| unsigned Release build | fixture를 제외한 App/Monitor/Report의 기기 아키텍처 컴파일을 검사합니다.                                                                                                                                                                                                         |
 
 SDK 또는 UI만 확인할 때는 test 명령에 `-only-testing:FocusSDKTests` 또는 `-only-testing:FocusUITests`를 추가합니다.
 이 검증은 실제 Screen Time 권한·차단·콜백 동작의 증거가 아닙니다.

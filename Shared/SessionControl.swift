@@ -26,25 +26,54 @@ final class SessionControl {
             if let prior = envelope.session {
                 throw prior.phase == .terminal ? ControlIssue.pendingHistory : ControlIssue.busy
             }
-            var session = ControlSession(startedAt: now, length: length)
-            do {
-                envelope.session = session
-                try locked.save(envelope)
-                try monitoring.register(id: session.id, start: session.startedAt, end: session.expiresAt)
-                guard monitoring.isRegistered(id: session.id), authorized() else { throw ControlIssue.verificationFailed }
-                apply()
-                guard matches(), authorized() else { throw ControlIssue.verificationFailed }
-                session.phase = .active; envelope.session = session
-                try locked.save(envelope)
-                return session
-            } catch {
-                // Keep the lock until rollback completes: a newer session cannot be cleared here.
-                shield.clear(); monitoring.stop(id: session.id)
-                session.phase = .terminal; session.reason = .startFailed; session.observedAt = now
-                envelope.session = session
-                try? locked.save(envelope)
-                throw error
+            return try begin(&envelope, locked: locked, now: now, length: length, origin: .manual, authorized: authorized, apply: apply, matches: matches)
+        }
+    }
+
+    // MARK: Focus filter
+
+    /// The spec "Filter start", step 3. One activation starts at most one session: a refusal also stores the marker.
+    func startFromFocusFilter(now: Date, length: TimeInterval, authorized: () -> Bool, selectionReady: Bool, apply: () -> Void, matches: () -> Bool) throws -> FocusFilterStart {
+        try section(now: now) { locked in
+            var envelope = try read(locked)
+            try cleanup(&envelope, locked: locked, now: now)
+            // A repeated call of the same activation makes no change of its own.
+            guard envelope.filterActivation == nil else { return .repeated }
+            envelope.filterActivation = UUID()
+            locked.access = authorized()
+            let refusal: FocusFilterRefusal?
+            if locked.access != true { refusal = .access }
+            else if !selectionReady { refusal = .selection }
+            else if let prior = envelope.session { refusal = prior.phase == .terminal ? .history : .busy }
+            else { refusal = nil }
+            if let refusal { try locked.save(envelope); return .refused(refusal) }
+            // The save of `preparing` writes the marker; the rollback keeps it, so the activation is used.
+            return .started(try begin(&envelope, locked: locked, now: now, length: length, origin: .focusFilter, authorized: authorized, apply: apply, matches: matches))
+        }
+    }
+    /// The spec "Filter end". The Focus-off rule ends only a `focusFilter` session; a manual one ends only for the reasons of any reconcile.
+    func endFromFocusFilter(now: Date, authorized: Bool) throws {
+        try section(now: now, access: authorized) { locked in
+            var envelope = try read(locked)
+            try cleanup(&envelope, locked: locked, now: now)
+            // Every later save of this section writes the cleared marker.
+            envelope.filterActivation = nil
+            try reconcile(&envelope, locked: locked, now: now, authorized: authorized, clockChanged: false)
+            if let session = envelope.session, session.phase != .terminal, session.isFilterStarted {
+                try end(&envelope, locked: locked, reason: .earlyExit, now: now)
             }
+            if var stored = locked.stored, stored.filterActivation != nil {
+                stored.filterActivation = nil; try locked.save(stored)
+            }
+        }
+    }
+    /// The spec "Activation check", step 3: clears the marker only while it is still the one that the caller read. It never starts or ends a session.
+    func clearFilterActivation(matching id: UUID, now: Date) throws {
+        try section(now: now) { locked in
+            var envelope = try read(locked)
+            try cleanup(&envelope, locked: locked, now: now)
+            guard envelope.filterActivation == id else { return }
+            envelope.filterActivation = nil; try locked.save(envelope)
         }
     }
     func snapshot() throws -> ControlEnvelope { try store.withExclusiveAccess { try read($0) } }
@@ -255,6 +284,30 @@ final class SessionControl {
             for id in Set(monitoring.registeredSessionIDs) { monitoring.stop(id: id) }
             for registered in monitoring.registeredBreaks { monitoring.stopBreak(id: registered.id, index: registered.index) }
             breakSelection.removeAll(except: nil)
+            throw error
+        }
+    }
+    /// The M1 start steps after the start checks: save `preparing`, register, verify, apply, verify, save `active`, or the rollback.
+    private func begin(_ envelope: inout ControlEnvelope, locked: LockedControl, now: Date, length: TimeInterval, origin: SessionOrigin,
+                       authorized: () -> Bool, apply: () -> Void, matches: () -> Bool) throws -> ControlSession {
+        var session = ControlSession(startedAt: now, length: length)
+        session.origin = origin
+        do {
+            envelope.session = session
+            try locked.save(envelope)
+            try monitoring.register(id: session.id, start: session.startedAt, end: session.expiresAt)
+            guard monitoring.isRegistered(id: session.id), authorized() else { throw ControlIssue.verificationFailed }
+            apply()
+            guard matches(), authorized() else { throw ControlIssue.verificationFailed }
+            session.phase = .active; envelope.session = session
+            try locked.save(envelope)
+            return session
+        } catch {
+            // Keep the lock until rollback completes: a newer session cannot be cleared here.
+            shield.clear(); monitoring.stop(id: session.id)
+            session.phase = .terminal; session.reason = .startFailed; session.observedAt = now
+            envelope.session = session
+            try? locked.save(envelope)
             throw error
         }
     }
