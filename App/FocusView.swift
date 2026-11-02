@@ -78,7 +78,7 @@ struct FocusView: View {
                             Button("계속 집중하기", role: .cancel) {}
                         } message: { Text("지금 끝내면 이 세션은 집중 시간으로 기록되지 않아요.") }
                 } else {
-                    Button("집중 시작하기") { model.start() }.buttonStyle(.borderedProminent).controlSize(.large)
+                    Button("집중 시작하기") { model.start() }.buttonStyle(.borderedProminent).controlSize(.large).modifier(ProminentLabel())
                         .disabled(!model.canStart).accessibilityIdentifier("start")
                     Text("앱 \(model.counts.apps)개 · 웹사이트 \(model.counts.websites)개 제한").font(.footnote).foregroundStyle(.secondary)
                         .monospacedDigit().accessibilityIdentifier("restrictionSummary")
@@ -111,7 +111,7 @@ struct FocusView: View {
             Text("제한을 잠시 풀었어요. 쉬는 시간이 끝나면 다시 제한해요.").font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
         case .breakOver:
             Text("쉬는 시간이 끝나서 다시 제한했어요.").font(.subheadline).foregroundStyle(.secondary)
-            Button("다시 집중하기") { model.resume() }.buttonStyle(.borderedProminent).controlSize(.large).accessibilityIdentifier("resume")
+            Button("다시 집중하기") { model.resume() }.buttonStyle(.borderedProminent).controlSize(.large).modifier(ProminentLabel()).accessibilityIdentifier("resume")
             Text(deadlineNotice).font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center).monospacedDigit().accessibilityIdentifier("deadlineNotice")
         default:
             Text("집중 시간 진행 중").font(.subheadline).foregroundStyle(.secondary)

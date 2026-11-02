@@ -18,10 +18,10 @@ struct OnboardingView: View {
                 }
                 Spacer()
                 if step == .length {
-                    Button("시작하기") { model.completeOnboarding() }.buttonStyle(.borderedProminent).accessibilityIdentifier("onboardingFinish")
+                    Button("시작하기") { model.completeOnboarding() }.buttonStyle(.borderedProminent).modifier(ProminentLabel()).accessibilityIdentifier("onboardingFinish")
                 } else {
                     Button("다음") { if let next = OnboardingStep(rawValue: step.rawValue + 1) { step = next } }
-                        .buttonStyle(.borderedProminent).disabled(!canAdvance).accessibilityIdentifier("onboardingNext")
+                        .buttonStyle(.borderedProminent).modifier(ProminentLabel()).disabled(!canAdvance).accessibilityIdentifier("onboardingNext")
                 }
             }
         }
@@ -56,7 +56,7 @@ struct OnboardingView: View {
                 Text("스크린 타임 권한이 필요해요").font(.title.weight(.bold))
                 Text("집중하는 동안 고른 앱을 제한하려면 권한을 허용해 주세요.").foregroundStyle(.secondary)
                 Button("권한 허용하기") { Task { await model.services.authorization.requestIndividual(); model.refresh() } }
-                    .buttonStyle(.borderedProminent).accessibilityIdentifier("authorize")
+                    .buttonStyle(.borderedProminent).modifier(ProminentLabel()).accessibilityIdentifier("authorize")
             case .denied:
                 Text("스크린 타임 권한이 꺼져 있어요").font(.title.weight(.bold))
                 Text("설정 앱에서 이 앱의 스크린 타임 권한을 켜면 이어서 시작할 수 있어요.").foregroundStyle(.secondary)
