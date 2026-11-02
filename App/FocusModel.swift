@@ -21,6 +21,8 @@ import Observation
     var writeEveryday: (EverydaySchedule, FamilyActivitySelection) throws -> Void = { _, _ in throw ControlIssue.io }
     #if DEBUG
     var diagnostics: DeviceDiagnostics?
+    /// `--ui-testing ending-soon`: the focus seconds left when `start()` begins a session; the start time moves into the past.
+    var fixtureFocusLeft: TimeInterval?
     #endif
 
 }
@@ -145,7 +147,13 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
             let counts = services.selection.counts
             try SelectionValidator.validate(appCount: counts.apps, webCount: counts.websites, categoryCount: counts.categories)
             let frozen = services.selection.selection
-            _ = try services.engine.start(now: Date(), length: services.settings.lengthSeconds, authorized: { self.services.authorization.hasAccessNow() }, apply: { self.services.applySelection(frozen) }, matches: { self.services.matchesSelection(frozen) })
+            let length = services.settings.lengthSeconds
+            #if DEBUG
+            let startedAt = Date().addingTimeInterval(-(services.fixtureFocusLeft.map { length - $0 } ?? 0))
+            #else
+            let startedAt = Date()
+            #endif
+            _ = try services.engine.start(now: startedAt, length: length, authorized: { self.services.authorization.hasAccessNow() }, apply: { self.services.applySelection(frozen) }, matches: { self.services.matchesSelection(frozen) })
             refresh()
         } catch {
             refresh()

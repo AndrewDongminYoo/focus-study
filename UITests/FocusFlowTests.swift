@@ -58,14 +58,21 @@ final class FocusFlowTests: XCTestCase {
         let app = app()
         let status = openEveryday(app)
         XCTAssertEqual(status.label, "꺼져 있어요")
-        app.buttons["everydaySelection"].tap()
-        let fixtureSelect = app.buttons["fixtureSelect"]
+        let selection = app.buttons["everydaySelection"], fixtureSelect = app.buttons["fixtureSelect"]
+        // A tap while the everyday screen still slides in can miss; tap again only when the sheet did not open and the row still takes a tap.
+        expectation(for: NSPredicate(format: "isHittable == true"), evaluatedWith: selection); waitForExpectations(timeout: 5)
+        selection.tap()
+        if !fixtureSelect.waitForExistence(timeout: 3), selection.isHittable { selection.tap() }
         XCTAssertTrue(fixtureSelect.waitForExistence(timeout: 5))
         expectation(for: NSPredicate(format: "isHittable == true"), evaluatedWith: fixtureSelect); waitForExpectations(timeout: 5)
         fixtureSelect.tap(); app.buttons["pickerSave"].tap()
         // An empty draft makes the save below refuse, so a missed fixture tap fails here instead.
         expectation(for: NSPredicate(format: "label CONTAINS '앱 1개'"), evaluatedWith: app.buttons["everydaySelection"]); waitForExpectations(timeout: 5)
-        flip(app.switches["everydayToggle"])
+        // The count follows the draft while the sheet is still up, so wait for the sheet to go and the switch to take a tap.
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: fixtureSelect); waitForExpectations(timeout: 5)
+        let toggle = app.switches["everydayToggle"]
+        expectation(for: NSPredicate(format: "isHittable == true"), evaluatedWith: toggle); waitForExpectations(timeout: 5)
+        flip(toggle)
         app.buttons["everydaySave"].tap()
         expectation(for: NSPredicate(format: "label BEGINSWITH '켜져 있어요' OR label BEGINSWITH '지금 제한하고 있어요'"), evaluatedWith: status)
         waitForExpectations(timeout: 5)
@@ -296,9 +303,14 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertFalse(app.buttons["breakStart"].exists); XCTAssertFalse(app.staticTexts["breaksLeft"].exists)
     }
     func testMissedDeadlineRecordsUnfocusedSession() {
-        // 10 seconds of focus left: a break taken at once and never resumed reaches the deadline about 19 seconds after launch.
+        // The start tap leaves 10 seconds of focus: a break taken at once and never resumed reaches the deadline about 19 seconds after the tap.
         let app = shortBreaks("ending-soon")
-        XCTAssertTrue(app.buttons["breakStart"].waitForExistence(timeout: 5)); app.buttons["breakStart"].tap()
+        let start = app.buttons["start"], breakStart = app.buttons["breakStart"]
+        XCTAssertTrue(start.waitForExistence(timeout: 8)); start.tap()
+        // A loaded host can drop a synthesized tap. `start()` is synchronous, so a delivered tap has shown the session controls before `tap()` returns;
+        // tap again only when they are absent and `start` still takes a tap. The 10 seconds count from the tap that starts the session.
+        if !breakStart.waitForExistence(timeout: 5), !app.buttons["end"].exists, start.exists, start.isHittable { start.tap() }
+        XCTAssertTrue(breakStart.waitForExistence(timeout: 5)); breakStart.tap()
         XCTAssertTrue(app.staticTexts["breakCountdown"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.buttons["resume"].waitForExistence(timeout: 10))
         let notice = app.staticTexts["deadlineNotice"]
@@ -308,7 +320,11 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(summary.waitForExistence(timeout: 30))
         XCTAssertEqual(summary.label, "오늘 집중 0분 · 0회")
         XCTAssertFalse(app.descendants(matching: .any)["completion"].exists)
+        // The summary appears while the timer screen swaps back, and a tap then can miss; tap again only when the history sheet
+        // is not up and the summary still takes a tap (an open sheet covers it).
+        expectation(for: NSPredicate(format: "isHittable == true"), evaluatedWith: summary); waitForExpectations(timeout: 5)
         summary.tap()
+        if !app.buttons["historyDone"].waitForExistence(timeout: 3), summary.isHittable { summary.tap() }
         XCTAssertTrue(app.staticTexts["시간 초과로 집중에서 제외"].waitForExistence(timeout: 5))
     }
     func testExpiredSessionShowsCompletionUntilDismissed() {
