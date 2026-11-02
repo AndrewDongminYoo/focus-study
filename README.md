@@ -1,6 +1,7 @@
-# FocusStudy (임시 이름)
+# 온:공
 
-학생이 자신의 앱·웹사이트 사용을 돌아보고 25분 집중 시간을 정하는 iOS 17+ SwiftUI/SwiftData 앱입니다. 정식 제품명은 미정입니다.
+학생이 자신의 앱·웹사이트 사용을 돌아보고 25분 집중 시간을 정하는 iOS 17+ SwiftUI/SwiftData 앱입니다.
+앱 이름은 "온:공"이고, FocusStudy는 코드와 프로젝트 이름입니다.
 
 Xcode 프로젝트는 `FocusStudy.xcodeproj`입니다.
 [GitHub 저장소](https://github.com/AndrewDongminYoo/focus-study)의 CI 설정은 [verify.yml](.github/workflows/verify.yml)에서 관리합니다.

@@ -2,7 +2,7 @@
 
 ## Project scope
 
-FocusStudy is a provisional product name for an iOS 17+ app built with SwiftUI, Observation, and SwiftData.
+The app's display name is "온:공", and FocusStudy is the code and project name of this iOS 17+ app built with SwiftUI, Observation, and SwiftData.
 It provides individual Screen Time authorization, app and website selection, focus sessions whose length is a personal setting from 25 to 50 minutes in 5-minute steps (see the [M1 design](docs/specs/2026-10-31-m1-launch-flow-design.md)), local session history, and an isolated usage report.
 A session has up to 3 breaks of exactly 3 minutes, each after a waiting screen, and a deadline after which it counts as unfocused (see the [M2 design](docs/specs/2026-11-01-m2-break-pass-design.md)).
 An everyday blocking layer has its own selection, one daily range and at most 3 unblocked windows; it runs every day without the app, blocks together with the focus layer, and a break lifts it (see the [M3 design](docs/specs/2026-11-01-m3-schedule-layer-design.md)).
