@@ -64,6 +64,8 @@ targets:
         App/EverydaySettingsModel.swift,
         App/FocusModel.swift,
         App/AuthorizationService.swift,
+        App/FocusFilterHandler.swift,
+        App/FocusRuntimeHolder.swift,
       ]
     settings:
       base:

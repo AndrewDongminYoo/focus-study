@@ -25,12 +25,12 @@ xcodebuild test -project FocusStudy.xcodeproj -scheme FocusStudy -destination "p
 xcodebuild build -project FocusStudy.xcodeproj -scheme FocusStudy -configuration Release -destination 'generic/platform=iOS' -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO
 ```
 
-| 검증                   | 범위와 한계                                                                                                                                                                                                                       |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `swift test`           | `CoreTests/`, `HistoryTests/`, `ReportTests/`의 제어 로직, SwiftData 기록, 합성 보고서 집계를 검사합니다.                                                                                                                         |
-| 경합 helper            | 실제 파일 잠금과 합성 monitoring/shield를 사용하는 두 프로세스를 검사하며 `PASS: stale A cannot clear B`, `PASS: stale break 1 cannot touch break 2`, `PASS: stale everyday revision cannot undo a newer save`를 출력해야 합니다. |
-| iOS scheme             | `FocusSDKTests`와 `FocusUITests`에서 SDK adapter/repository/model 및 DEBUG 합성 UI를 검사합니다.                                                                                                                                  |
-| unsigned Release build | fixture를 제외한 App/Monitor/Report의 기기 아키텍처 컴파일을 검사합니다.                                                                                                                                                          |
+| 검증                   | 범위와 한계                                                                                                                                                                                                                                                                      |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `swift test`           | `CoreTests/`, `HistoryTests/`, `ReportTests/`의 제어 로직, SwiftData 기록, 합성 보고서 집계를 검사합니다.                                                                                                                                                                        |
+| 경합 helper            | 실제 파일 잠금과 합성 monitoring/shield를 사용하는 두 프로세스를 검사하며 `PASS: stale A cannot clear B`, `PASS: stale break 1 cannot touch break 2`, `PASS: stale everyday revision cannot undo a newer save`, `PASS: focus off cannot end a manual session`을 출력해야 합니다. |
+| iOS scheme             | `FocusSDKTests`와 `FocusUITests`에서 SDK adapter/repository/model 및 DEBUG 합성 UI를 검사합니다.                                                                                                                                                                                 |
+| unsigned Release build | fixture를 제외한 App/Monitor/Report의 기기 아키텍처 컴파일을 검사합니다.                                                                                                                                                                                                         |
 
 SDK 또는 UI만 확인할 때는 test 명령에 `-only-testing:FocusSDKTests` 또는 `-only-testing:FocusUITests`를 추가합니다.
 이 검증은 실제 Screen Time 권한·차단·콜백 동작의 증거가 아닙니다.
@@ -43,6 +43,7 @@ SDK 또는 UI만 확인할 때는 test 명령에 `-only-testing:FocusSDKTests` �
 `--ui-testing expiring`은 설정한 길이의 합성 세션을 만료 3초 전부터 시작해 완료 화면을 확인합니다.
 `--everyday-fixture blocking`은 실행 5분 전(5분 단위)에 시작해 2시간 동안 이어지는 합성 매일 제한을 합성 앱 1개와 함께 저장합니다. 메모리 안의 store와 monitoring만 쓰며 실제 제한을 적용하지 않습니다.
 fixture 엔진과 상태 줄은 실행 시각이 12시와 13시 사이가 되는 고정 UTC 오프셋 시간대로 매일 제한을 계산하므로, 기기 시각과 관계없이 범위가 23:55나 자정에 닿지 않습니다.
+`--focus-filter-refusal <access|selection|busy|history|error>`는 실행 시 그 사유의 마지막 집중 모드 시작 거절을 메모리 설정에 저장해 설정의 집중 모드 안내에서 확인하게 합니다. 실제 집중 모드를 읽거나 바꾸지 않습니다.
 
 ### 보고서 상태와 실기기 진단
 

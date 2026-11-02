@@ -31,4 +31,22 @@ import XCTest
         later.migrateIfNeeded(hasSelection: true)
         XCTAssertFalse(later.hasCompletedOnboarding)
     }
+    func testLastFilterRefusalRoundTrips() {
+        let store = defaults(), time = Date(timeIntervalSince1970: 1_800_000_000)
+        XCTAssertNil(FocusSettings(defaults: store).lastFilterRefusal)
+        FocusSettings(defaults: store).recordFilterRefusal(.busy, at: time)
+        let loaded = FocusSettings(defaults: store)
+        XCTAssertEqual(loaded.lastFilterRefusal?.reason, .busy); XCTAssertEqual(loaded.lastFilterRefusal?.at, time)
+        loaded.clearFilterRefusal()
+        XCTAssertNil(loaded.lastFilterRefusal); XCTAssertNil(FocusSettings(defaults: store).lastFilterRefusal)
+    }
+    func testPendingCompletionIsTakenOnce() {
+        let store = defaults(), id = UUID()
+        FocusSettings(defaults: store).recordPendingCompletion(id: id, length: 2400)
+        let settings = FocusSettings(defaults: store)
+        XCTAssertEqual(settings.pendingCompletion?.id, id)
+        let taken = settings.takePendingCompletion()
+        XCTAssertEqual(taken?.id, id); XCTAssertEqual(taken?.length, 2400)
+        XCTAssertNil(settings.takePendingCompletion()); XCTAssertNil(FocusSettings(defaults: store).pendingCompletion)
+    }
 }

@@ -20,8 +20,13 @@ struct SettingsView: View {
                         }
                     }.accessibilityIdentifier("everydayRow")
                 } header: { Text("매일 제한") } footer: { Text("정한 시간대에 매일 앱과 웹사이트를 제한해요.") }
+                Section {
+                    NavigationLink("집중 모드 연결") { FocusGuideView(settings: model.services.settings) }.accessibilityIdentifier("focusGuideRow")
+                } header: { Text("집중 모드") } footer: { Text("iOS 집중 모드를 켤 때 집중도 함께 시작할 수 있어요.") }
                 #if DEBUG
-                if let diagnostics = model.services.diagnostics { DeviceDiagnosticsSection(diagnostics: diagnostics, model: model) }
+                if let diagnostics = model.services.diagnostics {
+                    DeviceDiagnosticsSection(diagnostics: diagnostics, model: model, filterHandler: try? FocusRuntime.process().holder.filterHandler(), readFilter: FocusStudyFilter.reading)
+                }
                 #endif
             }
             .navigationTitle("설정").navigationBarTitleDisplayMode(.inline)

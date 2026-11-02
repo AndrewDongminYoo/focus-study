@@ -2,11 +2,14 @@ import Foundation
 import Darwin
 
 private final class LocalMonitor: MonitoringClient {
-    /// Everyday registrations live in a shared file, so that both processes and the verifier see one center.
-    private let everydayFile: URL
-    init(_ root: URL) { everydayFile = root.appendingPathComponent("everyday-activities") }
+    /// Focus and everyday registrations live in shared files, so that both processes and the verifier see one center.
+    private let everydayFile: URL, focusFile: URL
+    init(_ root: URL) { everydayFile = root.appendingPathComponent("everyday-activities"); focusFile = root.appendingPathComponent("focus-activities") }
     var registeredSessionIDs: [UUID] { Array(ids) }
-    var ids = Set<UUID>()
+    private var ids: Set<UUID> {
+        get { Set(((try? String(contentsOf: focusFile, encoding: .utf8)) ?? "").split(separator: "\n").compactMap { UUID(uuidString: String($0)) }) }
+        set { try! Data(newValue.map(\.uuidString).joined(separator: "\n").utf8).write(to: focusFile) }
+    }
     var breaks: [(id: UUID, index: Int)] = []
     func register(id: UUID, start: Date, end: Date) throws { ids.insert(id) }
     func isRegistered(id: UUID) -> Bool { ids.contains(id) }
@@ -126,6 +129,9 @@ private func waitForReady(_ root: URL) {
             case "everyday-stale":
                 waitForReady(root)
                 try engine.handleCallback(activityName: args[3], kind: .didEnd, now: everydayNow, authorized: true)
+            case "filter-end":
+                waitForReady(root)
+                try engine.endFromFocusFilter(now: Date(timeIntervalSince1970: 2100), authorized: true)
             default:
                 waitForReady(root)
                 try engine.handleCallback(activityName: args[3], kind: .didEnd, now: Date(timeIntervalSince1970: 5000), authorized: true)
@@ -135,6 +141,7 @@ private func waitForReady(_ root: URL) {
         try verifyStaleSession(executable: args[0])
         try verifyStaleBreak(executable: args[0])
         try verifyStaleEveryday(executable: args[0])
+        try verifyFilterEnd(executable: args[0])
     }
     private static func run(_ executable: String, _ stale: [String], _ next: [String]) throws -> Bool {
         let staleProcess = Process(), nextProcess = Process()
@@ -188,5 +195,20 @@ private func waitForReady(_ root: URL) {
               Set(monitor.registeredEveryday.map { "\($0.revision).\($0.part)" }) == Set([EverydayPart.range, .window(1)].map { "\(stored.schedule.revision).\($0)" }),
               layer.applied == "B" else { exit(1) }
         print("PASS: stale everyday revision cannot undo a newer save")
+    }
+    /// A Focus off call waits for the lock while another process starts a manual session; it clears the marker and leaves that session running.
+    private static func verifyFilterEnd(executable: String) throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let shield = FileShield(root)
+        let engine = SessionControl(store: SharedControlStore(directory: root), monitoring: LocalMonitor(root), shield: shield, breakSelection: FileCopies(root, shield: shield), everyday: FileLayer(root))
+        // A refused on call stores the activation marker without a session.
+        guard try engine.startFromFocusFilter(now: Date(timeIntervalSince1970: 1000), length: 1500, authorized: { true }, selectionReady: false, apply: {}, matches: { true }) == .refused(.selection),
+              try engine.snapshot().filterActivation != nil else { exit(1) }
+        let exited = try run(executable, ["filter-end", root.path], ["new", root.path])
+        let stored = try engine.snapshot(), current = stored.session
+        guard exited, current?.phase == .active, current?.origin == .manual, stored.filterActivation == nil,
+              try String(contentsOf: shield.file, encoding: .utf8) == "B" else { exit(1) }
+        print("PASS: focus off cannot end a manual session")
     }
 }

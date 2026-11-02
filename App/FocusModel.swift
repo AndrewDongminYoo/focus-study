@@ -106,12 +106,18 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
             errorMessage = "상태를 확인하지 못했어요. 다시 확인해 주세요."
             return
         }
+        // The filter path imported an `.expired` session first: its card shows only on an idle screen, and this import's own card overrides it.
+        if let pending = services.settings.takePendingCompletion(), current == nil || current?.phase == .terminal {
+            completedSessionID = pending.id; completedLength = pending.length
+        }
         do {
             if let terminal = current, terminal.phase == .terminal {
                 try history.importTerminal(terminal)
                 if terminal.reason == .expired { completedSessionID = terminal.id; completedLength = terminal.length }
                 current = try services.engine.snapshot().session
             }
+            // The card belongs to an idle screen: a session that started without `start()`, such as by a Focus, must not sit under it.
+            if let current, current.phase != .terminal { completedSessionID = nil; completedLength = nil }
             records = try history.records(on: now, calendar: .current)
             errorMessage = nil
         } catch {

@@ -211,6 +211,55 @@ import ManagedSettings
         model.refresh()
         XCTAssertNil(model.everydayStatus?.issue)
     }
+    /// A filter handler on the model's own services and history, as one runtime per process gives it.
+    private func filterHandler(_ model: FocusModel, history: ModelTestHistory, refresh: @escaping () -> Void, now: @escaping () -> Date = Date.init) -> FocusFilterHandler {
+        FocusFilterHandler(services: model.services, history: history, refresh: refresh, now: now, pause: { _ in })
+    }
+    func testFilterChangeRefreshesTheModel() async throws {
+        let (model, history, _, shield, engine) = fixture()
+        let earlier = try engine.start(now: Date().addingTimeInterval(-1500), authorized: { true }, apply: { shield.applied = true }, matches: { true })
+        model.refresh(); XCTAssertEqual(model.completedSessionID, earlier.id)
+        await filterHandler(model, history: history, refresh: { model.refresh() }).focusDidChange(startsSession: true)
+        XCTAssertEqual(model.current?.origin, .focusFilter); XCTAssertEqual(model.current?.phase, .active)
+        XCTAssertNil(model.completedSessionID); XCTAssertNil(model.completedLength)
+    }
+    func testFilterImportOfAnExpiredSessionKeepsTheCard() async throws {
+        for starts in [false, true] {
+            let (model, history, _, shield, engine) = fixture()
+            let (_, selection) = doubles(model)
+            let earlier = try engine.start(now: Date().addingTimeInterval(-1500), authorized: { true }, apply: { shield.applied = true }, matches: { true })
+            if !starts { selection.counts = (0, 0, 0) }
+            await filterHandler(model, history: history, refresh: { model.refresh() }).focusDidChange(startsSession: true)
+            XCTAssertEqual(model.services.settings.lastFilterRefusal?.reason, starts ? nil : .selection, "\(starts)")
+            XCTAssertEqual(model.completedSessionID, starts ? nil : earlier.id, "\(starts)")
+            if !starts { XCTAssertEqual(model.completedLength, 1500) }
+            XCTAssertNil(model.services.settings.pendingCompletion, "\(starts)")
+        }
+    }
+    func testExpiredCardSurvivesRefreshesWithoutASession() throws {
+        let (model, _, _, shield, engine) = fixture()
+        let earlier = try engine.start(now: Date().addingTimeInterval(-1500), authorized: { true }, apply: { shield.applied = true }, matches: { true })
+        model.refresh(); model.refresh()
+        XCTAssertNil(model.current); XCTAssertEqual(model.completedSessionID, earlier.id); XCTAssertEqual(model.completedLength, 1500)
+    }
+    func testNewerExpiredSessionOverridesThePendingCard() async throws {
+        let (model, history, _, shield, engine) = fixture()
+        let s1 = try engine.start(now: Date().addingTimeInterval(-4000), authorized: { true }, apply: { shield.applied = true }, matches: { true })
+        // The filter path starts S2 long enough ago that it is past its focus end at the off call.
+        model.services.settings.lengthMinutes = 30
+        var clock = Date().addingTimeInterval(-1900)
+        let handler = filterHandler(model, history: history, refresh: {}, now: { clock })
+        await handler.focusDidChange(startsSession: true)
+        XCTAssertEqual(model.services.settings.pendingCompletion?.id, s1.id)
+        let s2 = try XCTUnwrap(try engine.snapshot().session)
+        XCTAssertEqual(s2.origin, .focusFilter); XCTAssertEqual(s2.length, 1800)
+        clock = Date()
+        await handler.focusDidChange(startsSession: false)
+        XCTAssertEqual(try engine.snapshot().session?.reason, .expired)
+        model.refresh()
+        XCTAssertEqual(model.completedSessionID, s2.id); XCTAssertEqual(model.completedLength, 1800)
+        XCTAssertNil(model.services.settings.pendingCompletion)
+    }
     func testNoBreakActionAfterThirdBreak() {
         let (model, _, _) = breakFixture()
         for _ in 0..<3 { takeBreak(model); model.resume() }

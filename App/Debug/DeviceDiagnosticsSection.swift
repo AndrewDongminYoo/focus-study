@@ -5,7 +5,12 @@ import FamilyControls
 struct DeviceDiagnosticsSection: View {
     let diagnostics: DeviceDiagnostics
     let model: FocusModel
+    /// The Focus filter handler of this process and `FocusStudyFilter.reading()`, from the app.
+    let filterHandler: FocusFilterHandler?
+    let readFilter: () async -> FocusFilterReading
     @State private var replayFailed = false
+    @State private var filterReading: FocusFilterReading?
+    @State private var callLog: [String] = []
     @State private var everydayPicker = false
     @State private var everydayDraft = FamilyActivitySelection(includeEntireCategory: true)
     var body: some View {
@@ -40,6 +45,18 @@ struct DeviceDiagnosticsSection: View {
                     }
             }
         }
+        Section("Focus 필터 진단") {
+            if let filterHandler {
+                Button("Focus 켜짐 전달") { Task { await filterHandler.focusDidChange(startsSession: true); callLog = model.services.settings.filterCallLog } }
+                    .accessibilityIdentifier("diagnosticFilterOn")
+                Button("Focus 꺼짐 전달") { Task { await filterHandler.focusDidChange(startsSession: false); callLog = model.services.settings.filterCallLog } }
+                    .accessibilityIdentifier("diagnosticFilterOff")
+            }
+            Button("current 읽기") { Task { filterReading = await readFilter() } }.accessibilityIdentifier("diagnosticFilterRead")
+            if let filterReading { Text("current: \(String(describing: filterReading))").font(.footnote) }
+            ForEach(Array(callLog.reversed().enumerated()), id: \.offset) { Text($0.element).font(.caption.monospaced()) }
+        }
+        .onAppear { callLog = model.services.settings.filterCallLog }
     }
 }
 #endif

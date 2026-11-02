@@ -117,6 +117,46 @@ final class SharedControlStoreTests: XCTestCase {
         XCTAssertThrowsError(try SharedControlStore(directory: directory, timeout: 0.02).withExclusiveAccess { _ in entered = true })
         XCTAssertFalse(entered)
     }
+    func testM3EnvelopeLoadsAsManualWithoutMarker() throws {
+        let id = UUID(), started = start.timeIntervalSinceReferenceDate
+        let json = #"{"schemaVersion":2,"session":{"id":"\#(id.uuidString)","startedAt":\#(started),"expiresAt":\#(started + 1500),"phase":"active","breaksTaken":0}}"#
+        try Data(json.utf8).write(to: directory.appendingPathComponent("control.json"))
+        let envelope = try SharedControlStore(directory: directory).withExclusiveAccess { try $0.load() }
+        let session = try XCTUnwrap(envelope.session)
+        XCTAssertEqual(session.id, id); XCTAssertEqual(session.phase, .active)
+        XCTAssertNil(session.origin); XCTAssertFalse(session.isFilterStarted); XCTAssertNil(envelope.filterActivation)
+    }
+    func testOriginAndMarkerRoundTripThroughTheStore() throws {
+        let store = SharedControlStore(directory: directory), marker = UUID()
+        var session = ControlSession(startedAt: start); session.origin = .focusFilter
+        var envelope = ControlEnvelope(); envelope.session = session; envelope.filterActivation = marker
+        try store.withExclusiveAccess { try $0.save(envelope) }
+        let loaded = try store.withExclusiveAccess { try $0.load() }
+        XCTAssertEqual(loaded.session?.origin, .focusFilter); XCTAssertEqual(loaded.session?.isFilterStarted, true)
+        XCTAssertEqual(loaded.filterActivation, marker); XCTAssertEqual(try rawVersion(), 2)
+    }
+    func testStorageChecksAcceptEitherOriginInEveryPhase() throws {
+        let p = #","pausedAt":\#(start.timeIntervalSinceReferenceDate + 100)"#
+        let ended = #","reason":"earlyExit","observedAt":\#(start.timeIntervalSinceReferenceDate + 100)"#
+        let shapes = [("preparing", ""), ("active", ""), ("waiting", p + #","waitEndsAt":\#(start.timeIntervalSinceReferenceDate + 115)"#),
+                      ("onBreak", p + #","breaksTaken":1,"breakEndsAt":1"#), ("breakOver", p + #","breaksTaken":3,"breakEndsAt":1"#), ("ending", ended), ("terminal", ended)]
+        let store = SharedControlStore(directory: directory)
+        for (phase, extra) in shapes {
+            for origin in [nil, "manual", "focusFilter"] {
+                for marker in [nil, UUID()] {
+                    let originKey = origin.map { #","origin":"\#($0)""# } ?? ""
+                    let markerKey = marker.map { #","filterActivation":"\#($0.uuidString)""# } ?? ""
+                    let id = UUID(), started = start.timeIntervalSinceReferenceDate
+                    let json = #"{"schemaVersion":2\#(markerKey),"session":{"id":"\#(id.uuidString)","startedAt":\#(started),"expiresAt":\#(started + 1500),"phase":"\#(phase)"\#(extra)\#(originKey)}}"#
+                    try Data(json.utf8).write(to: directory.appendingPathComponent("control.json"))
+                    let context = "\(phase) \(origin ?? "none") \(marker != nil)"
+                    let loaded = try store.withExclusiveAccess { try $0.load() }
+                    XCTAssertEqual(loaded.session?.phase.rawValue, phase, context)
+                    XCTAssertEqual(loaded.session?.origin?.rawValue, origin, context); XCTAssertEqual(loaded.filterActivation, marker, context)
+                }
+            }
+        }
+    }
     func testUnknownSchemaIsRejected() throws {
         try Data(#"{"schemaVersion":99}"#.utf8).write(to: directory.appendingPathComponent("control.json"))
         XCTAssertThrowsError(try SharedControlStore(directory: directory).withExclusiveAccess { try $0.load() })
