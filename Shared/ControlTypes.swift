@@ -2,6 +2,8 @@ import Foundation
 
 public enum SessionPhase: String, Codable { case preparing, active, waiting, onBreak, breakOver, ending, terminal }
 public enum EndReason: String, Codable { case expired, earlyExit, authorizationRevoked, startFailed, recoveryInterrupted, clockChanged, deadlineMissed }
+/// Who started the session. Only a `focusFilter` session ends when its Focus turns off.
+public enum SessionOrigin: String, Codable { case manual, focusFilter }
 public struct ControlSession: Codable, Equatable {
     public var id: UUID
     public var startedAt: Date
@@ -17,6 +19,9 @@ public struct ControlSession: Codable, Equatable {
     public var deadlineCredit: TimeInterval?
     public var waitEndsAt: Date?
     public var breakEndsAt: Date?
+    /// Set once in the save of `preparing`. A missing value (an M3 or earlier session) means `manual`.
+    public var origin: SessionOrigin?
+    public var isFilterStarted: Bool { origin == .focusFilter }
     public var activityName: String { "focus.\(id.uuidString)" }
     public func breakActivityName(index: Int) -> String { "\(activityName).break.\(index)" }
     public init(startedAt: Date, length: TimeInterval = 1500, id: UUID = UUID()) {
@@ -49,7 +54,11 @@ public struct ControlSession: Codable, Equatable {
         }
     }
 }
-struct ControlEnvelope: Codable { var schemaVersion = 2; var session: ControlSession? }
+/// `filterActivation` is the Focus activation that the filter path has seen; the next off call clears it. It outlives the session.
+struct ControlEnvelope: Codable { var schemaVersion = 2; var session: ControlSession?; var filterActivation: UUID? }
+/// Why a Focus on call started no session.
+enum FocusFilterRefusal: String, Codable { case access, selection, busy, history, error }
+enum FocusFilterStart: Equatable { case started(ControlSession), repeated, refused(FocusFilterRefusal) }
 enum ControlIssue: Error { case unauthorized, busy, pendingHistory, verificationFailed, lockTimeout, io, unsupportedSchema, invalidState, breakUnavailable, everydayLocked }
 enum CallbackKind { case didStart, didEnd, willEndWarning }
 protocol LockedControl {
