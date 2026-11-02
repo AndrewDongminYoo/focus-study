@@ -59,12 +59,18 @@ final class FocusFlowTests: XCTestCase {
         let status = openEveryday(app)
         XCTAssertEqual(status.label, "꺼져 있어요")
         app.buttons["everydaySelection"].tap()
-        XCTAssertTrue(app.buttons["fixtureSelect"].waitForExistence(timeout: 5)); app.buttons["fixtureSelect"].tap(); app.buttons["pickerSave"].tap()
+        let fixtureSelect = app.buttons["fixtureSelect"]
+        XCTAssertTrue(fixtureSelect.waitForExistence(timeout: 5))
+        expectation(for: NSPredicate(format: "isHittable == true"), evaluatedWith: fixtureSelect); waitForExpectations(timeout: 5)
+        fixtureSelect.tap(); app.buttons["pickerSave"].tap()
+        // An empty draft makes the save below refuse, so a missed fixture tap fails here instead.
+        expectation(for: NSPredicate(format: "label CONTAINS '앱 1개'"), evaluatedWith: app.buttons["everydaySelection"]); waitForExpectations(timeout: 5)
         flip(app.switches["everydayToggle"])
         app.buttons["everydaySave"].tap()
         expectation(for: NSPredicate(format: "label BEGINSWITH '켜져 있어요' OR label BEGINSWITH '지금 제한하고 있어요'"), evaluatedWith: status)
         waitForExpectations(timeout: 5)
-        XCTAssertFalse(app.staticTexts["everydayRefusal"].exists)
+        let refusal = app.staticTexts["everydayRefusal"]
+        XCTAssertFalse(refusal.exists, refusal.exists ? refusal.label : "")
         captureReport(app, name: "everyday-settings")
     }
     func testLooserEditInsideTheRangeIsRefused() {
