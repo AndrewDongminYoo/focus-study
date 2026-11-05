@@ -10,7 +10,7 @@
 
 **Spec:** [`docs/specs/2026-11-01-m4-focus-filter-design.md`](../specs/2026-11-01-m4-focus-filter-design.md)
 
-**Start condition:** The operator approves the spec. Create the implementation worktree from the updated `main`. If the SDK probe in Task 3 shows that the filter needs an entitlement, an `Info.plist` key or a permission, stop and raise it with the operator before Task 4 (spec [Permissions and entitlements](../specs/2026-11-01-m4-focus-filter-design.md#permissions-and-entitlements)).
+**Start condition:** The spec is approved. Create the implementation worktree from the updated `main`. If the SDK probe in Task 3 shows that the filter needs an entitlement, an `Info.plist` key or a permission, stop and raise it with me before Task 4 (spec [Permissions and entitlements](../specs/2026-11-01-m4-focus-filter-design.md#permissions-and-entitlements)).
 
 ## Global Constraints
 

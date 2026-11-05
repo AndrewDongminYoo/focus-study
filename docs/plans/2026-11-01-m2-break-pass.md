@@ -10,7 +10,7 @@
 
 **Spec:** [`docs/specs/2026-11-01-m2-break-pass-design.md`](../specs/2026-11-01-m2-break-pass-design.md)
 
-**Start condition:** The operator approves the spec, including the [selection copy in the App Group](../specs/2026-11-01-m2-break-pass-design.md#selection-copy-in-the-app-group-privacy-boundary-change). Create the implementation worktree from the updated `main`. If the operator rejects the selection copy, stop and revise the spec before Task 2.
+**Start condition:** The spec is approved, including the [selection copy in the App Group](../specs/2026-11-01-m2-break-pass-design.md#selection-copy-in-the-app-group-privacy-boundary-change). Create the implementation worktree from the updated `main`. If the selection copy is rejected, stop and revise the spec before Task 2.
 
 ## Global Constraints
 
