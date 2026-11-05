@@ -39,6 +39,33 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["countdown"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["countdown"].label, "남은 시간 45분 0초")
     }
+    func testHistoryDistinguishesCompletedSessionAtConfiguredLength() {
+        let app = app("history", extra: ["-AppleLanguages", "(ko)", "-AppleLocale", "ko_KR"])
+        XCTAssertTrue(app.buttons["todaySummary"].waitForExistence(timeout: ready))
+        let summary = app.buttons["todaySummary"].label
+        openToday(app)
+        XCTAssertTrue(app.staticTexts["historySummary"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["historySummary"].label, summary)
+        XCTAssertEqual(summary, "오늘 집중 1시간 15분 · 2회")
+        XCTAssertTrue(app.staticTexts["25분 완료"].exists)
+        XCTAssertTrue(app.staticTexts["50분 완료"].exists)
+        XCTAssertEqual(app.images.matching(identifier: "completedSessionIcon").count, 2)
+        XCTAssertTrue(app.staticTexts["집중 종료"].exists)
+        XCTAssertTrue(app.staticTexts["시간 초과로 집중에서 제외"].exists)
+        XCTAssertFalse(app.staticTexts["50분 만료"].exists)
+        captureReport(app, name: "history-completed-and-ended")
+    }
+    func testEmptyHistoryShowsZeroSummary() {
+        let app = app(extra: ["-AppleLanguages", "(ko)", "-AppleLocale", "ko_KR"])
+        XCTAssertTrue(app.buttons["todaySummary"].waitForExistence(timeout: ready))
+        let summary = app.buttons["todaySummary"].label
+        openToday(app)
+        XCTAssertTrue(app.staticTexts["historySummary"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["historySummary"].label, summary)
+        XCTAssertEqual(summary, "오늘 집중 0분 · 0회")
+        XCTAssertTrue(app.staticTexts["아직 기록이 없어요."].exists)
+        captureReport(app, name: "history-empty")
+    }
     func testKoreanSystemTimePicker() {
         let app = app(extra: ["-AppleLanguages", "(ko)", "-AppleLocale", "ko_KR"])
         _ = openEveryday(app)

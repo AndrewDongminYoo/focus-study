@@ -101,7 +101,8 @@ The operator decided that a person with no settings goes through onboarding and 
 - No copy may state "25분" when the configured length is different.
   - This applies to the start button, the completion state, the purpose line and the history reason labels.
   - The builder writes the length-aware copy with the `user-facing-copy` skill, in 해요체.
-  - The current label "25분 만료" (issue #35) must at least become length-aware in M1. Issue #35 keeps the wording decision.
+  - Issue #35 uses the completed session's actual focus length followed by "완료" and a checkmark, and reuses the timer's completed-only summary above the history section.
+    Summary and history durations use the report's `Duration` hour/minute units format.
 
 ## Constraints
 

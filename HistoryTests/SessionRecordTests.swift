@@ -75,5 +75,22 @@ import FocusCore
         XCTAssertEqual(try history.records(on: s.startedAt, calendar: calendar).count, 1)
         XCTAssertEqual(try history.records(on: s.expiresAt, calendar: calendar).count, 0)
     }
+    func testSummaryWithNoRecordsHasNoCompletionsOrFocusTime() {
+        let summary = SessionSummary(records: [])
+        XCTAssertEqual(summary.completedCount, 0)
+        XCTAssertEqual(summary.focusDuration, 0)
+    }
+    func testSummaryCountsOnlyCompletedRecordsAtTheirOwnLengths() {
+        let reasons: [EndReason] = [.expired, .earlyExit, .authorizationRevoked, .startFailed, .recoveryInterrupted, .clockChanged, .deadlineMissed]
+        let records = reasons.map { reason in
+            var session = terminal(); session.reason = reason
+            return SessionRecord(session: session)
+        }
+        var longer = terminal(); longer.expiresAt = longer.startedAt.addingTimeInterval(3000)
+        longer.pausedSeconds = 540; longer.observedAt = longer.expiresAt.addingTimeInterval(600)
+        let summary = SessionSummary(records: records + [SessionRecord(session: longer)])
+        XCTAssertEqual(summary.completedCount, 2)
+        XCTAssertEqual(summary.focusDuration, 4500)
+    }
 }
 enum HistoryTestError: Error { case injected }

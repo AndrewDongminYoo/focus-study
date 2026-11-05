@@ -21,6 +21,20 @@ import FocusCore
         reasonRaw = (session.reason ?? .recoveryInterrupted).rawValue
     }
 }
+/// Summarizes the already day-filtered history; interruptions never earn focus time.
+struct SessionSummary {
+    let completedCount: Int
+    let focusDuration: TimeInterval
+    init(records: [SessionRecord]) {
+        let completed = records.filter { $0.reason == .expired }
+        completedCount = completed.count
+        focusDuration = completed.reduce(0) { $0 + $1.focusDuration }
+    }
+    var text: String {
+        let duration = Duration.seconds(focusDuration).formatted(.units(allowed: [.hours, .minutes], width: .wide))
+        return "오늘 집중 \(duration) · \(completedCount)회"
+    }
+}
 @MainActor protocol SessionHistoryProviding {
     func importTerminal(_ session: ControlSession) throws
     func records(on date: Date, calendar: Calendar) throws -> [SessionRecord]
