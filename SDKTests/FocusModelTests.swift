@@ -206,6 +206,21 @@ import ManagedSettings
         XCTAssertEqual(model.current?.phase, .active)
         XCTAssertLessThanOrEqual(abs(model.remaining - paused), 1)
     }
+    func testResumeDuringBreakRestoresRestrictionsAndPreservesRemainingFocus() {
+        let shield = ModelTestShield()
+        let (model, _, _) = makeModel(store: ModelTestStore(), monitoring: ModelTestMonitoring(), shield: shield,
+                                    defaults: UserDefaults(suiteName: UUID().uuidString)!,
+                                    timing: BreakTiming(waits: [0, 0, 0], breakLength: 180, slack: 600, staleWaitGrace: 5))
+        model.start(); model.requestBreak(); model.tick()
+        XCTAssertEqual(model.current?.phase, .onBreak)
+        XCTAssertFalse(shield.applied)
+        let remaining = model.remaining
+        model.resume()
+        XCTAssertEqual(model.current?.phase, .active)
+        XCTAssertTrue(shield.applied)
+        XCTAssertEqual(model.breaksLeft, 2)
+        XCTAssertLessThanOrEqual(abs(model.remaining - remaining), 1)
+    }
     func testResumeRemainingReachesZeroWhenSessionCanNoLongerComplete() {
         let (roomy, _, _) = breakFixture()
         takeBreak(roomy)

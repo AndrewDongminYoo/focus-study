@@ -199,7 +199,7 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
         run({ try services.engine.cancelWait(id: id, now: Date()) }, failure: "집중으로 돌아가지 못했어요. 다시 시도해 주세요.")
     }
     func resume() {
-        guard let id = current?.id, current?.phase == .breakOver else { return }
+        guard let id = current?.id, current?.phase == .onBreak || current?.phase == .breakOver else { return }
         run({ try services.engine.resume(id: id, now: Date()) }, failure: "집중을 다시 시작하지 못했어요. 다시 시도해 주세요.")
     }
     /// The waiting screen is a step that the person must watch, so leaving the app cancels the wait.

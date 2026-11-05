@@ -474,6 +474,33 @@ final class EverydayControlTests: XCTestCase {
         XCTAssertLessThan(try XCTUnwrap(world.log.firstIndex(of: "everyday.apply")), save)
         XCTAssertEqual(world.state.store, s1); XCTAssertTrue(world.state.focusShield)
     }
+    func testEarlyResumeRestoresBothLayersBeforeFocusResumes() throws {
+        let world = EverydayWorld(); let (engine, _) = try onLayer(world)
+        let id = try started(engine, world)
+        try takeBreak(engine, world, id)
+        world.log = []
+        try engine.resume(id: id, now: at(150))
+        XCTAssertEqual(phase(world), .active)
+        XCTAssertEqual(world.state.store, s1); XCTAssertTrue(world.state.focusShield)
+        let save = try XCTUnwrap(world.log.firstIndex(of: "save:active"))
+        XCTAssertLessThan(try XCTUnwrap(world.log.firstIndex(of: "focus.restore")), save)
+        XCTAssertLessThan(try XCTUnwrap(world.log.firstIndex(of: "everyday.apply")), save)
+        XCTAssertEqual(world.state.envelope.session?.deadlineCredit, 50)
+    }
+    func testEarlyResumeEverydayRestoreFailureKeepsFocusPausedUntilRetry() throws {
+        let world = EverydayWorld(); let (engine, _) = try onLayer(world)
+        let id = try started(engine, world)
+        try takeBreak(engine, world, id)
+        world.storeMismatch = true
+        XCTAssertThrowsError(try engine.resume(id: id, now: at(150)))
+        XCTAssertEqual(phase(world), .onBreak)
+        XCTAssertTrue(world.state.focusShield)
+        world.storeMismatch = false
+        try engine.resume(id: id, now: at(155))
+        XCTAssertEqual(phase(world), .active)
+        XCTAssertEqual(world.state.store, s1)
+        XCTAssertEqual(world.state.envelope.session?.deadlineCredit, 55)
+    }
     func testEverydayCallbackAfterBreakEndsAtBlocksAndReBlocksTheFocusLayer() throws {
         let world = EverydayWorld()
         let (engine, schedule) = try onLayer(world)

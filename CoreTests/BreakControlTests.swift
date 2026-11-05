@@ -142,6 +142,127 @@ final class BreakControlTests: XCTestCase {
 
     // MARK: Break pass
 
+    func testEarlyResumeRestoresRestrictionsAndCreditsOnlyActualPause() throws {
+        let world = World(); let (engine, id) = try started(world)
+        try takeBreak(engine, world, id, at: 300)
+        try engine.resume(id: id, now: at(360))
+        let session = stored(world)
+        XCTAssertEqual(session.phase, .active)
+        XCTAssertTrue(world.state.shieldOn)
+        XCTAssertEqual(session.pausedSeconds, 60)
+        XCTAssertEqual(session.deadlineCredit, 60)
+        XCTAssertEqual(session.breakEndsAt, at(360))
+        XCTAssertEqual(session.breaksTaken, 1)
+        XCTAssertNil(session.pausedAt)
+        XCTAssertEqual(world.state.focus[id]?.end, at(1560))
+        XCTAssertTrue(world.state.breaks.isEmpty)
+        XCTAssertTrue(world.state.copies.isEmpty)
+    }
+
+    func testEarlyResumeIsIdempotentAndOldWarningCannotInterruptNextBreak() throws {
+        let world = World(); let (engine, id) = try started(world)
+        try takeBreak(engine, world, id, at: 300)
+        try engine.resume(id: id, now: at(360))
+        let resumed = world.state
+        try engine.resume(id: id, now: at(365))
+        XCTAssertEqual(world.state, resumed)
+        try takeBreak(engine, world, id, at: 400)
+        let second = world.state
+        try engine.handleCallback(activityName: breakName(id, 1), kind: .willEndWarning, now: at(495), authorized: true)
+        XCTAssertEqual(world.state, second)
+        XCTAssertEqual(stored(world).phase, .onBreak)
+        XCTAssertEqual(stored(world).breaksTaken, 2)
+    }
+
+    func testEarlyResumeSaveFailureKeepsPauseAndRetryDoesNotSubtractCreditTwice() throws {
+        let world = World(); let (engine, id) = try started(world)
+        try takeBreak(engine, world, id, at: 300)
+        world.failSavePhases = [.breakOver]
+        XCTAssertThrowsError(try engine.resume(id: id, now: at(360)))
+        XCTAssertEqual(stored(world).phase, .onBreak)
+        XCTAssertEqual(stored(world).deadlineCredit, 195)
+        XCTAssertTrue(world.state.shieldOn)
+        XCTAssertEqual(world.state.focus[id]?.end, at(2295))
+        try engine.resume(id: id, now: at(365))
+        XCTAssertEqual(stored(world).phase, .active)
+        XCTAssertEqual(stored(world).deadlineCredit, 65)
+        XCTAssertEqual(stored(world).pausedSeconds, 65)
+    }
+
+    func testEarlyResumeRegistrationFailureKeepsRestrictedRecoveryPoint() throws {
+        let world = World(); let (engine, id) = try started(world)
+        try takeBreak(engine, world, id, at: 300)
+        world.failFocusCalls.insert(world.focusCalls + 2)
+        XCTAssertThrowsError(try engine.resume(id: id, now: at(360)))
+        XCTAssertEqual(stored(world).phase, .breakOver)
+        XCTAssertEqual(stored(world).deadlineCredit, 60)
+        XCTAssertTrue(world.state.shieldOn)
+        XCTAssertEqual(world.state.focus[id]?.end, at(2160))
+        XCTAssertTrue(world.state.breaks.isEmpty)
+        XCTAssertTrue(world.state.copies.isEmpty)
+        try engine.resume(id: id, now: at(365))
+        XCTAssertEqual(stored(world).phase, .active)
+        XCTAssertEqual(stored(world).deadlineCredit, 60)
+        XCTAssertEqual(stored(world).pausedSeconds, 65)
+    }
+
+    func testEarlyResumeActiveSaveFailureKeepsRestrictedRecoveryPoint() throws {
+        let world = World(); let (engine, id) = try started(world)
+        try takeBreak(engine, world, id, at: 300)
+        world.failSavePhases = [.active]
+        XCTAssertThrowsError(try engine.resume(id: id, now: at(360)))
+        XCTAssertEqual(stored(world).phase, .breakOver)
+        XCTAssertEqual(stored(world).deadlineCredit, 60)
+        XCTAssertTrue(world.state.shieldOn)
+        XCTAssertEqual(world.state.focus[id]?.end, at(2160))
+        try engine.resume(id: id, now: at(365))
+        XCTAssertEqual(stored(world).phase, .active)
+        XCTAssertEqual(stored(world).pausedSeconds, 65)
+    }
+
+    func testEarlyResumeShieldFailureCannotResumeFocus() throws {
+        let world = World(); let (engine, id) = try started(world)
+        try takeBreak(engine, world, id, at: 300)
+        world.shieldMismatch = true
+        try engine.resume(id: id, now: at(360))
+        XCTAssertEqual(stored(world).phase, .terminal)
+        XCTAssertEqual(stored(world).reason, .recoveryInterrupted)
+        XCTAssertFalse(world.state.shieldOn)
+    }
+
+    func testEarlyResumeWithAnotherSessionIDLeavesBreakUntouched() throws {
+        let world = World(); let (engine, id) = try started(world)
+        try takeBreak(engine, world, id, at: 300)
+        let before = world.state
+        try engine.resume(id: UUID(), now: at(360))
+        XCTAssertEqual(world.state, before)
+    }
+
+    func testEarlyResumeInterruptionAtEveryEffectStillHasAnAutomaticEnd() throws {
+        let world = World(); let (engine, id) = try started(world)
+        try takeBreak(engine, world, id, at: 300)
+        world.recording = true
+        try engine.resume(id: id, now: at(360))
+        XCTAssertGreaterThan(world.snapshots.count, 3)
+        for snapshot in world.snapshots {
+            let interrupted = World(snapshot)
+            let nextEnd = try XCTUnwrap(interrupted.state.focus[id]?.end)
+            try self.engine(interrupted).handleCallback(activityName: focusName(id), kind: .didEnd, now: nextEnd, authorized: true)
+            // An overwrite before its save can deliver early; that callback restores the stored phase's end.
+            if stored(interrupted).phase != .terminal {
+                let repairedEnd = try XCTUnwrap(interrupted.state.focus[id]?.end)
+                XCTAssertGreaterThan(repairedEnd, nextEnd)
+                XCTAssertLessThanOrEqual(repairedEnd, at(2295))
+                try self.engine(interrupted).handleCallback(activityName: focusName(id), kind: .didEnd, now: repairedEnd, authorized: true)
+            }
+            XCTAssertEqual(stored(interrupted).phase, .terminal)
+            XCTAssertFalse(interrupted.state.shieldOn)
+            XCTAssertTrue(interrupted.state.focus.isEmpty)
+            XCTAssertTrue(interrupted.state.breaks.isEmpty)
+            XCTAssertTrue(interrupted.state.copies.isEmpty)
+        }
+    }
+
     func testThreeBreaksUseWaitsOf15And30And60SecondsAndNoFourth() throws {
         let world = World(); let (engine, id) = try started(world)
         for (index, (request, wait)) in [(100.0, 15.0), (300, 30), (520, 60)].enumerated() {
