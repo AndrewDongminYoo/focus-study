@@ -2,13 +2,13 @@
 
 Date: 2026-10-31.
 Status: design for approval. Milestone `M1` in the GitHub project "Focus Study".
-Source: an operator brainstorm on 2026-10-31.
+Source: a brainstorm on 2026-10-31.
 This document changes the product limits in [the 2026-10-26 design](2026-10-26-focus-study-design.md) only where it says so.
 Where they differ, this document is the newer decision.
 
 ## Intent
 
-The operator wants the app to feel like "open it and start focusing".
+I want the app to feel like "open it and start focusing".
 The focus timer is the main flow, and everything else is secondary.
 Students must reach the start button in one step, and the screen must stay quiet.
 
@@ -19,7 +19,7 @@ A person without setup sees onboarding first.
 
 ## Roadmap context
 
-The operator set this order: M1 launch flow and focus length, M2 break pass and deadline, M3 everyday schedule blocking layer, M4 stricter notification handling.
+I set this order: M1 launch flow and focus length, M2 break pass and deadline, M3 everyday schedule blocking layer, M4 stricter notification handling.
 M2 to M4 get their own design documents.
 M1 must not block them, but M1 does not build them.
 
@@ -38,13 +38,13 @@ M1 must not block them, but M1 does not build them.
 - The home-screen display name (issue #21 stays open).
 - Any change to the default system shield (issue #40 stays a separate decision).
 
-## Anti-goals (never, by operator decision)
+## Anti-goals (never, by decision)
 
 - Rankings, leaderboards, or any comparison with other people.
 - Friend presence or any feature that sends focus state off the device.
 - Anything that makes the first-screen line "데이터는 기기에만 저장돼요" false.
 
-## Decisions by the operator
+## Decisions by me
 
 ### Launch routing
 
@@ -56,7 +56,7 @@ M1 must not block them, but M1 does not build them.
 
 ### Timer screen (layout A)
 
-The operator chose layout A from three mockups.
+I chose layout A from three mockups.
 
 - The timer fills the screen. The center shows the configured length (for example `25:00`) and the "집중 시작하기" button.
 - A one-line summary of the focus-session restriction (for example "앱 4개 · 웹사이트 2개 제한") is under the button.
@@ -73,9 +73,9 @@ The operator chose layout A from three mockups.
 
 ### Onboarding
 
-The operator decided that a person with no settings goes through onboarding and sees the timer screen only after setup.
+I decided that a person with no settings goes through onboarding and sees the timer screen only after setup.
 
-## Decisions by Claude (the operator can change them)
+## Decisions by Claude (I can change them)
 
 - "Setup is complete" means all three conditions are true:
   - Screen Time access is approved.

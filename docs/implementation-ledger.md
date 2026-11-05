@@ -73,7 +73,7 @@ Issues #6, #7, and #15 add verification paths rather than claiming new physical-
   SDK tests use real file locking and the session engine with an observed SDK boundary, not real Screen Time calls.
   Omitting the injected error and replaying the current activity instead of the saved activity both produced assertion failures; the restored implementation passed.
   The underlying registration-error case also verifies that a genuine SDK error is preserved and consumes the injection.
-- #8/#9: the operator selected Team `393JTTV68D` and the `kr.donminzzi.focusStudy` prefix.
+- #8/#9: I selected Team `393JTTV68D` and the `kr.donminzzi.focusStudy` prefix.
   Updated the XcodeGen source, related configuration, generated project, and spelling dictionary.
   The source and generated project use the same App/Monitor group, and Report has no App Group entitlement.
   iOS 17 device coverage remains unavailable in this run.
@@ -92,12 +92,12 @@ Oracle retrieval was `[PARTIAL]`: the canonical wiki project identity could not 
 
 ## Development provisioning and installation: 2026-10-26
 
-After explicit operator approval for development-profile creation and updates, `xcodebuild build -allowProvisioningUpdates` succeeded for Team `393JTTV68D` and the three `kr.donminzzi.focusStudy` product identifiers.
+After explicit approval for development-profile creation and updates, `xcodebuild build -allowProvisioningUpdates` succeeded for Team `393JTTV68D` and the three `kr.donminzzi.focusStudy` product identifiers.
 Strict signature verification passed for the app and embedded extensions.
 Decoded signed entitlements and embedded profiles confirmed the requested identifiers, Family Controls development capability, target-device eligibility, and App/Monitor-only App Group access.
 An entitlement-validation negative control rejected missing Family Controls before the real target checks passed.
 
-Installed the Debug app with `devicectl device install app` on the operator's iPhone 16 Pro.
+Installed the Debug app with `devicectl device install app` on the iPhone 16 Pro.
 A subsequent exact-bundle-ID query confirmed version `0.1`, build `1` on the device.
 The app was not launched; no Screen Time authorization request or real restriction was applied.
 Physical behavioral acceptance and distribution entitlement review remain open.
@@ -105,7 +105,7 @@ The installed build comes from the local working tree based on `c25f60c`, not a 
 
 ## Category selection and copy correction: 2026-10-26
 
-The operator confirmed authorization, selection, and actual app shielding on the installed build, then reported that selecting every item in a category prevented saving.
+I confirmed authorization, selection, and actual app shielding on the installed build, then reported that selecting every item in a category prevented saving.
 Supplied screenshots also establish report rendering with actual app usage; they do not establish website shielding, expiry, or report refresh behavior.
 
 Five new repository tests use synthetic Codable tokens rather than private device tokens.
@@ -114,7 +114,7 @@ The existing collapsed-category rejection still passed.
 The repository now opens the picker with `includeEntireCategory: true`, preserves individual application and website tokens, removes category policy tokens before persistence, and validates each individual count before writing.
 The tests check stored tokens, reopening, the 50/51 boundary, and unchanged file bytes and selection after rejection.
 This follows Apple's [category expansion initializer](<https://developer.apple.com/documentation/familycontrols/familyactivityselection/init(includeentirecategory:)>).
-The operator subsequently confirmed that category selection saves successfully on the updated device build on 2026-10-27.
+I subsequently confirmed that category selection saves successfully on the updated device build on 2026-10-27.
 
 Applied the requested `user-facing-copy` workflow with a default warm voice because no project voice line exists, while retaining the existing formal register.
 Kept selection limits, delayed restriction removal, browser limitations, permission purpose, and retry actions.
@@ -139,16 +139,16 @@ The targeted waiting-report test then passed again; its recaptured screenshot sh
 
 ## PR handoff: 2026-10-27
 
-The operator confirmed that category selection now saves successfully on the installed build.
+I confirmed that category selection now saves successfully on the installed build.
 They also reported an authorization-revoked history entry without manually revoking permission.
 The cause and any relation to app termination or an install-over-existing update remain unverified.
-The operator explicitly deferred that investigation, so this PR does not change authorization classification or historical records.
+I explicitly deferred that investigation, so this PR does not change authorization classification or historical records.
 The displayed history time is the session start time, not the observed interruption time.
 
 ## UI/UX production pass: 2026-10-31
 
 An apple-design review on 2026-10-31 filed issues #20 to #43; this branch implements #25, #27 to #32 in that order.
-The project has no copy voice line, so the `user-facing-copy` pass assumed `warm` again and at first kept the existing formal register (`~습니다`, `~해 주세요`); the operator later moved the app to 해요체, as recorded at the end of this section.
+The project has no copy voice line, so the `user-facing-copy` pass assumed `warm` again and at first kept the existing formal register (`~습니다`, `~해 주세요`); I later moved the app to 해요체, as recorded at the end of this section.
 The privacy manifest reason codes were checked against the Apple documentation JSON for `NSPrivacyAccessedAPITypeReasons` and `NSPrivacyAccessedAPIType` on 2026-10-31, and every product source directory was searched for the full API list on that page.
 Only `UserDefaults` (App) and `ProcessInfo.systemUptime` (App and Monitor, through `Shared/`) matched, so Report has no manifest.
 
@@ -157,7 +157,7 @@ The cancel UI test taps the cancel button when it exists and the popover dismiss
 Two DEBUG fixture modes were added: `expiring` starts a session three seconds before expiry, and `not-requested` reports authorization as not yet requested.
 
 The first-screen privacy line was first written as "not sent to a server and stored on this device", because device backups are outside the app's control.
-On 2026-10-31 the operator replaced it with the exact text "데이터는 기기에만 저장돼요" and then asked for the other strings to match its tone.
+On 2026-10-31 I replaced it with the exact text "데이터는 기기에만 저장돼요" and then asked for the other strings to match its tone.
 A second `user-facing-copy` pass converted every shipped string in `App/`, `Presentation/` and `Report/` to 해요체 and gave single-action buttons a `~하기` form (`25분 시작하기`, `권한 허용하기`, `다시 확인하기`, `현재 세션 종료하기`).
 That pass changed tone only: the meaning changes owned by #34 and #35 (for example "25분 만료" and the "웹" short form) and the DEBUG-only diagnostic strings were left as they were.
 #17 remains the place that audits data egress.
@@ -184,7 +184,7 @@ After the fix pass, the full iOS scheme, `swift test` and the unsigned device Re
 ## M2 break pass and deadline: 2026-11-01
 
 The [M2 design](specs/2026-11-01-m2-break-pass-design.md) and [M2 plan](plans/2026-11-01-m2-break-pass.md) were implemented in one worktree; the spec is the authority where the plan differs.
-The operator approved the selection copy in the App Group on 2026-11-01, so the Monitor can re-block without the app; the 2026-10-26 design has a dated reconciliation for that data boundary.
+The selection copy in the App Group was approved on 2026-11-01, so the Monitor can re-block without the app; the 2026-10-26 design has a dated reconciliation for that data boundary.
 `Shared/` adds the `waiting`, `onBreak` and `breakOver` phases, optional break fields, schema version 2 (version 1 still loads), the timed-end rule that compares the focus end with the deadline, and the break transitions with the cleanup of break artifacts in every lock section.
 `BreakTiming.standard` holds the production timing; the DEBUG argument `--break-timing short` and the fixture mode `ending-soon` exist only for UI tests.
 The race check compiles `Shared/BreakTiming.swift`, so the README command and CI list it, and it adds a stale break callback that must leave a newer break unchanged.
@@ -194,7 +194,7 @@ Nothing in M2 was checked on a physical device or on an iOS 17 runtime; the devi
 ## M3 everyday schedule blocking layer: 2026-11-01
 
 The [M3 design](specs/2026-11-01-m3-schedule-layer-design.md) and [M3 plan](plans/2026-11-01-m3-schedule-layer.md) were implemented in one worktree; the spec is the authority where the plan differs.
-The operator approved the everyday selection in the App Group on 2026-11-01; the 2026-10-26 design and the M2 design have dated reconciliation sections for the changed lines.
+The everyday selection in the App Group was approved on 2026-11-01; the 2026-10-26 design and the M2 design have dated reconciliation sections for the changed lines.
 `Shared/` adds `EverydaySchedule` with its time rules and the blocking rule, and `SessionControl` runs the everyday convergence at the end of every lock section except `snapshot()` and `everydayStatus(now:authorized:)`, evaluating the envelope that the section loaded or saved last.
 `saveEveryday` registers the new revision, writes the file, then stops the other revisions; inside today's range it accepts only stricter edits.
 `Integration/` adds `everyday-layer.json` (schema version 1), the named store `everydayLayer` and repeating schedules with time components only; the Monitor passes every callback name to the engine.
@@ -219,7 +219,7 @@ The activation check stays outside this order, because it only clears a marker t
 The DEBUG argument `--focus-filter-refusal <reason>` exists only for UI tests, and the DEBUG diagnostics add Focus on and off calls, a `current` read and the call log for device steps 5, 12 and 13.
 Nothing in M4 was checked on a physical device or on an iOS 17 runtime; the device matrix lists the M4 rows as unverified.
 
-2026-11-02, issue #53: the Focus off end keeps the person's-end guarantee of `finish()`, by the operator decision recorded on the issue.
+2026-11-02, issue #53: the Focus off end keeps the person's-end guarantee of `finish()`, by the decision recorded on the issue.
 Before, `endFromFocusFilter` threw before its end when the cleanup or the reconcile threw, for example when the save of `breakOver` failed after the focus shield was restored, so a filter-started session kept its restrictions until its deadline or "집중 종료"; the off call is one-shot, so nothing retried it.
 Now a caught error in the cleanup or the reconcile still ends a filter-started session that is not `terminal` in memory, with transition 6 and `.authorizationRevoked` without access, else its timed end, else `.earlyExit`; the saves of that end write the cleared marker, and the section does not throw when the end completes.
 A manual session and a section without a filter-started session still propagate the error, and an `end` inside the cleanup or the reconcile is never followed by a second end.

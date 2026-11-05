@@ -2,7 +2,7 @@
 
 Date: 2026-11-01.
 Status: design for approval. Milestone `M3` in the GitHub project "Focus Study".
-Source: operator decisions from the 2026-10-31 brainstorm, confirmed on 2026-11-01.
+Source: decisions from the 2026-10-31 brainstorm, confirmed on 2026-11-01.
 This document changes [the 2026-10-26 design](2026-10-26-focus-study-design.md), [the M1 design](2026-10-31-m1-launch-flow-design.md) and [the M2 design](2026-11-01-m2-break-pass-design.md) only where it says so.
 Where they differ, this document is the newer decision.
 This PR does not edit those documents.
@@ -18,7 +18,7 @@ It is a background rule, not a new main screen, so the app still opens on the fo
 
 ## Roadmap context
 
-The operator set this order: M1 launch flow and focus length (PR #46), M2 break pass and deadline (PRs #47 and #48), M3 everyday schedule blocking layer, M4 stricter notification handling.
+I set this order: M1 launch flow and focus length (PR #46), M2 break pass and deadline (PRs #47 and #48), M3 everyday schedule blocking layer, M4 stricter notification handling.
 M4 gets its own design document.
 M3 must not block M4, but M3 does not build it.
 
@@ -48,13 +48,13 @@ M3 must not block M4, but M3 does not build it.
 - A new element on the timer screen. The settings show the layer state.
 - Protection against a manual clock change, a revoked Screen Time access or a deleted app. The 2026-10-26 design already excludes anti-cheating guarantees ("부정행위 방지를 증명하지 않는다").
 
-## Anti-goals (never, by operator decision)
+## Anti-goals (never, by decision)
 
 - Rankings, leaderboards, or any comparison with other people.
 - Friend presence, or any feature that sends the layer state or the schedule off the device.
 - Anything that makes the first-screen line "데이터는 기기에만 저장돼요" false.
 
-## Decisions by the operator
+## Decisions by me
 
 1. Blocking applies only inside a daily range that the person sets. Outside it, the layer blocks nothing.
 2. The same rules apply every day.
@@ -64,7 +64,7 @@ M3 must not block M4, but M3 does not build it.
 6. Blocking is the union of the everyday layer and the focus layer.
 7. A break lifts both layers.
 
-## Decisions by Claude (the operator can change them)
+## Decisions by Claude (I can change them)
 
 ### Times
 
@@ -106,7 +106,7 @@ M3 must not block M4, but M3 does not build it.
 
 - The everyday layer is lifted for a break only while the stored focus phase is `onBreak` and `now < breakEndsAt`.
 - At or after `breakEndsAt`, the everyday layer blocks again by its schedule, even if the focus re-block has not run yet. This keeps a break at 3 minutes for the everyday layer also when the focus re-block is late. The M2 limit of 5 minutes then depends only on the focus re-block.
-- The operator decided that a break lifts both layers. A consequence: a person inside the everyday range can start a focus session, take up to 3 breaks of 3 minutes, end the session with "집중 종료", and start again. M3 accepts this. A limit on breaks across sessions is excluded from M3. The operator can decide it later.
+- I decided that a break lifts both layers. A consequence: a person inside the everyday range can start a focus session, take up to 3 breaks of 3 minutes, end the session with "집중 종료", and start again. M3 accepts this. A limit on breaks across sessions is excluded from M3. I can decide it later.
 
 ### Placement
 
@@ -116,14 +116,14 @@ M3 must not block M4, but M3 does not build it.
 
 ### Everyday selection in the App Group (privacy boundary change)
 
-This decision changes the 2026-10-26 data boundary again, after the M2 change, so the operator must approve it before implementation.
+This decision changes the 2026-10-26 data boundary again, after the M2 change, so I must approve it before implementation.
 
 - The Monitor extension must apply the everyday shield at the start of the range and at the end of each window, while the app is usually not running. The Monitor needs the tokens to do that.
 - Proposal: the everyday selection (application tokens and web domain tokens only) and the schedule are stored together in one file in the App Group directory `SessionControl/`, as `everyday-layer.json`. It is the only stored copy of the everyday selection. The app reads and writes it there, and the Monitor only reads it. It uses the same file protection as `control.json`.
 - Difference from M2: the M2 break copy exists only while a break runs. This file exists as long as the layer is set up, also when the layer is off.
 - Tokens are opaque values that the system issues for this device. The file stays on the device, so "데이터는 기기에만 저장돼요" stays true. The Report extension still has no App Group access. Usage data and site names are still not shared.
 - The focus-session selection does not move. It stays in app private storage (`PrivateSelection/selection.json`), and M2 still copies it to the App Group only for a break.
-- If the operator rejects this proposal:
+- If I reject this proposal:
   - On iOS 26.5 and later, `ManagedSettingsStore.isActive` could replace the file. The app would keep the tokens in private storage and apply them to the everyday store once. The Monitor would set `isActive` at each edge and would not need the tokens. Whether a value of `isActive` that the Monitor sets stays in effect is `[UNCERTAIN]`.
   - On iOS 17 to 26.4, this design found no way for the Monitor to restore the everyday shield without the tokens. The layer would be unavailable there, or would work only while the app runs.
 
@@ -473,7 +473,7 @@ The settings row and the everyday settings screen use it. The timer screen does 
 The implementation PR adds dated reconciliation sections (it does not rewrite the original lines) for these:
 
 - 2026-10-26 design, data boundary: "App과 Monitor는 하나의 `ManagedSettingsStore(named: ManagedSettingsStore.Name("focusSession"))`만 사용한다." and "이 store의 `clearAllSettings()`만 호출하며".
-- 2026-10-26 design, data boundary: "선택 토큰은 앱 내부 파일에만 저장한다" and the Monitor row, as M2 already amended it (only if the operator approves the [everyday selection in the App Group](#everyday-selection-in-the-app-group-privacy-boundary-change)).
+- 2026-10-26 design, data boundary: "선택 토큰은 앱 내부 파일에만 저장한다" and the Monitor row, as M2 already amended it (only if I approve the [everyday selection in the App Group](#everyday-selection-in-the-app-group-privacy-boundary-change)).
 - 2026-10-26 design, "구현 후 복구 계약 보완": "이 앱의 명명된 store와 `focus.<UUID>` namespace의 등록만 정리한다" and "다른 namespace의 monitoring을 중지하지 않으며".
 - M2 design: transition 3 step 6 (the words "this app's named store"), transition 4 step 2, transition 6, the control-state read failure in [Process lock and recovery contract](2026-11-01-m2-break-pass-design.md#process-lock-and-recovery-contract), and the [Callback identity](2026-11-01-m2-break-pass-design.md#callback-identity) line "A name that is not the current session's focus activity or its current break activity (`n == breaksTaken`) changes nothing." (an everyday name now re-blocks a late break, see [Callback routing in `handleCallback`](#callback-routing-in-handlecallback)).
 - `AGENTS.md` project scope, ownership table and data boundary.
@@ -482,7 +482,7 @@ The implementation PR adds dated reconciliation sections (it does not rewrite th
 
 Blocked until issues #8, #9 and #10 are resolved (development team, identifiers and entitlements, signed install on an approved device).
 Record every result in the [device matrix](../notes/screen-time-device-matrix.md), with device, OS version, scheduled time and observed time.
-Do not apply real restrictions without the operator's explicit approval for that run.
+Do not apply real restrictions without my explicit approval for that run.
 
 Steps:
 

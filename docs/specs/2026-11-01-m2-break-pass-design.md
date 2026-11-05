@@ -2,7 +2,7 @@
 
 Date: 2026-11-01.
 Status: design for approval. Milestone `M2` in the GitHub project "Focus Study".
-Source: operator decisions from the 2026-10-31 brainstorm, confirmed on 2026-11-01.
+Source: decisions from the 2026-10-31 brainstorm, confirmed on 2026-11-01.
 This document changes [the 2026-10-26 design](2026-10-26-focus-study-design.md) and [the M1 design](2026-10-31-m1-launch-flow-design.md) only where it says so.
 Where they differ, this document is the newer decision.
 This PR does not edit those documents.
@@ -17,7 +17,7 @@ The break must be a small, deliberate step, not a free exit, so each break start
 
 ## Roadmap context
 
-The operator set this order: M1 launch flow and focus length (shipped in PR #46), M2 break pass and deadline, M3 everyday schedule blocking layer, M4 stricter notification handling.
+I set this order: M1 launch flow and focus length (shipped in PR #46), M2 break pass and deadline, M3 everyday schedule blocking layer, M4 stricter notification handling.
 M3 and M4 get their own design documents.
 M2 must not block them, but M2 does not build them.
 
@@ -35,18 +35,18 @@ M2 must not block them, but M2 does not build them.
 - A break that is longer than 3 minutes, a break that the person ends early, or a break that the person extends.
 - More than 3 breaks, or a break count that depends on the focus length.
 - A pause without lifting the restrictions (the timer stops only for a break).
-- A local notification when a break ends. The person sees the system shield when they open a blocked app, and returns to the app by themselves. The operator can add a notification later, but it needs notification permission and M4 owns notification decisions.
+- A local notification when a break ends. The person sees the system shield when they open a blocked app, and returns to the app by themselves. I can add a notification later, but it needs notification permission and M4 owns notification decisions.
 - A custom shield screen or a shield action that starts a break (issue #40 stays a separate decision).
 - Partial credit for a session that misses its deadline.
 - The everyday schedule blocking layer (M3) and notification silencing (M4).
 
-## Anti-goals (never, by operator decision)
+## Anti-goals (never, by decision)
 
 - Rankings, leaderboards, or any comparison with other people.
 - Friend presence or any feature that sends focus or break state off the device.
 - Anything that makes the first-screen line "데이터는 기기에만 저장돼요" false.
 
-## Decisions by the operator
+## Decisions by me
 
 ### Break pass
 
@@ -76,7 +76,7 @@ At break start, the app registers a separate DeviceActivity interval of at least
 The interval has a `warningTime`, so that the Monitor extension gets a callback at the 3-minute point and applies the shield again.
 The device check records whether this works (see [Physical-device verification](#physical-device-verification)).
 
-## Decisions by Claude (the operator can change them)
+## Decisions by Claude (I can change them)
 
 ### Timer and waiting screen
 
@@ -91,12 +91,12 @@ The device check records whether this works (see [Physical-device verification](
 
 ### Break and return
 
-- The break cannot end early. The operator decided "exactly 3 minutes".
+- The break cannot end early. I decided "exactly 3 minutes".
 - "집중 종료" is available in every phase: focusing, waiting, on a break, and after the re-block.
 - After the re-block, the timer screen shows "다시 집중하기", "집중 종료", and the time that is left to resume and still complete before the deadline (the deadline minus the remaining focus time). When that time is over, the screen says that the session can no longer count as focus.
 - The gaps between each re-block and the tap on "다시 집중하기" are not in the deadline formula. Added together, they use up the 10-minute slack. A late re-block callback also uses the slack.
   For example, after the first break, a person who taps "다시 집중하기" more than 10 minutes after the re-block can no longer complete before the deadline. Two gaps of 6 and 5 minutes after two breaks have the same result.
-- A session that can no longer complete stays in its phase, with the restrictions on, until the deadline. At the deadline it ends as `.deadlineMissed` in every phase except `waiting`, also in `active` after a resume. This follows the operator's rule word for word: the restrictions lift at the deadline. The rule is in [Timed end](#timed-end).
+- A session that can no longer complete stays in its phase, with the restrictions on, until the deadline. At the deadline it ends as `.deadlineMissed` in every phase except `waiting`, also in `active` after a resume. This follows my rule word for word: the restrictions lift at the deadline. The rule is in [Timed end](#timed-end).
 
 ### Focus time in history and today's total
 
@@ -108,14 +108,14 @@ The device check records whether this works (see [Physical-device verification](
 
 ### Selection copy in the App Group (privacy boundary change)
 
-This decision changes the 2026-10-26 data boundary, so the operator must approve it before implementation.
+This decision changes the 2026-10-26 data boundary, so I must approve it before implementation.
 
 - The Monitor extension must apply the shield again at the 3-minute point, while the app is usually not running. The Monitor does not have the selection tokens today. The 2026-10-26 design says: "Monitor ... 선택 토큰이나 SwiftData에 접근하지 않는다" and "토큰, 사용량, 사이트 이름은 공유하지 않는다".
 - Proposal: at break start, the app writes a copy of the session's frozen selection (application tokens and web domain tokens only) to the App Group directory `SessionControl/`, as `break-selection.<UUID>.json`. The file uses the same file protection as `control.json`.
 - The copy exists only while the stored phase is `onBreak` ([Break artifacts](#break-artifacts)). The re-block deletes it after the shield matches. The end of the session deletes it. Every lock section deletes a copy that the stored phase does not allow, whatever interruption left it. A control-state read failure deletes every `break-selection.*` file.
 - Tokens are opaque values that the system issues for this device. The file stays on the device, so "데이터는 기기에만 저장돼요" stays true. The Report extension still has no App Group access.
 - The re-block always uses this frozen copy, from the app and from the Monitor. The selection editor stays locked during the whole session, including breaks.
-- If the operator rejects this proposal: this design found no other way for the Monitor to restore the selection, because a `ManagedSettingsStore` shield cannot be suspended and restored without the tokens. Only the app could re-block, and only while it runs, so "blocked again at once" would not be true.
+- If I reject this proposal: this design found no other way for the Monitor to restore the selection, because a `ManagedSettingsStore` shield cannot be suspended and restored without the tokens. Only the app could re-block, and only while it runs, so "blocked again at once" would not be true.
 
 ### Schema and earlier builds
 
@@ -192,7 +192,7 @@ Derived values (in `Shared/`, without the Screen Time SDK):
 - Focused time = `min(length, max(0, now - startedAt - pausedSeconds - open pause))`.
 - Remaining time = `length - focused time`, rounded up to whole seconds, as in M1.
 - Focus end (only while `active`) = `expiresAt + pausedSeconds`.
-- Deadline = `expiresAt + deadlineCredit + 600`. For a session without cancelled waits, this is the operator's formula: start + length + (waiting time + 180 s for each break) + 10 minutes. `deadlineCredit` also holds the waiting time of cancelled waits, and that addition is a decision by Claude (see [Timer and waiting screen](#timer-and-waiting-screen)).
+- Deadline = `expiresAt + deadlineCredit + 600`. For a session without cancelled waits, this is my formula: start + length + (waiting time + 180 s for each break) + 10 minutes. `deadlineCredit` also holds the waiting time of cancelled waits, and that addition is a decision by Claude (see [Timer and waiting screen](#timer-and-waiting-screen)).
 - `recordedEnd` stays capped at `expiresAt`. An `.expired` record therefore gives exactly the focus length. Other reasons show no duration (see [Focus time in history and today's total](#focus-time-in-history-and-todays-total)).
 
 The waiting time and the break length are timing values in `Shared/`: waits `[15, 30, 60]` seconds, break `180` seconds, slack `600` seconds, and a stale-wait grace of `10` seconds.
@@ -412,7 +412,7 @@ Step 3 of transition 3 only changes fields in memory, so a gap after it is the g
 The implementation PR adds dated reconciliation sections (it does not rewrite the original lines) for these:
 
 - 2026-10-26 design, scope: "일시정지는 제공하지 않는다".
-- 2026-10-26 design, data boundary: the Monitor and the App Group have no selection tokens (only if the operator approves the [selection copy](#selection-copy-in-the-app-group-privacy-boundary-change)).
+- 2026-10-26 design, data boundary: the Monitor and the App Group have no selection tokens (only if I approve the [selection copy](#selection-copy-in-the-app-group-privacy-boundary-change)).
 - 2026-10-26 design, "세션 상태와 원자성": `now >= expiresAt` as the expiry rule, and the history duration for every reason.
 - M1 design: "the existing "중도 종료" button with its confirmation".
 - `AGENTS.md` project scope: "no pause".
@@ -421,7 +421,7 @@ The implementation PR adds dated reconciliation sections (it does not rewrite th
 
 Blocked until issues #8, #9 and #10 are resolved (development team, identifiers and entitlements, signed install on an approved device).
 Record every result in the [device matrix](../notes/screen-time-device-matrix.md), with device, OS version, scheduled time and observed time.
-Do not apply real restrictions without the operator's explicit approval for that run.
+Do not apply real restrictions without my explicit approval for that run.
 
 Steps:
 

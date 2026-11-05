@@ -2,7 +2,7 @@
 
 Date: 2026-11-01.
 Status: design for approval. Milestone `M4` in the GitHub project "Focus Study".
-Source: operator requirements of 2026-10-31 and operator decisions of 2026-11-01.
+Source: requirements of 2026-10-31 and decisions of 2026-11-01.
 This document changes [the 2026-10-26 design](2026-10-26-focus-study-design.md), [the M1 design](2026-10-31-m1-launch-flow-design.md), [the M2 design](2026-11-01-m2-break-pass-design.md) and [the M3 design](2026-11-01-m3-schedule-layer-design.md) only where it says so.
 Where they differ, this document is the newer decision.
 This PR does not edit those documents.
@@ -19,12 +19,12 @@ With that one action, iOS filters notifications by the Focus's own allowed peopl
 The app does not decide which notification is urgent, and it does not change the Focus settings.
 The settings sheet explains how to set up that Focus.
 
-The operator noted on 2026-11-01 that the real behavior will show only during implementation, and that the internal logic of a shipped app with the same pattern is not known.
+I noted on 2026-11-01 that the real behavior will show only during implementation, and that the internal logic of a shipped app with the same pattern is not known.
 So this design marks each unverified point with `[UNCERTAIN]`, lists it under [Physical-device verification](#physical-device-verification), and gives the builder room in [Left to the builder](#left-to-the-builder).
 
 ## Roadmap context
 
-The operator set this order: M1 launch flow and focus length (PR #46), M2 break pass and deadline (PRs #47 and #48), M3 everyday schedule blocking layer (PRs #49 and #50), M4 stricter notification handling.
+I set this order: M1 launch flow and focus length (PR #46), M2 break pass and deadline (PRs #47 and #48), M3 everyday schedule blocking layer (PRs #49 and #50), M4 stricter notification handling.
 This document is the M4 design.
 
 ## Goals
@@ -51,16 +51,16 @@ This document is the M4 design.
 - Notification filtering through `FocusFilterAppContext`. The app sends no notifications, so the default app context stays.
 - Protection against a person who turns the Focus off to end a session. Turning the Focus off is the person's action, like "집중 종료".
 
-## Anti-goals (never, by operator decision)
+## Anti-goals (never, by decision)
 
 - Rankings, leaderboards, or any comparison with other people.
 - Friend presence, or any feature that sends the Focus state or the session state off the device.
 - Anything that makes the first-screen line "데이터는 기기에만 저장돼요" false.
 - Copy that promises which notifications come through. "Urgent" is never guessed by the app.
 
-## Decisions by the operator
+## Decisions by me
 
-1. The session connects to iOS Focus through a Focus filter that starts a FocusStudy session when the Focus turns on. The reference is the Focus filter of a shipped Screen Time blocking app (operator screenshots, 2026-11-01): it starts a timer when the Focus turns on and stops it when the Focus turns off.
+1. The session connects to iOS Focus through a Focus filter that starts a FocusStudy session when the Focus turns on. The reference is the Focus filter of a shipped Screen Time blocking app (my screenshots, 2026-11-01): it starts a timer when the Focus turns on and stops it when the Focus turns off.
 2. The setup guide is in the settings sheet only. No onboarding step, and no change to the focus-start screen. The app still opens on the focus-start screen.
 3. "Urgent" is never guessed by the app. It means the system's urgent alerts plus the contacts and apps that the person chose. Three tracks:
    - Medical and disaster alerts: the app does not interfere. Each alert type is verified separately.
@@ -70,7 +70,7 @@ This document is the M4 design.
 5. An exception that the person sets in iOS and an exception that iOS actually applies are separate verification items.
 6. The design marks what is unverified and leaves room for the builder, without hiding risk.
 
-## Decisions by Claude (the operator can change them)
+## Decisions by Claude (I can change them)
 
 ### What the filter starts
 
@@ -136,11 +136,11 @@ This document is the M4 design.
 
 ### Permissions and entitlements
 
-18. No new permission, no `INFocusStatusCenter`, and no new entitlement. If the builder finds that a Focus filter needs an entitlement or an `Info.plist` key, that is a target-configuration change (unsigned device Release build) and a privacy-boundary item: stop and raise it with the operator.
+18. No new permission, no `INFocusStatusCenter`, and no new entitlement. If the builder finds that a Focus filter needs an entitlement or an `Info.plist` key, that is a target-configuration change (unsigned device Release build) and a privacy-boundary item: stop and raise it with me.
 
 ### Settings sheet guide
 
-19. A section in the settings sheet with one short row opens a guide screen. The row label is two or three words, and the explanation goes in the footer and in the guide (operator preference for short labels).
+19. A section in the settings sheet with one short row opens a guide screen. The row label is two or three words, and the explanation goes in the footer and in the guide (my preference for short labels).
 20. The guide has text instructions only. No button opens the Focus settings: the only public URL, `UIApplication.openSettingsURLString`, opens the app's own settings page, which has no Focus settings. No private URL scheme is used.
 
 ## Constraints
@@ -181,7 +181,7 @@ The iOS 27.1 SDK `AppIntents.swiftinterface` was also checked.
 Conclusions for this design:
 
 - The checked public APIs have no way to turn on a Focus or to change its allowed list. The Focus settings stay with the person and with iOS.
-- An allowed app lets every notification of that app through, and a Focus with Time Sensitive Notifications on lets an app through only for the notifications that the app marks so. This supports the copy rule in [Decisions by the operator](#decisions-by-the-operator).
+- An allowed app lets every notification of that app through, and a Focus with Time Sensitive Notifications on lets an app through only for the notifications that the app marks so. This supports the copy rule in [Decisions by me](#decisions-by-me).
 - A Focus can let more through than the allowed list (Time Sensitive, repeated calls, Emergency Bypass, Intelligent Breakthrough). So the copy never promises that nothing else comes through.
 - The design does not depend on how a shipped app with a similar filter works. Its behavior shows only that the pattern exists.
 
@@ -469,7 +469,7 @@ The implementation PR adds dated reconciliation sections (it does not rewrite th
 
 Blocked until issues #8, #9 and #10 are resolved (development team, identifiers and entitlements, signed install on an approved device).
 Record every result in the [device matrix](../notes/screen-time-device-matrix.md), with device, OS version, the time of the Focus change and the observed time.
-Do not apply real restrictions without the operator's explicit approval for that run.
+Do not apply real restrictions without my explicit approval for that run.
 Do not try to trigger an emergency or government alert, and do not use Emergency SOS for a test.
 
 Steps:

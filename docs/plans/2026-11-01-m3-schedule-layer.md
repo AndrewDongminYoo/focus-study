@@ -10,7 +10,7 @@
 
 **Spec:** [`docs/specs/2026-11-01-m3-schedule-layer-design.md`](../specs/2026-11-01-m3-schedule-layer-design.md)
 
-**Start condition:** The operator approves the spec, including the [everyday selection in the App Group](../specs/2026-11-01-m3-schedule-layer-design.md#everyday-selection-in-the-app-group-privacy-boundary-change). Create the implementation worktree from the updated `main`. If the operator rejects the App Group file, stop and revise the spec before Task 3.
+**Start condition:** The spec is approved, including the [everyday selection in the App Group](../specs/2026-11-01-m3-schedule-layer-design.md#everyday-selection-in-the-app-group-privacy-boundary-change). Create the implementation worktree from the updated `main`. If the App Group file is rejected, stop and revise the spec before Task 3.
 
 ## Global Constraints
 
