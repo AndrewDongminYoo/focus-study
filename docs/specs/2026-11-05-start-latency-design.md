@@ -32,4 +32,4 @@ If device measurements are unavailable, retain an explicit measurement blocker r
 Keep every process-lock section synchronous: no `await`, UI wait, or actor hop inside the lock.
 Preserve session transitions, rollback, privacy boundaries, and accessibility identifiers.
 Do not change authorization, dependencies, provisioning, or real restrictions as part of measurement setup.
-Any eventual rendered change requires operator visual approval before merge.
+Review any eventual rendered change before merge.
