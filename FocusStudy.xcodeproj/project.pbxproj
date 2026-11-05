@@ -44,6 +44,7 @@
 		5DF1E21B9E3B54A89DDC940F /* EverydayLayerFileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC64A13EBA38AE48756A0698 /* EverydayLayerFileTests.swift */; };
 		622CC874670E246B827B3746 /* StartupRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC5423DA7A71AB76ABD3FC97 /* StartupRecovery.swift */; };
 		65047D939004D1007341FAAA /* EverydaySchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72B855890EB8AC4858EACDCD /* EverydaySchedule.swift */; };
+		6703DC1B84D30D9ACB820356 /* BreakSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A08B2A2B5A673549A6D57E /* BreakSessionView.swift */; };
 		674D21FCCD020DB5F8D71243 /* SelectionValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACC55D005E82218CABB3BFED /* SelectionValidator.swift */; };
 		69568524CD868EEF67A6BBD8 /* FocusRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F43D719BF3A630EB9119C4D /* FocusRuntime.swift */; };
 		6998714F799B4974077A5061 /* ControlTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66F1973C38BC3E67F3196742 /* ControlTypes.swift */; };
@@ -188,6 +189,7 @@
 		BC64A13EBA38AE48756A0698 /* EverydayLayerFileTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EverydayLayerFileTests.swift; sourceTree = "<group>"; };
 		BE52C8706C6D532DF83AB565 /* UITestFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestFixtures.swift; sourceTree = "<group>"; };
 		C319BE9A1C80D0D864BC6263 /* SessionRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionRecord.swift; sourceTree = "<group>"; };
+		C3A08B2A2B5A673549A6D57E /* BreakSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreakSessionView.swift; sourceTree = "<group>"; };
 		D4FDE385189F73B5B88044CC /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		D7F8E5F4EE114794DD03509E /* FocusReport.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = FocusReport.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		D82C12E3AAAB889FC7623746 /* UsageReportHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageReportHost.swift; sourceTree = "<group>"; };
@@ -263,6 +265,7 @@
 			children = (
 				B543F0FF6A0D24AAE65F0107 /* Assets.xcassets */,
 				6376EBDFD30119EBB7E9E78F /* AuthorizationService.swift */,
+				C3A08B2A2B5A673549A6D57E /* BreakSessionView.swift */,
 				33C23E014FD02FF57A213162 /* EverydaySettingsModel.swift */,
 				F6197AA8AF62D75441E008EA /* EverydaySettingsView.swift */,
 				E8BA417ED4A44DC1B5F572AE /* FocusFilterHandler.swift */,
@@ -584,6 +587,7 @@
 			files = (
 				E4B6B528F6E1A160C69FE606 /* AuthorizationService.swift in Sources */,
 				BB3C9C1DC79476E97BD84A93 /* BreakSelectionFile.swift in Sources */,
+				6703DC1B84D30D9ACB820356 /* BreakSessionView.swift in Sources */,
 				94BAF801E7FA2AF952C3FA3B /* BreakTiming.swift in Sources */,
 				30B2FE49B9B438FEBB38B02E /* ControlTypes.swift in Sources */,
 				EFB35A4E1D71C6C507BDB887 /* DeviceDiagnostics.swift in Sources */,

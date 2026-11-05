@@ -5,6 +5,8 @@ Status: design for approval. Milestone `M2` in the GitHub project "Focus Study".
 Source: decisions from the 2026-10-31 brainstorm, confirmed on 2026-11-01.
 This document changes [the 2026-10-26 design](2026-10-26-focus-study-design.md) and [the M1 design](2026-10-31-m1-launch-flow-design.md) only where it says so.
 Where they differ, this document is the newer decision.
+The [2026-11-05 early-return amendment](2026-11-05-break-screen-design.md) supersedes this document's fixed three-minute break, exclusion of early return, and shared timer-screen layout.
+The original M2 decisions below remain as historical context; the amendment defines current early-return behavior and accounting.
 This PR does not edit those documents.
 The implementation PR adds dated reconciliation sections to them (see [Superseded lines](#superseded-lines)).
 
@@ -472,6 +474,21 @@ The lines below stay as the M2 decision of 2026-11-01 and do not describe the cu
 - Transition 6: a new step runs after step 4 and before step 5. It reads the everyday file and sets the everyday store for the phase that is stored (convergence steps 1 and 3 only), so the everyday layer blocks again by its schedule, also after an end during a break. The registrations wait for the convergence at the end of the section.
 - [Process lock and recovery contract](#process-lock-and-recovery-contract), the control-state read failure: it also clears the everyday store. It reads no everyday file and registers, stops or applies nothing for the everyday layer, and the everyday activities stay.
 - [Callback identity](#callback-identity), "A name that is not the current session's focus activity or its current break activity (`n == breaksTaken`) changes nothing.": an `everyday.` name runs the reconcile order when the stored session is `onBreak` and `now >= breakEndsAt`, so a late break re-blocks. In every other phase an everyday name does not reach the focus part. Every lock section except `snapshot()` and `everydayStatus(now:authorized:)` then runs the everyday convergence.
+
+## Early return amendment: 2026-11-05
+
+The person may now tap “다시 집중하기” during `onBreak`, before the normal three-minute end.
+The [dedicated break screen contract](2026-11-05-break-screen-design.md) owns the updated layout and transition.
+At most three breaks and the existing waiting sequence remain unchanged; ending early still consumes that break.
+
+Early return restores the applicable restrictions, subtracts unused break seconds from `deadlineCredit`, shortens `breakEndsAt`, and commits a restricted `breakOver` recovery point before resuming focus.
+The shortened deadline is registered before that commit, just as the active focus end is registered before saving `active`.
+The actual open pause is then added to `pausedSeconds`; unused break time is not granted as deadline slack.
+A natural break end or late return keeps the original accounting.
+Every process-lock section remains synchronous.
+
+The break screen follows the stored phase for waiting, break, and post-break return.
+It is separate from the centered focus countdown, and “집중 종료” remains available in each phase.
 
 ## M4 reconciliation: 2026-11-02
 

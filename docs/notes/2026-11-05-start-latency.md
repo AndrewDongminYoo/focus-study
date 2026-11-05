@@ -33,11 +33,28 @@ The SDK test run used that override, then restored the original default mapping 
 No SDK, runtime image or physical device was installed or changed.
 Future local runs must resolve this machine prerequisite again; this workaround does not change CI's pinned environment or prove runtime compatibility beyond the executed checks.
 
+## Physical-device sample on 2026-11-05
+
+The first accepted start call in a diagnostic launch on the iPhone 16 Pro took **2,522.737 ms**.
+The timer started normally, and the subsequent break was confirmed on the phone.
+This is one successful sample; repeated successful starts and the registration interval have not yet been measured.
+It does not establish a typical duration or percentile.
+
+Environment: iPhone 16 Pro (`iPhone17,1`), iOS 27.0.1 (`24A446`), signed Debug version 0.1, build 1, launched with `--screen-time-diagnostics` and console forwarding.
+The installed build came from `157920edecd1d67ae4da89a755043d3d489d477e`; executable source and project configuration match the merged measurement implementation at `b90c36834010295fc84b73d94c86c40c6d52418a`.
+The duration-only console line was `START_LATENCY total_ms=2522.737`, logged at 19:51:03 +09:00.
+This was the first measured start in this launch, not a verified first-ever Screen Time registration or a cold-device benchmark.
+
+The total establishes a synchronous main-actor occupation of about 2.52 seconds in a successful real start.
+It does not identify which operation caused the delay, measure the subsequent SwiftUI render, or establish when the system shield became visible.
+The successful synthetic baseline cannot be used to dismiss this device observation.
+
 ## Decision and remaining evidence
 
 The synthetic successful path is short in this run; a real lock timeout can occupy the main actor for about a quarter second.
 Neither number measures successful `DeviceActivityCenter.startMonitoring`, real managed-settings effects, or persistent device history.
-Therefore the progress UI decision and removal of `isStarting` remain pending successful device measurements.
+The real successful sample is long enough to require investigating visible start feedback; removing `isStarting` based on the fast synthetic path is not supported.
+Repeated device measurements, investigation of the registration interval, and a verified UI change remain pending.
 The current measurements do not close #33.
 
 DEBUG builds provide a timing callback around accepted `FocusModel.start()` calls, including refresh failures and error handling.

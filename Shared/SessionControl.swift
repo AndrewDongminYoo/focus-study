@@ -209,11 +209,13 @@ final class SessionControl {
             shield.clear()
         }
     }
-    /// Transition 5: `breakOver` → `active`, when the person taps "다시 집중하기".
+    /// An early return first commits the re-block, then transition 5 resumes focus.
     func resume(id: UUID, now: Date) throws {
         try section(now: now) { locked in
             var envelope = try read(locked)
             try cleanup(&envelope, locked: locked, now: now)
+            guard envelope.session?.id == id else { return }
+            if envelope.session?.phase == .onBreak { try reBlock(&envelope, locked: locked, now: now, endingEarly: true) }
             guard var session = envelope.session, session.id == id, session.phase == .breakOver, let pausedAt = session.pausedAt else { return }
             if now >= session.deadline(timing: timing) { try end(&envelope, locked: locked, reason: .deadlineMissed, now: now); return }
             session.pausedSeconds = (session.pausedSeconds ?? 0) + max(0, now.timeIntervalSince(pausedAt))
@@ -357,17 +359,27 @@ final class SessionControl {
         try overwriteAndSave(&envelope, to: session, locked: locked, now: now)
     }
     /// Transition 4: `onBreak` → `breakOver`. A break without an end must not happen.
-    private func reBlock(_ envelope: inout ControlEnvelope, locked: LockedControl, now: Date) throws {
+    private func reBlock(_ envelope: inout ControlEnvelope, locked: LockedControl, now: Date, endingEarly: Bool = false) throws {
         guard var session = envelope.session, session.phase == .onBreak else { return }
         if let reason = session.timedEnd(at: now, timing: timing) { try end(&envelope, locked: locked, reason: reason, now: now); return }
         guard breakSelection.restoreShield(id: session.id) else { try end(&envelope, locked: locked, reason: .recoveryInterrupted, now: now); return }
         // Both layers come back before the save of `breakOver`: the blocking rule without its break line. A failure here changes no M2 step.
         if let schedule = try? everyday.load(), EverydayRules.blocks(schedule: schedule, session: nil, authorized: nil, now: now, calendar: calendar),
-           !everyday.storeMatches() { _ = everyday.applyStored() }
+           !everyday.storeMatches() {
+            let applied = everyday.applyStored()
+            if endingEarly && !applied { throw ControlIssue.verificationFailed }
+        }
         session.phase = .breakOver
-        var updated = envelope; updated.session = session
-        // A failed save leaves `onBreak` with the shield on, and the next reconcile re-blocks again.
-        try locked.save(updated); envelope = updated
+        if endingEarly, let breakEndsAt = session.breakEndsAt, now < breakEndsAt {
+            session.deadlineCredit = max(0, (session.deadlineCredit ?? 0) - breakEndsAt.timeIntervalSince(now))
+            session.breakEndsAt = now
+            // The shortened deadline needs its callback before the recovery point is committed.
+            try overwriteAndSave(&envelope, to: session, locked: locked, now: now)
+        } else {
+            var updated = envelope; updated.session = session
+            // A failed save leaves `onBreak` with the shield on, and the next reconcile re-blocks again.
+            try locked.save(updated); envelope = updated
+        }
         monitoring.stopBreak(id: session.id, index: session.breaksTaken ?? 0)
         breakSelection.remove(id: session.id)
     }

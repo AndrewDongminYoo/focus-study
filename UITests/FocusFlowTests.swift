@@ -337,6 +337,56 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["countdown"].exists); XCTAssertFalse(app.descendants(matching: .any)["completion"].exists)
     }
     private func shortBreaks(_ mode: String = "approved") -> XCUIApplication { app(mode, extra: ["--break-timing", "short"]) }
+    func testDedicatedBreakScreenCanReturnToFocusBeforeBreakEnds() {
+        let app = app(); app.buttons["start"].tap()
+        XCTAssertTrue(app.buttons["breakStart"].waitForExistence(timeout: 5))
+        let clock = app.staticTexts["countdown"].frame
+        XCTAssertGreaterThan(app.buttons["breakStart"].frame.minY - clock.maxY, 80)
+        app.buttons["breakStart"].tap()
+        XCTAssertTrue(app.otherElements["breakScreen"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["countdown"].exists)
+        XCTAssertTrue(app.staticTexts["breakCountdown"].waitForExistence(timeout: 25))
+        XCTAssertTrue(app.buttons["resume"].exists)
+        captureReport(app, name: "break-early-return-initial")
+        let breakClock = app.staticTexts["breakCountdown"], initialBreak = app.staticTexts["breakCountdown"].label
+        expectation(for: NSPredicate(format: "label != %@", initialBreak), evaluatedWith: breakClock)
+        waitForExpectations(timeout: 5)
+        let end = app.buttons["end"]
+        XCTAssertTrue(end.isHittable); XCTAssertTrue(app.frame.contains(end.frame))
+        end.tap()
+        XCTAssertTrue(app.buttons["종료하기"].waitForExistence(timeout: 5))
+        if app.buttons["계속 집중하기"].exists { app.buttons["계속 집중하기"].tap() }
+        else { app.otherElements["PopoverDismissRegion"].tap() }
+        XCTAssertTrue(app.buttons["resume"].waitForExistence(timeout: 5))
+        captureReport(app, name: "break-early-return")
+        app.buttons["resume"].tap()
+        XCTAssertTrue(app.staticTexts["countdown"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.otherElements["breakScreen"].exists)
+        XCTAssertEqual(app.staticTexts["breaksLeft"].label, "쉬는 시간 2번 남았어요")
+        let focusClock = app.staticTexts["countdown"], initialFocus = app.staticTexts["countdown"].label
+        expectation(for: NSPredicate(format: "label != %@", initialFocus), evaluatedWith: focusClock)
+        waitForExpectations(timeout: 5)
+        XCTAssertTrue(app.buttons["end"].isHittable)
+        captureReport(app, name: "focus-after-early-return")
+    }
+    func testBreakScreenAtLargestTextSizeKeepsReturnReachable() {
+        let app = app(extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        app.buttons["start"].tap()
+        let takeBreak = app.buttons["breakStart"]
+        XCTAssertTrue(takeBreak.waitForExistence(timeout: 5))
+        if !takeBreak.isHittable { app.swipeUp() }
+        takeBreak.tap()
+        XCTAssertTrue(app.otherElements["breakScreen"].waitForExistence(timeout: 5))
+        captureReport(app, name: "break-wait-largest-text")
+        XCTAssertTrue(app.staticTexts["breakCountdown"].waitForExistence(timeout: 25))
+        let resume = app.buttons["resume"]
+        XCTAssertTrue(resume.exists)
+        for _ in 0..<3 where !resume.isHittable { app.swipeUp() }
+        XCTAssertTrue(resume.isHittable)
+        captureReport(app, name: "break-return-largest-text")
+        resume.tap()
+        XCTAssertTrue(app.buttons["breakStart"].waitForExistence(timeout: 8))
+    }
     func testBreakFlowReBlocksAndResumes() {
         let app = shortBreaks(); app.buttons["start"].tap()
         XCTAssertTrue(app.buttons["breakStart"].waitForExistence(timeout: 5))
@@ -349,8 +399,13 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["breakCountdown"].waitForExistence(timeout: 8))
         XCTAssertFalse(app.buttons["selection"].exists); XCTAssertTrue(app.buttons["end"].exists)
         captureReport(app, name: "break-countdown")
-        XCTAssertTrue(app.buttons["resume"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["deadlineNotice"].exists); XCTAssertTrue(app.buttons["end"].exists)
+        // Early return now exposes `resume` during the break; the deadline notice identifies the natural end.
+        XCTAssertTrue(app.staticTexts["deadlineNotice"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["resume"].exists); XCTAssertTrue(app.buttons["end"].exists)
+        let notice = app.staticTexts["deadlineNotice"], initialNotice = app.staticTexts["deadlineNotice"].label
+        expectation(for: NSPredicate(format: "label != %@", initialNotice), evaluatedWith: notice)
+        waitForExpectations(timeout: 5)
+        XCTAssertTrue(app.buttons["end"].isHittable)
         captureReport(app, name: "break-over")
         app.buttons["resume"].tap()
         let countdown = app.staticTexts["countdown"]
