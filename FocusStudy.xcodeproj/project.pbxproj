@@ -472,11 +472,11 @@
 				};
 			};
 			buildConfigurationList = 938F7FE73AEE0F7658835584 /* Build configuration list for PBXProject "FocusStudy" */;
-			developmentRegion = en;
+			developmentRegion = ko;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				Base,
-				en,
+				ko,
 			);
 			mainGroup = 1310A1EC79F266DBEE8CC69B;
 			minimizedProjectReferenceProxies = 1;

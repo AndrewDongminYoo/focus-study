@@ -39,6 +39,23 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["countdown"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["countdown"].label, "남은 시간 45분 0초")
     }
+    func testKoreanSystemTimePicker() {
+        let app = app(extra: ["-AppleLanguages", "(ko)", "-AppleLocale", "ko_KR"])
+        _ = openEveryday(app)
+        let picker = app.datePickers["everydayRangeStart"]
+        XCTAssertTrue(picker.waitForExistence(timeout: ready))
+        picker.tap()
+        captureReport(app, name: "korean-system-time-picker")
+        let hierarchy = XCTAttachment(string: app.debugDescription)
+        hierarchy.name = "korean-system-time-picker-hierarchy"
+        hierarchy.lifetime = .keepAlways
+        add(hierarchy)
+        let wheels = app.pickerWheels
+        XCTAssertTrue(wheels.firstMatch.waitForExistence(timeout: ready))
+        let values = wheels.allElementsBoundByIndex.compactMap { $0.value as? String }
+        XCTAssertTrue(values.contains { $0.contains("시") }, values.description)
+        XCTAssertTrue(values.contains { $0.contains("분") }, values.description)
+    }
     /// The everyday layer opens from its row in the settings sheet.
     private func openEveryday(_ app: XCUIApplication) -> XCUIElement {
         XCTAssertTrue(app.buttons["settingsButton"].waitForExistence(timeout: ready)); app.buttons["settingsButton"].tap()
