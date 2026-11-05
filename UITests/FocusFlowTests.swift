@@ -216,15 +216,18 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(completion.label.contains("40분"), completion.label); XCTAssertFalse(completion.label.contains("25분"), completion.label)
     }
     func testReloadRecreatesReportContentWithinSameDay() {
-        let app = app()
+        let app = app(extra: ["-AppleLanguages", "(ko)", "-AppleLocale", "ko_KR"])
         openReport(app)
         let generation = app.staticTexts["reportGeneration"]
         XCTAssertTrue(generation.waitForExistence(timeout: 8))
         let firstInstance = generation.label
-        app.buttons["reportReload"].tap()
+        let reload = app.navigationBars.buttons["reportReload"]
+        XCTAssertTrue(reload.waitForExistence(timeout: 5))
+        reload.tap()
         let changed = NSPredicate(format: "label != %@", firstInstance)
         expectation(for: changed, evaluatedWith: generation)
         waitForExpectations(timeout: 5)
+        captureReport(app, name: "report-toolbar-reloaded")
     }
     func testReportWaitingDoesNotClaimZeroUsage() {
         let app = app("report-waiting")

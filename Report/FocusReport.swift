@@ -45,12 +45,11 @@ struct UsageSummaryView: View {
         List {
             UsageSummarySection(total: configuration.summary.total)
             if !configuration.apps.isEmpty {
-                Section("앱") { ForEach(configuration.apps) { row in HStack { Label(row.token); Spacer(); Text(formatted(row.duration)) } } }
+                Section("앱") { ForEach(configuration.apps) { row in HStack { Label(row.token); Spacer(); Text(formatted(row.duration)).monospacedDigit() } } }
             }
             if !configuration.websites.isEmpty {
-                Section("웹사이트") { ForEach(configuration.websites) { row in HStack { Label(row.token); Spacer(); Text(formatted(row.duration)) } } }
+                Section("웹사이트") { ForEach(configuration.websites) { row in HStack { Label(row.token); Spacer(); Text(formatted(row.duration)).monospacedDigit() } } }
             }
-            Section { Text("다음 집중 시간에 제한할 항목을 골라보세요.").font(.footnote) }
         }
     }
     private func formatted(_ seconds: TimeInterval) -> String { Duration.seconds(seconds).formatted(.units(allowed: [.hours, .minutes], width: .wide)) }
