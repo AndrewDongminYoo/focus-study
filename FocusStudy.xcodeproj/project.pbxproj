@@ -18,6 +18,7 @@
 		21E33EEE42C54C58C39FB8CE /* FocusGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BE36FC578F5BE7554D484FD /* FocusGuideView.swift */; };
 		2223AD7702556469FD055BA5 /* SessionRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = C319BE9A1C80D0D864BC6263 /* SessionRecord.swift */; };
 		2364D36A284307BF97D90516 /* EverydaySettingsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33C23E014FD02FF57A213162 /* EverydaySettingsModel.swift */; };
+		2432ECBDCC5153BC169BD61B /* StartLatencyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12D6AC995C58C331D7D32953 /* StartLatencyTests.swift */; };
 		25D34E51A83B9EAB02B652D6 /* FocusModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A79936C6EE2CD49F1C577E32 /* FocusModel.swift */; };
 		273EF2F6149CC12979F5CDB1 /* SharedControlStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9124EDD32B42B6B7DC563AC8 /* SharedControlStore.swift */; };
 		297118490F6E579348F3E665 /* SelectionFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8BD3DEDFDB2421AD65430A2 /* SelectionFeedback.swift */; };
@@ -142,6 +143,7 @@
 /* Begin PBXFileReference section */
 		075F44517A7B663FB87D2B46 /* EverydaySettingsModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EverydaySettingsModelTests.swift; sourceTree = "<group>"; };
 		0A458766C7C3F49D3EC0BDC5 /* FocusMonitor.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = FocusMonitor.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		12D6AC995C58C331D7D32953 /* StartLatencyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartLatencyTests.swift; sourceTree = "<group>"; };
 		19F3D8987BD6C6691060C1F9 /* FocusRuntimeHolder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusRuntimeHolder.swift; sourceTree = "<group>"; };
 		1AA2D86BDEB87B9F650B7BDD /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		32E2982CA955C853A36A4B57 /* SessionControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionControl.swift; sourceTree = "<group>"; };
@@ -341,6 +343,7 @@
 				3B731670DFB36A4517DB2AFB /* FocusSettingsTests.swift */,
 				9AF1F08069A8EBE3F00C1594 /* ScreenTimeAdapterTests.swift */,
 				9F2A8D2AB4DE7F5037838367 /* SelectionFeedbackTests.swift */,
+				12D6AC995C58C331D7D32953 /* StartLatencyTests.swift */,
 			);
 			path = SDKTests;
 			sourceTree = "<group>";
@@ -548,6 +551,7 @@
 				8419B6EB8D04D027B9401EDB /* SessionControl.swift in Sources */,
 				189BD9F6D2970E8EB3F5CDE7 /* SessionRecord.swift in Sources */,
 				1E4D7C7989DE3C003A640CC3 /* SharedControlStore.swift in Sources */,
+				2432ECBDCC5153BC169BD61B /* StartLatencyTests.swift in Sources */,
 				C8D2A66389908DCF21EA6AA7 /* StartupRecovery.swift in Sources */,
 				F1BC458275EADB9DC365F411 /* TimeRules.swift in Sources */,
 			);

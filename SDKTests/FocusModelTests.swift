@@ -75,6 +75,34 @@ import ManagedSettings
         XCTAssertEqual(model.remaining, 2400)
         model.start(); XCTAssertEqual(model.current?.length, 2400)
     }
+    func testStartMeasurementRunsAfterSuccessfulRefresh() {
+        let (original, history, _, _, _) = fixture()
+        var services = original.services
+        var samples: [TimeInterval] = []
+        weak var measuredModel: FocusModel?
+        services.didMeasureStart = { duration in
+            samples.append(duration)
+            XCTAssertEqual(measuredModel?.isActive, true)
+        }
+        let model = FocusModel(services: services, history: history)
+        measuredModel = model
+        model.start()
+        XCTAssertEqual(samples.count, 1)
+        if let duration = samples.first { XCTAssertGreaterThan(duration, 0) }
+    }
+    func testStartMeasurementIncludesRefreshFailureButSkipsRejectedTap() {
+        let (original, history, store, _, _) = fixture()
+        var services = original.services
+        var samples: [TimeInterval] = []
+        services.didMeasureStart = { samples.append($0) }
+        let model = FocusModel(services: services, history: history)
+        store.failRead = true
+        model.start()
+        XCTAssertNotNil(model.errorMessage)
+        XCTAssertEqual(samples.count, 1)
+        model.start()
+        XCTAssertEqual(samples.count, 1)
+    }
     func testChangingLengthDuringSessionKeepsRunningSession() {
         let (model, _, _, _, _) = fixture(); model.completeOnboarding()
         model.start(); let end = model.current?.expiresAt

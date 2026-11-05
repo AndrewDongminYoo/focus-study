@@ -66,6 +66,9 @@ import SwiftData
             services.writeEveryday = { try everyday.write($0, selection: $1) }
             #if DEBUG
             services.diagnostics = diagnostics
+            if diagnostics != nil {
+                services.didMeasureStart = { duration in NSLog("START_LATENCY total_ms=%.3f", duration * 1000) }
+            }
             #endif
             let container = try ModelContainer(for: SessionRecord.self, configurations: ModelConfiguration(cloudKitDatabase: .none))
             return (services, container)
