@@ -7,14 +7,27 @@ struct TodayHistoryView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("오늘의 세션") {
-                    if model.records.isEmpty { Text("아직 기록이 없어요.").foregroundStyle(.secondary) }
-                    ForEach(model.records, id: \.id) { record in
-                        HStack {
-                            VStack(alignment: .leading) { Text(record.startedAt, style: .time); Text(reasonText(record)).font(.caption).foregroundStyle(.secondary) }
-                            Spacer()
-                            // Only a completed session shows a duration; other rows show their reason only.
-                            if record.reason == .expired { Text("\(Int(record.focusDuration) / 60)분 \(Int(record.focusDuration) % 60)초").monospacedDigit() }
+                Section {
+                    if let error = model.errorMessage {
+                        Text(error).foregroundStyle(.secondary).accessibilityIdentifier("historyError")
+                        Button("다시 확인하기") { model.refresh() }.accessibilityIdentifier("historyRetry")
+                    } else {
+                        Text(SessionSummary(records: model.records).text)
+                            .accessibilityIdentifier("historySummary")
+                    }
+                }
+                if model.errorMessage == nil {
+                    Section("오늘의 세션") {
+                        if model.records.isEmpty { Text("아직 기록이 없어요.").foregroundStyle(.secondary) }
+                        ForEach(model.records, id: \.id) { record in
+                            HStack {
+                                if record.reason == .expired {
+                                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.tint)
+                                        .accessibilityLabel("완료").accessibilityIdentifier("completedSessionIcon")
+                                }
+                                VStack(alignment: .leading) { Text(record.startedAt, style: .time); Text(reasonText(record)).font(.caption).foregroundStyle(.secondary) }
+                                Spacer()
+                            }
                         }
                     }
                 }
@@ -36,7 +49,7 @@ struct TodayHistoryView: View {
     }
     private func reasonText(_ record: SessionRecord) -> String {
         switch record.reason {
-        case .expired: "\(Int(record.expiresAt.timeIntervalSince(record.startedAt)) / 60)분 만료"
+        case .expired: "\(Duration.seconds(record.focusDuration).formatted(.units(allowed: [.hours, .minutes], width: .wide))) 완료"
         case .earlyExit: "집중 종료"
         case .authorizationRevoked: "접근 철회로 중단"
         case .startFailed: "시작 실패"

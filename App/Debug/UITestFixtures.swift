@@ -144,6 +144,17 @@ extension FocusRuntime {
             attempts += 1
             if arguments.contains("startup-failure"), attempts == 1 { throw ControlIssue.io }
             let container = try ModelContainer(for: SessionRecord.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none))
+            if let index = arguments.firstIndex(of: "--ui-testing"), index + 1 < arguments.count, arguments[index + 1] == "history" {
+                // Seed today's records directly so completion rows do not depend on a backdated timer crossing midnight.
+                let history = SessionHistory(context: ModelContext(container), acknowledge: { _ in })
+                let now = Date(), start = max(Calendar.current.startOfDay(for: now), now.addingTimeInterval(-7200))
+                let samples: [(TimeInterval, EndReason)] = [(1500, .expired), (3000, .expired), (1500, .earlyExit), (1500, .deadlineMissed)]
+                for (index, sample) in samples.enumerated() {
+                    var session = ControlSession(startedAt: start.addingTimeInterval(Double(index) * 60), length: sample.0)
+                    session.phase = .terminal; session.reason = sample.1; session.observedAt = session.expiresAt
+                    try history.importTerminal(session)
+                }
+            }
             return (services, container)
         })
     }

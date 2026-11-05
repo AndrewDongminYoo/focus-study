@@ -42,6 +42,8 @@ SDK 또는 UI만 확인할 때는 test 명령에 `-only-testing:FocusSDKTests` �
 `--break-timing short`는 쉬는 시간 대기를 1·2·4초, 쉬는 시간을 3초, 마감 여유를 5초, 대기 유예를 2초로 줄이며 집중 시간은 줄이지 않습니다.
 `--ui-testing ending-soon`은 시작 버튼을 누르면 설정한 길이의 합성 세션을 집중 종료 10초 전부터 시작하며, `--break-timing short`와 함께 쓰면 바로 쉬고 다시 집중하지 않은 세션이 시작 버튼을 누른 뒤 약 19초에 마감에 닿습니다.
 `--ui-testing expiring`은 설정한 길이의 합성 세션을 만료 3초 전부터 시작해 완료 화면을 확인합니다.
+`--ui-testing history`는 오늘 날짜에 25분·50분 완료, 집중 종료, 마감 초과 기록을 메모리 저장소에 넣어 기록 화면을 확인합니다.
+세션 타이머를 소급하지 않으므로 자정 직후에도 기록은 오늘에 속하며, 실제 세션 실행의 증거는 아닙니다.
 `--everyday-fixture blocking`은 실행 5분 전(5분 단위)에 시작해 2시간 동안 이어지는 합성 매일 제한을 합성 앱 1개와 함께 저장합니다. 메모리 안의 store와 monitoring만 쓰며 실제 제한을 적용하지 않습니다.
 fixture 엔진과 상태 줄은 실행 시각이 12시와 13시 사이가 되는 고정 UTC 오프셋 시간대로 매일 제한을 계산하므로, 기기 시각과 관계없이 범위가 23:55나 자정에 닿지 않습니다.
 `--focus-filter-refusal <access|selection|busy|history|error>`는 실행 시 그 사유의 마지막 집중 모드 시작 거절을 메모리 설정에 저장해 설정의 집중 모드 안내에서 확인하게 합니다. 실제 집중 모드를 읽거나 바꾸지 않습니다.
@@ -111,6 +113,7 @@ App과 Monitor만 같은 App Group을 사용하며 Report에는 App Group entitl
 ## 공개 PR의 CI
 
 `.github/workflows/verify.yml`은 PR의 실제 head를 checkout하고 SwiftPM 테스트, 두 프로세스 경쟁 검증, 서명 없는 SDK/mock UI 테스트와 기기용 Release 빌드를 실행합니다. `contents: read` 권한만 사용하며 계정·인증서·시크릿·entitlement를 구성하지 않습니다.
+합성 UI 테스트의 xcresult 첨부파일은 `focus-test-attachments` artifact로 3일간 보관하므로 CI에서 생성한 화면 캡처를 검토할 수 있습니다.
 
 runner·Xcode·Simulator 버전은 workflow에 명시된 값을 기준으로 합니다.
 지정한 runtime이 없으면 검증을 건너뛰지 않고 실패합니다.

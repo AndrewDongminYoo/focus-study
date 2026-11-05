@@ -150,8 +150,8 @@ struct FocusView: View {
     }
     /// Completed sessions only: early exits and interruptions do not count toward today's focus.
     private var todaySummary: String {
-        let completed = model.records.filter { $0.reason == .expired }
-        return "오늘 집중 \(Int(completed.reduce(0) { $0 + $1.focusDuration }) / 60)분 · \(completed.count)회"
+        guard model.errorMessage == nil else { return "오늘의 기록" }
+        return SessionSummary(records: model.records).text
     }
     private var completedMinutes: Int { Int(model.completedLength ?? model.services.settings.lengthSeconds) / 60 }
     private func blockerText(_ blocker: StartBlocker) -> String {

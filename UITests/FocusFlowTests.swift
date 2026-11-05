@@ -5,7 +5,13 @@ final class FocusFlowTests: XCTestCase {
     }
     /// Today's history and the usage report open from the one-line summary at the bottom of the timer screen.
     private func openToday(_ app: XCUIApplication) {
-        XCTAssertTrue(app.buttons["todaySummary"].waitForExistence(timeout: 8)); app.buttons["todaySummary"].tap()
+        let summary = app.buttons["todaySummary"], done = app.buttons["historyDone"]
+        XCTAssertTrue(summary.waitForExistence(timeout: ready))
+        waitHittable(summary)
+        summary.tap()
+        // Retry only while the summary still takes a tap and the sheet has not appeared.
+        if !done.waitForExistence(timeout: 3), summary.isHittable { summary.tap() }
+        XCTAssertTrue(done.waitForExistence(timeout: ready))
     }
     private func openReport(_ app: XCUIApplication) {
         openToday(app); XCTAssertTrue(app.buttons["report"].waitForExistence(timeout: 5)); app.buttons["report"].tap()
@@ -38,6 +44,50 @@ final class FocusFlowTests: XCTestCase {
         app.buttons["settingsDone"].tap()
         XCTAssertTrue(app.staticTexts["countdown"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["countdown"].label, "남은 시간 45분 0초")
+    }
+    func testHistoryDistinguishesCompletedSessionAtConfiguredLength() {
+        let app = app("history", extra: ["-AppleLanguages", "(ko)", "-AppleLocale", "ko_KR"])
+        XCTAssertTrue(app.buttons["todaySummary"].waitForExistence(timeout: ready))
+        let summary = app.buttons["todaySummary"].label
+        captureReport(app, name: "timer-summary-mixed-history")
+        openToday(app)
+        XCTAssertTrue(app.staticTexts["historySummary"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["historySummary"].label, summary)
+        XCTAssertEqual(summary, "오늘 집중 1시간 15분 · 2회")
+        XCTAssertTrue(app.staticTexts["25분 완료"].exists)
+        XCTAssertTrue(app.staticTexts["50분 완료"].exists)
+        XCTAssertEqual(app.images.matching(identifier: "completedSessionIcon").count, 2)
+        XCTAssertTrue(app.staticTexts["집중 종료"].exists)
+        XCTAssertTrue(app.staticTexts["시간 초과로 집중에서 제외"].exists)
+        XCTAssertFalse(app.staticTexts["50분 만료"].exists)
+        captureReport(app, name: "history-completed-and-ended")
+    }
+    func testEmptyHistoryShowsZeroSummary() {
+        let app = app(extra: ["-AppleLanguages", "(ko)", "-AppleLocale", "ko_KR"])
+        XCTAssertTrue(app.buttons["todaySummary"].waitForExistence(timeout: ready))
+        let summary = app.buttons["todaySummary"].label
+        openToday(app)
+        XCTAssertTrue(app.staticTexts["historySummary"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["historySummary"].label, summary)
+        XCTAssertEqual(summary, "오늘 집중 0분 · 0회")
+        XCTAssertTrue(app.staticTexts["아직 기록이 없어요."].exists)
+        captureReport(app, name: "history-empty")
+    }
+    func testHistoryErrorDoesNotShowSuccessfulSummaryOrEmptyState() {
+        let app = app("registration-failure")
+        XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: ready)); app.buttons["start"].tap()
+        XCTAssertTrue(app.staticTexts["startError"].waitForExistence(timeout: 5))
+        let error = app.staticTexts["startError"].label
+        XCTAssertEqual(app.buttons["todaySummary"].label, "오늘의 기록")
+        openToday(app)
+        XCTAssertTrue(app.staticTexts["historyError"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["historyError"].label, error)
+        XCTAssertFalse(app.staticTexts["historySummary"].exists)
+        XCTAssertFalse(app.staticTexts["아직 기록이 없어요."].exists)
+        captureReport(app, name: "history-error")
+        app.buttons["historyRetry"].tap()
+        XCTAssertTrue(app.staticTexts["historySummary"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["historyError"].exists)
     }
     func testKoreanSystemTimePicker() {
         let app = app(extra: ["-AppleLanguages", "(ko)", "-AppleLocale", "ko_KR"])
