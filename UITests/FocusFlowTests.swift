@@ -66,6 +66,22 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["아직 기록이 없어요."].exists)
         captureReport(app, name: "history-empty")
     }
+    func testHistoryErrorDoesNotShowSuccessfulSummaryOrEmptyState() {
+        let app = app("registration-failure")
+        XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: ready)); app.buttons["start"].tap()
+        XCTAssertTrue(app.staticTexts["startError"].waitForExistence(timeout: 5))
+        let error = app.staticTexts["startError"].label
+        XCTAssertEqual(app.buttons["todaySummary"].label, "오늘의 기록")
+        openToday(app)
+        XCTAssertTrue(app.staticTexts["historyError"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["historyError"].label, error)
+        XCTAssertFalse(app.staticTexts["historySummary"].exists)
+        XCTAssertFalse(app.staticTexts["아직 기록이 없어요."].exists)
+        captureReport(app, name: "history-error")
+        app.buttons["historyRetry"].tap()
+        XCTAssertTrue(app.staticTexts["historySummary"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["historyError"].exists)
+    }
     func testKoreanSystemTimePicker() {
         let app = app(extra: ["-AppleLanguages", "(ko)", "-AppleLocale", "ko_KR"])
         _ = openEveryday(app)
