@@ -5,7 +5,13 @@ final class FocusFlowTests: XCTestCase {
     }
     /// Today's history and the usage report open from the one-line summary at the bottom of the timer screen.
     private func openToday(_ app: XCUIApplication) {
-        XCTAssertTrue(app.buttons["todaySummary"].waitForExistence(timeout: 8)); app.buttons["todaySummary"].tap()
+        let summary = app.buttons["todaySummary"], done = app.buttons["historyDone"]
+        XCTAssertTrue(summary.waitForExistence(timeout: ready))
+        waitHittable(summary)
+        summary.tap()
+        // Retry only while the summary still takes a tap and the sheet has not appeared.
+        if !done.waitForExistence(timeout: 3), summary.isHittable { summary.tap() }
+        XCTAssertTrue(done.waitForExistence(timeout: ready))
     }
     private func openReport(_ app: XCUIApplication) {
         openToday(app); XCTAssertTrue(app.buttons["report"].waitForExistence(timeout: 5)); app.buttons["report"].tap()
@@ -43,6 +49,7 @@ final class FocusFlowTests: XCTestCase {
         let app = app("history", extra: ["-AppleLanguages", "(ko)", "-AppleLocale", "ko_KR"])
         XCTAssertTrue(app.buttons["todaySummary"].waitForExistence(timeout: ready))
         let summary = app.buttons["todaySummary"].label
+        captureReport(app, name: "timer-summary-mixed-history")
         openToday(app)
         XCTAssertTrue(app.staticTexts["historySummary"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["historySummary"].label, summary)

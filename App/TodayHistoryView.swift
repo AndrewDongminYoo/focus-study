@@ -8,19 +8,26 @@ struct TodayHistoryView: View {
         NavigationStack {
             List {
                 Section {
-                    Text(SessionSummary(records: model.records).text)
-                        .accessibilityIdentifier("historySummary")
+                    if let error = model.errorMessage {
+                        Text(error).foregroundStyle(.secondary).accessibilityIdentifier("historyError")
+                        Button("다시 확인하기") { model.refresh() }.accessibilityIdentifier("historyRetry")
+                    } else {
+                        Text(SessionSummary(records: model.records).text)
+                            .accessibilityIdentifier("historySummary")
+                    }
                 }
-                Section("오늘의 세션") {
-                    if model.records.isEmpty { Text("아직 기록이 없어요.").foregroundStyle(.secondary) }
-                    ForEach(model.records, id: \.id) { record in
-                        HStack {
-                            if record.reason == .expired {
-                                Image(systemName: "checkmark.circle.fill").foregroundStyle(.tint)
-                                    .accessibilityLabel("완료").accessibilityIdentifier("completedSessionIcon")
+                if model.errorMessage == nil {
+                    Section("오늘의 세션") {
+                        if model.records.isEmpty { Text("아직 기록이 없어요.").foregroundStyle(.secondary) }
+                        ForEach(model.records, id: \.id) { record in
+                            HStack {
+                                if record.reason == .expired {
+                                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.tint)
+                                        .accessibilityLabel("완료").accessibilityIdentifier("completedSessionIcon")
+                                }
+                                VStack(alignment: .leading) { Text(record.startedAt, style: .time); Text(reasonText(record)).font(.caption).foregroundStyle(.secondary) }
+                                Spacer()
                             }
-                            VStack(alignment: .leading) { Text(record.startedAt, style: .time); Text(reasonText(record)).font(.caption).foregroundStyle(.secondary) }
-                            Spacer()
                         }
                     }
                 }

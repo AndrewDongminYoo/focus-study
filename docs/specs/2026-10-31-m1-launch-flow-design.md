@@ -103,6 +103,7 @@ The operator decided that a person with no settings goes through onboarding and 
   - The builder writes the length-aware copy with the `user-facing-copy` skill, in 해요체.
   - Issue #35 uses the completed session's actual focus length followed by "완료" and a checkmark, and reuses the timer's completed-only summary above the history section.
     Summary and history durations use the report's `Duration` hour/minute units format.
+    A model error replaces the summary and history rows with the existing error and a retry action; the timer's history button uses "오늘의 기록" until refresh succeeds.
 
 ## Constraints
 
