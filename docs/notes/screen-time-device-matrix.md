@@ -224,3 +224,11 @@ Simulator와 DEBUG fixture(`--focus-filter-refusal`) 결과는 아래 행의 증
 | 14. 첫 잠금 해제 전 예약 집중 모드   | `perform()` 실행 여부와 저장된 거절                                            | 미검증 |
 
 제한한 앱의 알림 표시, 백그라운드 `perform()`의 실행·지연·반복과 빠른 호출 순서, 백그라운드에서 `DeviceActivityCenter` 등록과 `ManagedSettingsStore` 쓰기, 메신저별 허용한 사람, 긴급 알림 종류별 동작, Settings의 필터 표시, 꺼진 상태의 `current`, 집중 모드 직접 전환 시 값, 첫 잠금 해제 전 `perform()`, iOS 17 runtime은 모두 미검증이다.
+
+## Start latency sample: 2026-11-05
+
+On the iPhone 16 Pro with iOS 27.0.1 (`24A446`), the first measured accepted `FocusModel.start()` call in the installed diagnostic Debug build took 2,522.737 ms.
+The timer started normally, and a subsequent break was confirmed on the phone.
+This is one successful real-path sample, not a percentile, tap-to-render duration, or shield-delivery measurement.
+See the [measurement record](2026-11-05-start-latency.md) for build identity and boundaries.
+The new early-return operation and dedicated break screen remain unverified on a physical device.
