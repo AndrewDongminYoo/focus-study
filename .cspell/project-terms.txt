@@ -46,6 +46,8 @@ xcassets
 xcodegen
 xcodeproj
 xcprivacy
+xcresult
+xcresulttool
 xcrun
 xctest
 XCUIApplication
