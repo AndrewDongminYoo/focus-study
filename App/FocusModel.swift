@@ -21,6 +21,8 @@ import Observation
     var writeEveryday: (EverydaySchedule, FamilyActivitySelection) throws -> Void = { _, _ in throw ControlIssue.io }
     #if DEBUG
     var diagnostics: DeviceDiagnostics?
+    /// Opt-in timing of the complete synchronous start call; never carries selection or usage data.
+    var didMeasureStart: ((TimeInterval) -> Void)?
     /// `--ui-testing ending-soon`: the focus seconds left when `start()` begins a session; the start time moves into the past.
     var fixtureFocusLeft: TimeInterval?
     #endif
@@ -139,6 +141,12 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
 
     func start() {
         guard canStart else { return }
+        #if DEBUG
+        let measurementStarted = services.didMeasureStart == nil ? nil : ProcessInfo.processInfo.systemUptime
+        defer {
+            if let measurementStarted { services.didMeasureStart?(ProcessInfo.processInfo.systemUptime - measurementStarted) }
+        }
+        #endif
         completedSessionID = nil; completedLength = nil
         isStarting = true; defer { isStarting = false }
         refresh()
