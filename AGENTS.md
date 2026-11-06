@@ -7,20 +7,17 @@ It provides individual Screen Time authorization, app and website selection, foc
 A session has up to 3 breaks of up to 3 minutes, each after a waiting screen; “다시 집중하기” can end a break early, and a deadline determines whether the session counts as unfocused (see the [M2 design](docs/specs/2026-11-01-m2-break-pass-design.md) and its linked early-return amendment).
 An everyday blocking layer has its own selection, one daily range and at most 3 unblocked windows; it runs every day without the app, blocks together with the focus layer, and a break lifts it (see the [M3 design](docs/specs/2026-11-01-m3-schedule-layer-design.md)).
 A Focus filter starts a normal focus session when an iOS Focus with its session option turns on and ends that session when the Focus turns off; iOS filters notifications by the Focus's own settings, which the app neither reads nor changes (see the [M4 design](docs/specs/2026-11-01-m4-focus-filter-design.md)).
+A read-only Live Activity projects confirmed timing as planned times, never shielding (see [contract](docs/specs/2026-11-06-live-activity-decision.md)).
 Keep changes within this baseline unless the task explicitly expands it: no other pause, parental management, Android client, accounts, backend, AI, or rewards.
 Preserve existing Korean UI text; use English for code identifiers and technical documentation.
 
 ## Sources and project generation
 
-- `project.yml` is the XcodeGen source for targets, build settings, dependencies, and the shared `FocusStudy` scheme.
-- `FocusStudy.xcodeproj` is tracked generated output.
-  Change `project.yml` first, run `xcodegen generate`, and review the generated diff rather than editing the project file by hand.
-- `Package.swift` defines the macOS-testable modules and their source inclusion/exclusion rules.
-  Keep these rules aligned when adding files under `App/` or `Report/`.
-- Both build definitions use Swift 5 language mode; the package requires Swift tools 6.0 and macOS 14+ for host tests.
-  There are no external package dependencies in the current manifest.
-- `.github/workflows/verify.yml` defines CI checks and its explicit Xcode/runtime pins.
-  Read it before changing toolchain assumptions; the deployment target does not identify the SDK required to compile current API references.
+- `project.yml` owns targets, settings, dependencies and the shared scheme.
+  Change it first, regenerate tracked `FocusStudy.xcodeproj` with `xcodegen generate`, and review the diff; never edit generated output directly.
+- `Package.swift` owns host modules and source rules; align it when adding App or Report files.
+- Both use Swift 5 mode; host tests require Swift tools 6.0 and macOS 14+. There are no external dependencies.
+- `.github/workflows/verify.yml` owns SDK/runtime pins; the deployment target alone does not establish API availability.
 
 Use these current documentation paths:
 
@@ -66,11 +63,10 @@ Keep new plans, specs, and notes under `docs/plans/`, `docs/specs/`, and `docs/n
 | `App/Debug/UITestFixtures.swift`                                                                                      | Synthetic authorization, selection, monitoring, storage failures, and report lifecycle/state probes                                                                                                                                                                          |
 | `Integration/DeviceDiagnostics.swift`, `App/Debug/DeviceDiagnosticsSection.swift`                                     | Opt-in DEBUG diagnostics around the real monitoring adapter and shared callback engine                                                                                                                                                                                       |
 
-The app and Monitor compile `Shared/` and `Integration/` directly into their targets.
-Report has a separate source boundary and does not depend on those directories.
-`Presentation/` contains display-only code compiled into App and Report; it does not transport report data to the host.
-SwiftPM exposes `FocusCore`, `FocusHistory`, and `FocusReportLogic` for host tests; keep Screen Time SDK imports out of `Shared/`.
-Use the existing protocols and injected closures for failure tests rather than adding another service framework.
+App and Monitor compile `Shared/` and `Integration/`; Report stays separate.
+`Presentation/` shares views between App and Report, never report data.
+Widget compiles only `Shared/FocusActivityContent.swift` and Activity attributes/views, with no App Group or control-store access.
+SwiftPM exposes `FocusCore`, `FocusHistory`, `FocusReportLogic`; keep Screen Time imports out of `Shared/` and reuse injected protocols/closures.
 
 ## Behavioral changes and verification
 

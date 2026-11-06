@@ -11,6 +11,8 @@ import Observation
     let matchesSelection: (FamilyActivitySelection) -> Bool
     var isFixture = false
     var settings = FocusSettings()
+    /// Display-only notification, invoked after control/history work and outside every process lock.
+    var activityDidChange: () -> Void = {}
     /// Writes the session-scoped selection copy for a break. Without one, no break can start, so the shield is never cleared.
     var saveBreakSelection: (FamilyActivitySelection, UUID) throws -> Void = { _, _ in throw ControlIssue.io }
     /// The stored everyday selection; an unreadable everyday file gives `nil`, because the layer then blocks nothing.
@@ -102,6 +104,7 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
         self.services = services; self.history = history
     }
     func refresh(clockChanged: Bool = false) {
+        defer { services.activityDidChange() }
         services.authorization.refresh(); now = Date()
         do {
             try services.engine.reconcile(now: now, authorized: access == .approved, clockChanged: clockChanged)
@@ -192,7 +195,10 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
     func end() {
         guard let id = current?.id else { return }
         do { try services.engine.finish(id: id, reason: .earlyExit, now: Date()); refresh() }
-        catch { current = nil; errorMessage = "종료 상태를 저장하지 못했어요. 다시 확인해 주세요." }
+        catch {
+            services.activityDidChange()
+            current = nil; errorMessage = "종료 상태를 저장하지 못했어요. 다시 확인해 주세요."
+        }
     }
     func dismissCompletion() { completedSessionID = nil; completedLength = nil }
     func completeOnboarding() { services.settings.hasCompletedOnboarding = true }

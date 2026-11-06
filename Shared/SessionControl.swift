@@ -84,6 +84,8 @@ final class SessionControl {
         }
     }
     func snapshot() throws -> ControlEnvelope { try store.withExclusiveAccess { try read($0) } }
+    /// Optional display reads never invoke recovery, even when metadata is unavailable.
+    func activitySnapshot() throws -> ControlSession? { try store.withExclusiveAccess { try $0.load().session } }
     /// `now` is the wall clock of the section and of its everyday convergence; `endedAt`, when given, is the recorded end time of the session.
     func finish(id: UUID, reason: EndReason, now: Date, endedAt: Date? = nil) throws {
         try section(now: now) { locked in
@@ -258,7 +260,7 @@ final class SessionControl {
             // Step 5 is the convergence at the end of this section, against the new file.
         }
     }
-    /// A read-only section, as `snapshot()` is: it runs no convergence step.
+    /// No convergence step; unreadable control metadata still invokes the recovery reader.
     func everydayStatus(now: Date, authorized: Bool) throws -> EverydayStatus {
         try store.withExclusiveAccess { locked in
             let envelope = try read(locked)
@@ -449,7 +451,7 @@ final class SessionControl {
     static func everydayActivities(_ schedule: EverydaySchedule) -> [(part: EverydayPart, start: Int, end: Int)] {
         [(.range, schedule.rangeStart, schedule.rangeEnd)] + schedule.windows.enumerated().map { (.window($0.offset + 1), $0.element.start, $0.element.end) }
     }
-    /// Every lock section except `snapshot()` and `everydayStatus` ends with the everyday convergence, also when its focus part threw.
+    /// Engine mutation sections end with everyday convergence, also when their focus part threw.
     /// When the read of `control.json` threw, the section has no envelope, and no convergence step runs.
     private func section<T>(now: Date, access: Bool? = nil, mayRegister: Bool = true, _ body: (TrackedControl) throws -> T) throws -> T {
         try store.withExclusiveAccess { base in

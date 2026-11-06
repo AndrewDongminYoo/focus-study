@@ -4,6 +4,9 @@
 모든 자동 테스트는 합성 데이터 또는 앱이 만든 기록만 사용했다.
 이후 운영자의 실제 기기 확인 결과는 아래 후속 기록에 구분해 남긴다.
 
+The Live Activity implementation adds an unsigned `.activity` product; earlier three-target signing evidence below does not cover it.
+Its [feasibility record](2026-11-06-live-activity-feasibility.md) separates synthetic ActivityKit presentation from pending physical-device and iOS 17 release checks.
+
 ## 실행한 검증
 
 아래는 2026-10-26 로컬 실행 당시 기록이며 현재 head를 재검증한 결과가 아니다.

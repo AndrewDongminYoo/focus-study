@@ -159,8 +159,8 @@ SwiftData `SessionRecord`는 UUID를 고유 키로 하고 시작/예정 만료/�
 ## Live Activity adoption amendment: 2026-11-06
 
 The [Live Activity decision](2026-11-06-live-activity-decision.md) adopts an optional local, read-only display of focus, break, and latest-return timing.
-The three product targets described above remain the current implementation; [implementation #74](https://github.com/AndrewDongminYoo/focus-study/issues/74) will add one WidgetKit extension after its feasibility gate.
-This decision changes the planned product scope, not the current target configuration or release-readiness status.
+Implementation for [#74](https://github.com/AndrewDongminYoo/focus-study/issues/74) adds a fourth product target, the isolated `FocusActivity` WidgetKit extension.
+The [feasibility record](../notes/2026-11-06-live-activity-feasibility.md) distinguishes verified simulator behavior from physical-device and iOS 17 release gates.
 The existing engine remains authoritative; display payloads contain only a session UUID, phase, timing, and freshness metadata.
 The new extension will receive no App Group access, selections, report data, or history.
 Existing focus/break/deadline rules, everyday-layer independence, and the iOS 17 minimum remain unchanged.

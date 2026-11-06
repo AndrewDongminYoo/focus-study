@@ -2,7 +2,17 @@ import SwiftUI
 import SwiftData
 
 @main struct FocusStudyApp: App {
-    var body: some Scene { WindowGroup { FocusBootstrap() } }
+    var body: some Scene {
+        WindowGroup {
+            #if DEBUG
+            if let index = ProcessInfo.processInfo.arguments.firstIndex(of: "--activity-preview"), index + 1 < ProcessInfo.processInfo.arguments.count {
+                FocusActivityPreviewView(mode: ProcessInfo.processInfo.arguments[index + 1])
+            } else { FocusBootstrap() }
+            #else
+            FocusBootstrap()
+            #endif
+        }
+    }
 }
 @MainActor private struct FocusBootstrap: View {
     @State private var model: FocusModel?
@@ -28,6 +38,7 @@ import SwiftData
                     Button("다시 확인하기") { load() }.accessibilityIdentifier("startupRetry")
                     if let runtime {
                         Button("현재 세션 종료하기", role: .destructive) {
+                            defer { runtime.holder.notifyActivity() }
                             do {
                                 try runtime.recovery.endCurrent(now: Date())
                                 self.errorMessage = "종료를 요청했어요. 다시 확인해 주세요."
@@ -42,6 +53,7 @@ import SwiftData
             // The off call is one-shot, so each foreground repairs a marker that it left set.
             if model != nil, let runtime { Task { await runtime.checkActivation() }; return }
             guard model == nil, let runtime else { return }
+            defer { runtime.holder.notifyActivity() }
             do { try runtime.recovery.engine.reconcile(now: Date(), authorized: runtime.hasAccess()) }
             catch { errorMessage = "세션 상태를 확인하지 못했어요. 다시 확인해 주세요." }
         }
