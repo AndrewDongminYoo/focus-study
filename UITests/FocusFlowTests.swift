@@ -296,6 +296,84 @@ final class FocusFlowTests: XCTestCase {
         if toggle.value as? String == before { toggle.switches.firstMatch.tap() }
         XCTAssertNotEqual(toggle.value as? String, before)
     }
+    func testEverydayPreviewShowsDraftSeparatelyFromStoredSchedule() {
+        let app = app(extra: ["--everyday-fixture", "preview"])
+        _ = openEveryday(app)
+        let draft = app.staticTexts["everydayDraftSegment.1"]
+        scrollEveryday(app, to: draft)
+        XCTAssertEqual(draft.label, "08:00부터 12:00까지, 제한")
+        XCTAssertEqual(app.staticTexts["everydayDraftSegment.2"].label, "12:00부터 13:00까지, 해제")
+        XCTAssertEqual(app.staticTexts["everydayDraftSegment.3"].label, "13:00부터 18:00까지, 제한")
+        captureReport(app, name: "everyday-preview")
+        let stored = app.buttons["저장된 일정"]
+        scrollEveryday(app, to: stored); stored.tap()
+        let storedFirst = app.staticTexts["everydayStoredSegment.1"]
+        scrollEveryday(app, to: storedFirst)
+        XCTAssertEqual(storedFirst.label, "08:00부터 12:00까지, 제한")
+        captureReport(app, name: "everyday-preview-stored")
+        let hierarchy = XCTAttachment(string: app.debugDescription)
+        hierarchy.name = "everyday-preview-accessibility"; hierarchy.lifetime = .keepAlways; add(hierarchy)
+        for _ in 0..<4 where !app.buttons["삭제"].firstMatch.isHittable { app.swipeDown() }
+        app.buttons["삭제"].firstMatch.tap()
+        scrollEveryday(app, to: draft)
+        XCTAssertEqual(draft.label, "08:00부터 18:00까지, 제한")
+        scrollEveryday(app, to: storedFirst)
+        XCTAssertEqual(storedFirst.label, "08:00부터 12:00까지, 제한")
+        captureReport(app, name: "everyday-preview-unsaved-comparison")
+        app.buttons["everydaySave"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["everydaySaveSuccess"].waitForExistence(timeout: 5))
+        XCTAssertEqual(storedFirst.label, "08:00부터 18:00까지, 제한")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.buttons["everydayRow"].tap()
+        scrollEveryday(app, to: draft)
+        XCTAssertEqual(draft.label, "08:00부터 18:00까지, 제한")
+    }
+    func testEverydayPreviewRejectsOverlappingDraftWithoutReplacingStoredSchedule() {
+        let app = app(extra: ["--everyday-fixture", "preview"])
+        _ = openEveryday(app)
+        let add = app.buttons["everydayAddWindow"]
+        scrollEveryday(app, to: add); add.tap()
+        let lunch = app.buttons["점심"]
+        if !lunch.waitForExistence(timeout: 3), add.isHittable { add.tap() }
+        XCTAssertTrue(lunch.waitForExistence(timeout: 5)); lunch.tap()
+        let invalid = app.staticTexts["everydayDraftInvalid"]
+        scrollEveryday(app, to: invalid)
+        XCTAssertTrue(invalid.isHittable)
+        XCTAssertFalse(app.staticTexts["everydayDraftSegment.1"].exists)
+        XCTAssertFalse(app.buttons["everydaySave"].isEnabled)
+        let stored = app.buttons["저장된 일정"]
+        scrollEveryday(app, to: stored); stored.tap()
+        let storedFirst = app.staticTexts["everydayStoredSegment.1"]
+        scrollEveryday(app, to: storedFirst)
+        XCTAssertEqual(storedFirst.label, "08:00부터 12:00까지, 제한")
+        captureReport(app, name: "everyday-preview-invalid")
+    }
+    func testEverydayPreviewAtLargestText() {
+        let app = app(extra: ["--everyday-fixture", "preview", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        _ = openEveryday(app)
+        let first = app.staticTexts["everydayDraftSegment.1"], second = app.staticTexts["everydayDraftSegment.2"], third = app.staticTexts["everydayDraftSegment.3"]
+        scrollEveryday(app, to: first)
+        XCTAssertEqual(first.label, "08:00부터 12:00까지, 제한")
+        captureReport(app, name: "everyday-preview-largest-text")
+        scrollEveryday(app, to: third)
+        XCTAssertLessThan(first.frame.minY, second.frame.minY)
+        XCTAssertLessThan(second.frame.minY, third.frame.minY)
+        XCTAssertTrue(app.buttons["everydaySave"].isHittable)
+        captureReport(app, name: "everyday-preview-largest-text-end")
+    }
+    private func scrollEveryday(_ app: XCUIApplication, to element: XCUIElement) {
+        let top = app.navigationBars["매일 제한"].frame.maxY + 12
+        let bottom = app.buttons["everydaySave"].frame.minY - 80
+        for _ in 0..<20 {
+            if element.isHittable, element.frame.midY > top, element.frame.maxY < bottom { break }
+            let down = element.exists && element.frame.midY < top
+            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: down ? 0.35 : 0.60))
+            let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: down ? 0.60 : 0.35))
+            start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.1)
+        }
+        XCTAssertTrue(element.waitForExistence(timeout: 5))
+        XCTAssertTrue(element.isHittable)
+    }
     func testEverydayLayerTurnsOnFromSettings() {
         let app = app()
         let status = openEveryday(app)
