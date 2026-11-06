@@ -155,3 +155,14 @@ SwiftData `SessionRecord`는 UUID를 고유 키로 하고 시작/예정 만료/�
 - 타깃과 데이터 경계의 "App Group에는 `ControlEnvelope.schemaVersion`과 선택적인 `session`을 저장한다.": envelope에는 선택적인 `filterActivation`(집중 모드 활성화 표시, `UUID`)도 저장한다. 집중 모드 이름은 저장하지 않으며 기기 밖으로 보내지 않는다. `schemaVersion`은 2로 남는다.
 - 같은 절의 "세션에는 UUID, 시작/만료 시각, 단계(`preparing/active/ending/terminal`), 종료 사유·관측 시각을 둔다.": 세션에는 선택적인 `origin`(`manual` 또는 `focusFilter`)도 둔다. 값이 없으면 `manual`이다.
 - 세션 상태와 원자성 5단계의 "종료는 ID 일치 확인 후": 집중 모드를 끌 때의 종료는 호출자가 가진 ID가 아니라 잠금 안에서 저장된 세션의 `origin`으로 대상을 고른다. `focusFilter` 세션만 이 규칙으로 끝난다. 같은 잠금 안에서 그 호출의 권한 값으로 M2의 reconcile 순서가 먼저 실행되므로, 시간이 이미 끝난 세션은 `.expired` 또는 `.deadlineMissed`로, 권한이 없으면 `.authorizationRevoked`로 끝난다. 그 뒤에도 세션이 `terminal`이 아닐 때만 종료 사유가 `.earlyExit`("집중 종료")이다.
+
+## Live Activity adoption amendment: 2026-11-06
+
+The [Live Activity decision](2026-11-06-live-activity-decision.md) adopts an optional local, read-only display of focus, break, and latest-return timing.
+The three product targets described above remain the current implementation; [implementation #74](https://github.com/AndrewDongminYoo/focus-study/issues/74) will add one WidgetKit extension after its feasibility gate.
+This decision changes the planned product scope, not the current target configuration or release-readiness status.
+The existing engine remains authoritative; display payloads contain only a session UUID, phase, timing, and freshness metadata.
+The new extension will receive no App Group access, selections, report data, or history.
+Existing focus/break/deadline rules, everyday-layer independence, and the iOS 17 minimum remain unchanged.
+No completion notification, home widget, interactive session control, server, or push transport is added to this scope.
+The decision contract defines fallback, stale-content limits, privacy, and implementation/device verification gates.
