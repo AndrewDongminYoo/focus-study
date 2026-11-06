@@ -31,6 +31,7 @@ import XCTest
     let client = ActivityTestClient()
     var session: ControlSession?
     var unreadable = false, foreground = true
+    var lockTimeoutRead: Int?, snapshotReads = 0
     var attempted: Set<UUID> = []
     init() {
         var value = ControlSession(startedAt: Date(timeIntervalSince1970: 1000))
@@ -38,6 +39,8 @@ import XCTest
     }
     func coordinator() -> FocusActivityCoordinator {
         FocusActivityCoordinator(client: client, snapshot: { [unowned self] in
+            snapshotReads += 1
+            if snapshotReads == lockTimeoutRead { throw ControlIssue.lockTimeout }
             if unreadable { throw ControlIssue.io }; return session
         }, timing: .standard, now: { Date(timeIntervalSince1970: 1100) }, canStart: { [unowned self] in foreground },
         hasAttempted: { [unowned self] in attempted.contains($0) }, markAttempted: { [unowned self] in attempted.insert($0) })
@@ -124,6 +127,28 @@ import XCTest
         h.session?.phase = .waiting; h.session?.pausedAt = Date(timeIntervalSince1970: 1050)
         await h.coordinator().synchronize()
         XCTAssertTrue(h.client.requests.isEmpty)
+    }
+    func testLockContentionLeavesExistingDisplayForTheNextSynchronization() async throws {
+        for busyRead in [1, 2] {
+            let h = ActivityHarness(), coordinator = h.coordinator(), id = try XCTUnwrap(h.session?.id)
+            let existing = FocusActivityHandle(id: "existing", sessionID: id)
+            h.client.activities = [existing]; h.attempted.insert(id); h.lockTimeoutRead = busyRead
+            await coordinator.synchronize()
+            XCTAssertEqual(h.client.activities, [existing])
+            XCTAssertTrue(h.client.ends.isEmpty); XCTAssertTrue(h.client.updates.isEmpty)
+            h.lockTimeoutRead = nil
+            await coordinator.synchronize()
+            XCTAssertTrue(h.client.updates.contains(existing)); XCTAssertTrue(h.client.requests.isEmpty)
+        }
+    }
+    func testBusyFinalRecheckKeepsSessionEligibleForARequest() async {
+        let h = ActivityHarness(), coordinator = h.coordinator()
+        h.lockTimeoutRead = 3
+        await coordinator.synchronize()
+        XCTAssertTrue(h.attempted.isEmpty); XCTAssertTrue(h.client.requests.isEmpty)
+        h.lockTimeoutRead = nil
+        await coordinator.synchronize()
+        XCTAssertEqual(h.client.requests.count, 1)
     }
     func testConcurrentSynchronizationsDoNotOverlapTransportWork() async throws {
         let h = ActivityHarness(), coordinator = h.coordinator()

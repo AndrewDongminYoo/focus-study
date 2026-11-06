@@ -95,4 +95,13 @@ final class FocusActivityTests: XCTestCase {
         value.pausedAt = Date(timeIntervalSince1970: 1300); value.breakEndsAt = Date(timeIntervalSince1970: 1510)
         XCTAssertNil(FocusActivityProjection.make(session: value, now: Date(timeIntervalSince1970: 3100), timing: .standard))
     }
+    func testProjectionAcceptsTheControlStoresDurationTolerance() {
+        var value = session()
+        value.expiresAt = value.startedAt.addingTimeInterval(1500.005)
+        XCTAssertTrue(FocusLength.isAllowed(seconds: value.length))
+        XCTAssertNotNil(FocusActivityProjection.make(session: value, now: now, timing: .standard))
+        value.expiresAt = value.startedAt.addingTimeInterval(1500.02)
+        XCTAssertFalse(FocusLength.isAllowed(seconds: value.length))
+        XCTAssertNil(FocusActivityProjection.make(session: value, now: now, timing: .standard))
+    }
 }

@@ -10,6 +10,7 @@ This is implementation evidence, not release approval.
 `FocusActivityCoordinator` serializes effects, re-reads after awaited operations, identifies both activity and session, and retires duplicates/orphans without ending sessions.
 The app persists an attempted-session UUID in private UserDefaults before requesting an activity; dismissal or an ambiguous request failure uses the app fallback for that session.
 Background processes never create an activity.
+A busy control lock defers display work to the next synchronization; it neither retires the activity nor consumes the start marker before a request.
 The Monitor schedules optional update/end work after its engine callback releases the process lock; callback lifetime does not guarantee that task will complete.
 
 The widget compiles only the payload, Activity attributes and views.
@@ -35,8 +36,11 @@ The comparison guard rejected a deliberately changed mapping before it was trust
   Failing SDK regressions reproduced both paths; a display-only locked reader now avoids recovery, and the end error path notifies the display.
   The repaired regressions passed in the full 115-test SDK suite, preserving shielding, registrations, break copies and everyday restrictions while invalidating the optional display.
 
-The full local run passed 208 host tests, four separate-process race checks, 115 SDK tests and 53 UI tests.
-A subsequent presentation-only repair passed its three affected UI tests again.
+The first full local run passed 208 host tests, four separate-process race checks, 115 SDK tests and 53 UI tests.
+Hosted review then reproduced two availability defects: lock contention was treated as unreadable control state, and projection used stricter duration equality than the control store.
+The fixes preserve the display on contention, record an attempt only after the final successful read, and reuse the store’s duration tolerance.
+Three new regressions failed before those fixes; the final host run passed 211 tests and the separate-process race checks passed again.
+Presentation changes and the later hosted fixes each passed the three affected UI tests; the hosted fixes also passed nine SDK tests and an unsigned device Release build.
 The actual expanded Island at accessibility maximum size clipped a redundant helper line; the final card keeps planned times and last confirmation visible and moves that helper into the confirmation item’s accessibility hint.
 The stale app-confirmation message remains visible.
 Actual synthetic probes confirmed focus-to-break and foreground return updates, compact/expanded and Lock Screen presentation, larger text and tap-to-open.

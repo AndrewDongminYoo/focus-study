@@ -7,7 +7,7 @@ struct FocusActivityProjection: Equatable {
         guard let session else { return nil }
         guard now.timeIntervalSince1970.isFinite, session.startedAt.timeIntervalSince1970.isFinite,
               session.expiresAt.timeIntervalSince1970.isFinite, now >= session.startedAt,
-              FocusLength.allowedMinutes.contains(where: { TimeInterval($0 * 60) == session.length }),
+              FocusLength.isAllowed(seconds: session.length),
               (session.pausedSeconds ?? 0).isFinite, (session.pausedSeconds ?? 0) >= 0,
               (session.deadlineCredit ?? 0).isFinite, (session.deadlineCredit ?? 0) >= 0 else { return nil }
         if session.isPaused {
