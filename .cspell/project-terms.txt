@@ -10,10 +10,12 @@ autoupdating
 BEGINSWITH
 cfbundle
 clock.arrow.circlepath
+clock.badge.exclamationmark
 codesign
 codesigning
 com.apple.deviceactivity.monitor-extension
 com.apple.deviceactivityui.report-extension
+com.apple.widgetkit-extension
 devicectl
 donminzzi
 dsym
@@ -26,6 +28,7 @@ GENERATE_INFOPLIST_FILE
 INFOPLIST_FILE
 iphoneos
 KakaoTalk
+keylineTint
 kr.donminzzi.focusStudy.sdktests
 kr.donminzzi.focusStudy.uitests
 layoutSubviews

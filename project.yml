@@ -16,7 +16,7 @@ targets:
   FocusStudy:
     type: application
     platform: iOS
-    sources: [App, Shared, Integration, Presentation]
+    sources: [App, Shared, Integration, Presentation, Activity]
     settings:
       base:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -26,6 +26,8 @@ targets:
         CODE_SIGN_ENTITLEMENTS: Configuration/App.entitlements
         TARGETED_DEVICE_FAMILY: "1"
     dependencies:
+      - target: FocusActivity
+        embed: true
       - target: FocusMonitor
         embed: true
       - target: FocusReport
@@ -33,7 +35,12 @@ targets:
   FocusMonitor:
     type: app-extension
     platform: iOS
-    sources: [Monitor, Shared, Integration]
+    sources:
+      - Monitor
+      - Shared
+      - Integration
+      - path: Activity
+        excludes: [FocusActivityViews.swift]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: kr.donminzzi.focusStudy.monitor
@@ -52,6 +59,20 @@ targets:
         CODE_SIGN_ENTITLEMENTS: Configuration/Report.entitlements
         APPLICATION_EXTENSION_API_ONLY: YES
         TARGETED_DEVICE_FAMILY: "1"
+  FocusActivity:
+    type: app-extension
+    platform: iOS
+    sources:
+      - Widget
+      - Activity/FocusActivityAttributes.swift
+      - Activity/FocusActivityViews.swift
+      - Shared/FocusActivityContent.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: kr.donminzzi.focusStudy.activity
+        INFOPLIST_FILE: Configuration/Activity-Info.plist
+        APPLICATION_EXTENSION_API_ONLY: YES
+        TARGETED_DEVICE_FAMILY: "1"
   FocusSDKTests:
     type: bundle.unit-test
     platform: iOS
@@ -62,6 +83,7 @@ targets:
         Integration,
         App/SelectionRepository.swift,
         App/SelectionFeedback.swift,
+        App/FocusActivityRuntime.swift,
         App/FocusSettings.swift,
         App/SessionRecord.swift,
         App/EverydaySettingsModel.swift,
@@ -69,6 +91,8 @@ targets:
         App/AuthorizationService.swift,
         App/FocusFilterHandler.swift,
         App/FocusRuntimeHolder.swift,
+        Activity/FocusActivityAttributes.swift,
+        Activity/SystemFocusActivityClient.swift,
       ]
     settings:
       base:

@@ -1,7 +1,7 @@
 # Live Activity adoption decision
 
 Date: 2026-11-06.
-Status: adoption approved on 2026-11-06; implementation and release verification remain separate work.
+Status: adoption approved on 2026-11-06; implementation is under #74; release verification remains separate.
 Scope: [decision #41](https://github.com/AndrewDongminYoo/focus-study/issues/41), prioritized by [parent #39](https://github.com/AndrewDongminYoo/focus-study/issues/39).
 Primary sources: issue #41, the [M2 contract](2026-11-01-m2-break-pass-design.md) with its early-return amendment, and [Apple's Live Activities guide](https://developer.apple.com/documentation/activitykit/displaying-live-data-with-live-activities) (accessed 2026-11-06).
 Current behavior was checked at `4075ea83625bf5fba32e6251f4c2bb6a9794165a` against `Shared/ControlTypes.swift`, `App/FocusModel.swift`, `App/FocusView.swift`, and `project.yml`.
@@ -9,7 +9,7 @@ Current behavior was checked at `4075ea83625bf5fba32e6251f4c2bb6a9794165a` again
 ## Decision and rationale
 
 Adopt one optional, local, read-only Live Activity for the current focus session, subject to the feasibility and release gates below.
-This approves the product direction; the feature does not exist yet and its lifecycle remains unverified.
+The [implementation feasibility record](../notes/2026-11-06-live-activity-feasibility.md) tracks the implemented lifecycle and its remaining release limits.
 The immediate value is checking break and return timing while using another app, without opening the focus screen solely to read time.
 The value is a hypothesis from the current flow and issue #41; no student usability study or device trial establishes its effect.
 
@@ -98,4 +98,4 @@ The [original design amendment](2026-10-26-focus-study-design.md#live-activity-a
 Record adoption and its limits in #41; [implementation #74](https://github.com/AndrewDongminYoo/focus-study/issues/74) tracks the separate work using these gates.
 The decision PR closes only #41; #39 and unrelated decisions remain open.
 The implementation issue must distinguish adoption from release readiness and preserve failed feasibility results as a reason to defer shipment.
-This decision PR changes documentation only and needs content/link/Trunk checks, not a mobile build or visual approval.
+The original adoption PR #75 changed documentation only; implementation #74 requires the technical and visual gates above.

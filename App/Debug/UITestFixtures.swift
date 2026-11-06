@@ -97,7 +97,11 @@ private final class FixtureBreakSelection: BreakSelectionStore {
 }
 extension FocusServices {
     static func fixture(arguments: [String]) -> FocusServices {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("FocusFixture-\(UUID().uuidString)")
+        let probeID: UUID?
+        if let index = arguments.firstIndex(of: "--live-activity-probe"), index + 1 < arguments.count {
+            probeID = UUID(uuidString: arguments[index + 1])
+        } else { probeID = nil }
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(probeID.map { "FocusActivityProbe-\($0.uuidString)" } ?? "FocusFixture-\(UUID().uuidString)")
         var startDelay: TimeInterval = 0
         if let index = arguments.firstIndex(of: "--start-delay"), index + 1 < arguments.count,
            let requested = TimeInterval(arguments[index + 1]), requested.isFinite, requested >= 0 {
@@ -119,7 +123,18 @@ extension FocusServices {
             everyday.schedule = EverydaySchedule(revision: UUID(), enabled: true, rangeStart: 480, rangeEnd: 1080, windows: [EverydaySchedule.template(.lunch)!])
             everyday.selection = FixtureEverydayLayer.sampleSelection()
         }
-        let engine = SessionControl(store: SharedControlStore(directory: directory), monitoring: FixtureMonitoring(fail: arguments.contains("registration-failure"), startDelay: startDelay), shield: FixtureShield(), breakSelection: breakSelection, everyday: everyday, timing: timing, calendar: calendar)
+        let store = SharedControlStore(directory: directory)
+        let monitoring = FixtureMonitoring(fail: arguments.contains("registration-failure"), startDelay: startDelay)
+        // The explicit display probe can relaunch the same temporary synthetic session.
+        // Recreate its in-memory registrations/copy, never any system monitoring or shield.
+        if probeID != nil, let session = try? store.withExclusiveAccess({ try $0.load().session }), session.phase == .active || session.isPaused {
+            monitoring.registered.insert(session.id)
+            if session.phase == .onBreak {
+                monitoring.breaks.append((session.id, session.breaksTaken ?? 1))
+                breakSelection.copies.insert(session.id)
+            }
+        }
+        let engine = SessionControl(store: store, monitoring: monitoring, shield: FixtureShield(), breakSelection: breakSelection, everyday: everyday, timing: timing, calendar: calendar)
         let onboarding = arguments.contains("onboarding")
         var services = FocusServices(authorization: FixtureAuthorization(denied: arguments.contains("denied"), notRequested: arguments.contains("not-requested") || onboarding), selection: FixtureSelection(selected: arguments.contains("--selected") && !onboarding), engine: engine, applySelection: { _ in }, matchesSelection: { _ in true }, isFixture: true)
         services.saveBreakSelection = { _, id in breakSelection.copies.insert(id) }
@@ -137,6 +152,9 @@ extension FocusServices {
             settings.recordFilterRefusal(reason, at: now)
         }
         services.settings = settings
+        if let probeID {
+            services.activityDidChange = FocusActivityRuntime.hook(engine: engine, defaults: UserDefaults(suiteName: "FocusActivityProbe-\(probeID.uuidString)")!)
+        }
         return services
     }
 }
@@ -155,7 +173,7 @@ extension FocusRuntime {
             _ = try services.engine.start(now: Date().addingTimeInterval(-(length - 3)), length: length, authorized: { true }, apply: {}, matches: { true })
         }
         var attempts = 0
-        return FocusRuntime(recovery: StartupRecovery(engine: services.engine), hasAccess: services.authorization.hasAccessNow, holder: FocusRuntimeHolder(engine: services.engine, authorization: services.authorization, settings: services.settings) {
+        return FocusRuntime(recovery: StartupRecovery(engine: services.engine), hasAccess: services.authorization.hasAccessNow, holder: FocusRuntimeHolder(engine: services.engine, authorization: services.authorization, settings: services.settings, activityDidChange: services.activityDidChange) {
             attempts += 1
             if arguments.contains("startup-failure"), attempts == 1 { throw ControlIssue.io }
             let container = try ModelContainer(for: SessionRecord.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none))

@@ -31,7 +31,7 @@ xcodebuild build -project FocusStudy.xcodeproj -scheme FocusStudy -configuration
 | `swift test`           | `CoreTests/`, `HistoryTests/`, `ReportTests/`의 제어 로직, SwiftData 기록, 합성 보고서 집계를 검사합니다.                                                                                                                                                                        |
 | 경합 helper            | 실제 파일 잠금과 합성 monitoring/shield를 사용하는 두 프로세스를 검사하며 `PASS: stale A cannot clear B`, `PASS: stale break 1 cannot touch break 2`, `PASS: stale everyday revision cannot undo a newer save`, `PASS: focus off cannot end a manual session`을 출력해야 합니다. |
 | iOS scheme             | `FocusSDKTests`와 `FocusUITests`에서 SDK adapter/repository/model 및 DEBUG 합성 UI를 검사합니다.                                                                                                                                                                                 |
-| unsigned Release build | fixture를 제외한 App/Monitor/Report의 기기 아키텍처 컴파일을 검사합니다.                                                                                                                                                                                                         |
+| unsigned Release build | fixture를 제외한 App/Monitor/Report/Activity의 기기 아키텍처 컴파일을 검사합니다.                                                                                                                                                                                                |
 
 SDK 또는 UI만 확인할 때는 test 명령에 `-only-testing:FocusSDKTests` 또는 `-only-testing:FocusUITests`를 추가합니다.
 이 검증은 실제 Screen Time 권한·차단·콜백 동작의 증거가 아닙니다.
@@ -49,6 +49,23 @@ SDK 또는 UI만 확인할 때는 test 명령에 `-only-testing:FocusSDKTests` �
 `--everyday-fixture blocking`은 실행 5분 전(5분 단위)에 시작해 2시간 동안 이어지는 합성 매일 제한을 합성 앱 1개와 함께 저장합니다. 메모리 안의 store와 monitoring만 쓰며 실제 제한을 적용하지 않습니다.
 fixture 엔진과 상태 줄은 실행 시각이 12시와 13시 사이가 되는 고정 UTC 오프셋 시간대로 매일 제한을 계산하므로, 기기 시각과 관계없이 범위가 23:55나 자정에 닿지 않습니다.
 `--focus-filter-refusal <access|selection|busy|history|error>`는 실행 시 그 사유의 마지막 집중 모드 시작 거절을 메모리 설정에 저장해 설정의 집중 모드 안내에서 확인하게 합니다. 실제 집중 모드를 읽거나 바꾸지 않습니다.
+
+### Live Activity verification
+
+The optional Live Activity shows last-confirmed plans for focus, breaks and return timing; it never confirms shielding.
+The app remains the fallback when the system disables, dismisses or cannot create the activity.
+See the [contract](docs/specs/2026-11-06-live-activity-decision.md) and [feasibility record](docs/notes/2026-11-06-live-activity-feasibility.md) for release gates and observed limits.
+
+Ordinary `--ui-testing` fixtures make no ActivityKit request.
+To probe the real ActivityKit presentation with synthetic Screen Time only, use `--ui-testing approved --selected --live-activity-probe <UUID>` in a DEBUG simulator build, with a valid UUID generated once for that run.
+The UUID reuses a temporary synthetic control directory and private UserDefaults suite across relaunches so dismissal persistence can be checked; it never enables real monitoring or restrictions.
+Use a new UUID for an independent run.
+`--break-timing short` accelerates break boundaries as described above; `--ui-testing ending-soon` accelerates focus expiry.
+Opt-in `LIVE_ACTIVITY_PROBE` logs report display operations only.
+
+`--activity-preview <mode>` renders the shared views without requesting an activity.
+Modes are `focus`, `break`, `return`, `waiting`, `stale`, `deadline` and `late`; they support light/dark and larger-text inspection but do not establish system stale redraw or background delivery.
+The new `.activity` identifier still needs account/profile verification before a signed device build.
 
 ### 보고서 상태와 실기기 진단
 
@@ -99,10 +116,10 @@ Xcode 프로젝트와 숨김 설정 파일도 검사하며, 한국어 맞춤법 
 
 ## 실제 기기를 연결하기 전
 
-운영자가 선택한 개발 Team은 `393JTTV68D`이며 bundle ID는 `kr.donminzzi.focusStudy`, 확장은 `.monitor`와 `.report`입니다.
+운영자가 선택한 개발 Team은 `393JTTV68D`이며 bundle ID는 `kr.donminzzi.focusStudy`, 확장은 `.activity`, `.monitor`, `.report`입니다.
 App Group은 `group.kr.donminzzi.focusStudy`입니다.
 `project.yml`, `Configuration/*-Info.plist`, `Configuration/*.entitlements`가 이 값을 사용하며, Apple 계정의 식별자 등록·capability·프로필 적합성은 별도로 확인해야 합니다.
-App과 Monitor만 같은 App Group을 사용하며 Report에는 App Group entitlement가 없습니다.
+App과 Monitor만 같은 App Group을 사용하며 Report와 Activity에는 App Group entitlement가 없습니다.
 
 개발 서명과 실제 기기 준비 상태는 [검증 기록](docs/notes/screen-time-device-matrix.md#서명과-배포)을 확인하세요.
 실제 앱·웹사이트에 제한을 적용하기 전에는 기기 소유자의 선택과 동의를 받아야 합니다.

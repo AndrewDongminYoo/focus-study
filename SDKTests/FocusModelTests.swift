@@ -419,6 +419,7 @@ final class ModelTestBreakSelection: BreakSelectionStore {
 enum ModelTestError: Error { case storage }
 final class ModelTestStore: ControlStore, LockedControl {
     var envelope = ControlEnvelope(), failRead = false
+    var failSavePhase: SessionPhase?
     /// The numbers of the lock sections that throw `lockTimeout` before their body runs.
     var lockTimeoutCalls = Set<Int>()
     private(set) var calls = 0
@@ -428,7 +429,10 @@ final class ModelTestStore: ControlStore, LockedControl {
         return try body(self)
     }
     func load() throws -> ControlEnvelope { if failRead { throw ModelTestError.storage }; return envelope }
-    func save(_ envelope: ControlEnvelope) throws { self.envelope = envelope }
+    func save(_ envelope: ControlEnvelope) throws {
+        if let failSavePhase, envelope.session?.phase == failSavePhase { throw ModelTestError.storage }
+        self.envelope = envelope
+    }
 }
 final class ModelTestMonitoring: MonitoringClient {
     var failRegistration = false

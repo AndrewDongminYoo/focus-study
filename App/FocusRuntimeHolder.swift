@@ -8,6 +8,7 @@ import SwiftData
     private let engine: SessionControl
     private let authorization: any AuthorizationProviding
     private let settings: FocusSettings
+    private let activityDidChange: () -> Void
     private let make: () throws -> (FocusServices, ModelContainer)
     private var loaded: (services: FocusServices, container: ModelContainer)?
     private var handler: FocusFilterHandler?
@@ -15,8 +16,9 @@ import SwiftData
     var refreshScreens: (() -> Void)?
     /// `engine`, `authorization` and `settings` are the ones that `make` puts in the services; the off call uses them without `make`.
     /// `make` builds the services and the container; only a successful build is kept, so a failed load can be tried again.
-    init(engine: SessionControl, authorization: any AuthorizationProviding, settings: FocusSettings, make: @escaping () throws -> (FocusServices, ModelContainer)) {
+    init(engine: SessionControl, authorization: any AuthorizationProviding, settings: FocusSettings, activityDidChange: @escaping () -> Void = {}, make: @escaping () throws -> (FocusServices, ModelContainer)) {
         self.engine = engine; self.authorization = authorization; self.settings = settings; self.make = make
+        self.activityDidChange = activityDidChange
     }
     func load() throws -> (FocusServices, ModelContainer) {
         if let loaded { return (loaded.services, loaded.container) }
@@ -24,17 +26,21 @@ import SwiftData
         loaded = (services, container)
         return (services, container)
     }
+    func notifyActivity() { activityDidChange() }
     func filterHandler() throws -> FocusFilterHandler {
         if let handler { return handler }
         let (services, container) = try load()
         let history = SessionHistory(context: ModelContext(container), acknowledge: services.engine.acknowledgeTerminal)
-        let created = FocusFilterHandler(services: services, history: history, refresh: { [weak self] in self?.refreshScreens?() }, pause: Self.pause)
+        let created = FocusFilterHandler(services: services, history: history, refresh: { [weak self] in
+            self?.refreshScreens?(); self?.notifyActivity()
+        }, pause: Self.pause)
         handler = created
         return created
     }
     /// The on call needs the selection and the history store, so it throws when they cannot load.
     /// The off call runs on the engine alone, as the error screen's end does, so a storage failure cannot keep a filter session running.
     func focusDidChange(startsSession: Bool) async throws {
+        defer { notifyActivity() }
         if startsSession { return try await filterHandler().focusDidChange(startsSession: true) }
         await FocusFilterHandler.end(engine: engine, authorization: authorization, settings: settings, now: Date.init, pause: Self.pause)
         refreshScreens?()
