@@ -54,10 +54,13 @@ The successful synthetic baseline cannot be used to dismiss this device observat
 The synthetic successful path is short in this run; a real lock timeout can occupy the main actor for about a quarter second.
 Neither number measures successful `DeviceActivityCenter.startMonitoring`, real managed-settings effects, or persistent device history.
 The real successful sample is long enough to require investigating visible start feedback; removing `isStarting` based on the fast synthetic path is not supported.
-Repeated device measurements, investigation of the registration interval, and a verified UI change remain pending.
+Repeated device measurements and investigation of the registration interval remain pending.
+The [interface polish design](../specs/2026-11-05-interface-polish-design.md) separates a pending UI request from the unchanged synchronous start body so feedback can be displayed before that body runs.
+This does not remove main-actor occupation or establish current physical-device feedback; local rendered verification is recorded with that change.
 The current measurements do not close #33.
 
-DEBUG builds provide a timing callback around accepted `FocusModel.start()` calls, including refresh failures and error handling.
+DEBUG builds provide a timing callback around the accepted synchronous start body, including UI requests, refresh failures, and error handling.
+The display-frame opportunity before that body is excluded.
 Only the existing real `--screen-time-diagnostics` runtime connects this callback to the `START_LATENCY total_ms=...` console log.
 Default runs and synthetic UI fixtures do not emit that log; Release excludes the callback and wiring.
 The interval excludes setup before the tap, rejected taps, the timing log itself, and the subsequent SwiftUI render.

@@ -9,25 +9,32 @@ struct TodayHistoryView: View {
             List {
                 Section {
                     if let error = model.errorMessage {
-                        Text(error).foregroundStyle(.secondary).accessibilityIdentifier("historyError")
+                        Text(error).foregroundStyle(FocusTheme.Palette.secondaryText).accessibilityIdentifier("historyError")
                         Button("다시 확인하기") { model.refresh() }.accessibilityIdentifier("historyRetry")
                     } else {
                         Text(SessionSummary(records: model.records).text)
+                            .font(.title2.weight(.semibold)).monospacedDigit()
+                            .fixedSize(horizontal: false, vertical: true).padding(.vertical, FocusTheme.Layout.inlineSpacing)
                             .accessibilityIdentifier("historySummary")
                     }
                 }
                 if model.errorMessage == nil {
                     Section("오늘의 세션") {
-                        if model.records.isEmpty { Text("아직 기록이 없어요.").foregroundStyle(.secondary) }
+                        if model.records.isEmpty { Text("아직 기록이 없어요.").foregroundStyle(FocusTheme.Palette.secondaryText) }
                         ForEach(model.records, id: \.id) { record in
                             HStack {
                                 if record.reason == .expired {
-                                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.tint)
+                                    Image(systemName: "checkmark.circle.fill").foregroundStyle(FocusTheme.Palette.accent)
                                         .accessibilityLabel("완료").accessibilityIdentifier("completedSessionIcon")
+                                } else {
+                                    Image(systemName: "circle").foregroundStyle(FocusTheme.Palette.secondaryText).accessibilityHidden(true)
                                 }
-                                VStack(alignment: .leading) { Text(record.startedAt, style: .time); Text(reasonText(record)).font(.caption).foregroundStyle(.secondary) }
+                                VStack(alignment: .leading, spacing: FocusTheme.Layout.detailSpacing) {
+                                    Text(record.startedAt, style: .time).font(.headline)
+                                    Text(reasonText(record)).font(.subheadline).foregroundStyle(FocusTheme.Palette.secondaryText)
+                                }.fixedSize(horizontal: false, vertical: true)
                                 Spacer()
-                            }
+                            }.padding(.vertical, FocusTheme.Layout.detailSpacing)
                         }
                     }
                 }
@@ -43,9 +50,11 @@ struct TodayHistoryView: View {
                     .accessibilityIdentifier("report")
                 } footer: { Text("집중 기록과 별도로 기기 사용 시간을 볼 수 있어요.") }
             }
+            .contentMargins(.horizontal, FocusTheme.Layout.screenInset, for: .scrollContent)
             .navigationTitle("오늘의 기록").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("닫기") { dismiss() }.accessibilityIdentifier("historyDone") } }
         }
+        .modifier(FocusEditorSheet())
     }
     private func reasonText(_ record: SessionRecord) -> String {
         switch record.reason {

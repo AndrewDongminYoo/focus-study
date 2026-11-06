@@ -1,12 +1,15 @@
 393JTTV68D
+addSubview
 appex
 appintents
+arrangedSubviews
 assetcatalog
 ASSETCATALOG_COMPILER_APPICON_NAME
 ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME
 autoupdating
 BEGINSWITH
 cfbundle
+clock.arrow.circlepath
 codesign
 codesigning
 com.apple.deviceactivity.monitor-extension
@@ -25,6 +28,8 @@ iphoneos
 KakaoTalk
 kr.donminzzi.focusStudy.sdktests
 kr.donminzzi.focusStudy.uitests
+layoutSubviews
+Mirae
 Onone
 parallelizable
 parallelizeBuildables
@@ -38,6 +43,7 @@ subheadline
 swiftc
 swiftinterface
 Testables
+translatesAutoresizingMaskIntoConstraints
 udid
 UICT
 wholemodule

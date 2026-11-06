@@ -38,6 +38,7 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
     private(set) var records: [SessionRecord] = []
     private(set) var errorMessage: String?
     private(set) var isStarting = false
+    private(set) var startRequestID: UUID?
     private(set) var now = Date()
     /// The most recent session that reached its full length, until the person dismisses it.
     private(set) var completedSessionID: UUID?
@@ -141,6 +142,26 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
 
     func start() {
         guard canStart else { return }
+        performStart()
+    }
+    /// Reserves the UI action before its feedback has had a chance to appear. No control operation runs here.
+    @discardableResult func requestStart() -> UUID? {
+        guard canStart else { return nil }
+        let request = UUID()
+        startRequestID = request; isStarting = true
+        completedSessionID = nil; completedLength = nil
+        return request
+    }
+    /// Called after the feedback view's frame boundary. Every control section remains synchronous.
+    func performPendingStart(_ request: UUID) {
+        guard startRequestID == request else { return }
+        performStart()
+    }
+    func cancelPendingStart(_ request: UUID) {
+        guard startRequestID == request else { return }
+        startRequestID = nil; isStarting = false
+    }
+    private func performStart() {
         #if DEBUG
         let measurementStarted = services.didMeasureStart == nil ? nil : ProcessInfo.processInfo.systemUptime
         defer {
@@ -148,7 +169,7 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
         }
         #endif
         completedSessionID = nil; completedLength = nil
-        isStarting = true; defer { isStarting = false }
+        isStarting = true; defer { startRequestID = nil; isStarting = false }
         refresh()
         guard errorMessage == nil, access == .approved, current == nil else { return }
         do {
@@ -203,7 +224,10 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
         run({ try services.engine.resume(id: id, now: Date()) }, failure: "집중을 다시 시작하지 못했어요. 다시 시도해 주세요.")
     }
     /// The waiting screen is a step that the person must watch, so leaving the app cancels the wait.
-    func sceneDidLeaveForeground() { if current?.phase == .waiting { cancelWait() } }
+    func sceneDidLeaveForeground() {
+        if let request = startRequestID { cancelPendingStart(request) }
+        if current?.phase == .waiting { cancelWait() }
+    }
     private func startBreak(_ session: ControlSession) {
         let frozen = services.selection.selection, id = session.id
         run({ try services.engine.startBreak(id: id, now: now, saveSelection: { try self.services.saveBreakSelection(frozen, id) }) },

@@ -32,7 +32,7 @@ struct DeviceDiagnosticsSection: View {
                 Button("매일 제한 store에 선택 적용(합집합 검사 없음)") { everydayPicker = true }.accessibilityIdentifier("diagnosticEverydayApply")
             }
             if let message = diagnostics.message { Text(message).font(.footnote) }
-            if replayFailed { Text("콜백을 전달하지 못했습니다. 세션 상태를 다시 확인해 주세요.").foregroundStyle(.red) }
+            if replayFailed { Text("콜백을 전달하지 못했습니다. 세션 상태를 다시 확인해 주세요.").foregroundStyle(FocusTheme.Palette.error) }
         }
         .sheet(isPresented: $everydayPicker) {
             NavigationStack {

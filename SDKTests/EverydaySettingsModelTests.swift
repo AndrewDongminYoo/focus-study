@@ -39,6 +39,77 @@ import ManagedSettings
         XCTAssertEqual(EverydaySettingsModel.statusLine(settings.status), "꺼져 있어요")
         XCTAssertTrue(settings.canEdit)
     }
+    func testDirtyStateComparesEditableValuesAndTokensRatherThanRevisionOrWindowOrder() {
+        let (settings, layer, _, _) = fixture()
+        storedLayer(layer, settings)
+        settings.refresh()
+        XCTAssertFalse(settings.hasChanges); XCTAssertFalse(settings.canSave)
+        settings.draft.revision = UUID()
+        XCTAssertFalse(settings.hasChanges)
+        settings.draft.rangeEnd += 5
+        XCTAssertTrue(settings.hasChanges); XCTAssertTrue(settings.canSave)
+        settings.draft.rangeEnd -= 5
+        XCTAssertFalse(settings.hasChanges)
+        settings.draftSelection = apps(1..<2)
+        XCTAssertTrue(settings.hasChanges, "a different app with the same count is an edit")
+        settings.draftSelection = apps(0..<1)
+        XCTAssertFalse(settings.hasChanges)
+        settings.draft.windows = [EverydaySchedule.template(.lunch)!, EverydaySchedule.template(.fromSchool)!]
+        layer.write(settings.draft, settings.draftSelection)
+        settings.refresh()
+        settings.draft.windows.reverse()
+        XCTAssertFalse(settings.hasChanges)
+    }
+    func testUnchangedSaveDoesNotWriteAndSuccessfulSaveClearsDirtyState() {
+        let (settings, layer, _, _) = fixture()
+        settings.refresh()
+        settings.save()
+        XCTAssertEqual(layer.writes, 0); XCTAssertNil(settings.successMessage)
+        settings.draft.rangeEnd += 5
+        settings.save()
+        XCTAssertEqual(layer.writes, 1); XCTAssertFalse(settings.hasChanges); XCTAssertFalse(settings.canSave)
+        XCTAssertEqual(settings.successMessage, "매일 제한을 저장했어요.")
+        settings.draft.rangeEnd += 5
+        XCTAssertTrue(settings.hasChanges); XCTAssertNil(settings.successMessage)
+    }
+    func testRefusedSaveKeepsDraftDirtyAndNeverShowsSuccess() {
+        let (settings, layer, _, _) = fixture()
+        storedLayer(layer, settings)
+        settings.refresh()
+        settings.draft.enabled = false
+        settings.save()
+        XCTAssertNotNil(settings.refusalMessage); XCTAssertNil(settings.successMessage)
+        XCTAssertTrue(settings.hasChanges); XCTAssertFalse(settings.draft.enabled)
+        settings.draft.enabled = true
+        XCTAssertNil(settings.refusalMessage); XCTAssertFalse(settings.hasChanges)
+    }
+    func testValidationFeedbackBelongsToTheRelatedSectionAndDisablesSave() {
+        let (settings, _, _, _) = fixture()
+        settings.refresh()
+        settings.draft.rangeEnd = 510
+        XCTAssertNotNil(settings.rangeIssue); XCTAssertNil(settings.windowsIssue); XCTAssertFalse(settings.canSave)
+        settings.draft.rangeEnd = 1080
+        settings.draft.windows = [EverydayWindow(kind: .custom, start: 600, end: 610)]
+        XCTAssertNil(settings.rangeIssue); XCTAssertNotNil(settings.windowsIssue); XCTAssertFalse(settings.canSave)
+        settings.draft.windows = []; settings.draft.enabled = true
+        XCTAssertNotNil(settings.selectionIssue); XCTAssertFalse(settings.canSave)
+        settings.draftSelection = apps(0..<1)
+        XCTAssertNil(settings.selectionIssue); XCTAssertTrue(settings.canSave)
+    }
+    func testStrictOnlyGuidanceIncludesWindowsAndEndsAtTheStoredRangeEnd() {
+        let (settings, layer, _, _) = fixture()
+        storedLayer(layer, settings)
+        settings.refresh()
+        let expected = "제한 시간에는 더 엄격하게만 바꿀 수 있어요. 18:00부터 자유롭게 바꿀 수 있어요."
+        XCTAssertEqual(settings.strictOnlyMessage, expected)
+        settings.clock = { self.tenAM.addingTimeInterval(2.5 * 3600) }
+        settings.refreshStatus()
+        XCTAssertFalse(settings.status?.blocksNow ?? true)
+        XCTAssertEqual(settings.strictOnlyMessage, expected, "lunch still uses the strict-only rule")
+        settings.clock = { self.tenAM.addingTimeInterval(8 * 3600) }
+        settings.refreshStatus()
+        XCTAssertNil(settings.strictOnlyMessage)
+    }
     func testTemplatesAddSuggestedTimesAndCustomHasNone() {
         let (settings, _, _, _) = fixture()
         settings.refresh()
@@ -186,6 +257,25 @@ import ManagedSettings
         settings.save()
         XCTAssertNil(settings.refusalMessage)
         XCTAssertEqual(layer.schedule?.enabled, true); XCTAssertNil(settings.status?.issue)
+    }
+    func testUnreadableFileCanBeReplacedWithTheUnchangedStandardDraft() {
+        let (settings, layer, _, _) = fixture()
+        storedLayer(layer, settings); layer.unreadable = true
+        settings.refresh()
+        XCTAssertEqual(settings.status?.issue, .unreadable)
+        XCTAssertFalse(settings.hasChanges)
+        XCTAssertTrue(settings.canSave, "the standard draft can replace an unreadable file without a dummy edit")
+        settings.save()
+        XCTAssertNil(settings.refusalMessage); XCTAssertNotNil(settings.successMessage)
+        XCTAssertEqual(layer.writes, 2); XCTAssertFalse(layer.unreadable)
+        XCTAssertEqual(layer.schedule?.enabled, false)
+        XCTAssertEqual(layer.schedule?.rangeStart, EverydaySchedule.standard.rangeStart)
+        XCTAssertEqual(layer.schedule?.rangeEnd, EverydaySchedule.standard.rangeEnd)
+        XCTAssertEqual(layer.schedule?.windows, [])
+        XCTAssertNil(settings.status?.issue)
+        XCTAssertFalse(settings.hasChanges); XCTAssertFalse(settings.canSave)
+        settings.save()
+        XCTAssertEqual(layer.writes, 2, "after recovery an unchanged draft remains a no-op")
     }
     func testEverydaySaveRefusesAUnionOver50() {
         let (settings, layer, monitoring, focusSelection) = fixture()

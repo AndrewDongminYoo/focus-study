@@ -4,19 +4,23 @@ import SwiftUI
 struct SettingsView: View {
     let model: FocusModel
     @Environment(\.dismiss) private var dismiss
+    @State private var everydayHasChanges = false
+    @State private var confirmingDiscard = false
     var body: some View {
         NavigationStack {
             Form {
                 Section {
                     Picker("집중 시간", selection: Binding(get: { model.services.settings.lengthMinutes }, set: { model.services.settings.lengthMinutes = $0 })) {
                         ForEach(FocusLength.allowedMinutes, id: \.self) { Text("\($0)분").tag($0) }
-                    }.pickerStyle(.segmented).accessibilityIdentifier("lengthPicker")
+                    }.pickerStyle(.menu).accessibilityIdentifier("lengthPicker")
                 } header: { Text("집중 시간") } footer: { Text("바꾼 시간은 다음 집중부터 적용돼요.") }
                 Section {
-                    NavigationLink { EverydaySettingsView(model: model) } label: {
-                        VStack(alignment: .leading, spacing: 2) {
+                    NavigationLink {
+                        EverydaySettingsView(model: model, onUnsavedChanges: { everydayHasChanges = $0 }, onFinish: finish)
+                    } label: {
+                        VStack(alignment: .leading, spacing: FocusTheme.Layout.detailSpacing) {
                             Text("시간과 앱 정하기")
-                            Text(EverydaySettingsModel.statusLine(model.everydayStatus, calendar: model.services.engine.calendar)).font(.footnote).foregroundStyle(.secondary)
+                            Text(EverydaySettingsModel.statusLine(model.everydayStatus, calendar: model.services.engine.calendar)).font(.footnote).foregroundStyle(FocusTheme.Palette.secondaryText)
                         }
                     }.accessibilityIdentifier("everydayRow")
                 } header: { Text("매일 제한") } footer: { Text("정한 시간대에 매일 앱과 웹사이트를 제한해요.") }
@@ -29,13 +33,29 @@ struct SettingsView: View {
                 }
                 #endif
             }
+            .contentMargins(.horizontal, FocusTheme.Layout.screenInset, for: .scrollContent)
             .navigationTitle("설정").navigationBarTitleDisplayMode(.inline)
             .onAppear { model.refreshEveryday() }
             // The row's status changes at a range or window boundary while the sheet stays open, also with no focus tick.
             .task(id: model.everydayStatus) {
                 await EverydaySettingsModel.followStatus({ model.everydayStatus }, now: Date.init) { model.refreshEveryday() }
             }
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("완료") { dismiss() }.accessibilityIdentifier("settingsDone") } }
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("완료") { finish(everydayHasChanges) }.accessibilityIdentifier("settingsDone")
+                }
+            }
         }
+        .modifier(FocusEditorSheet())
+        .interactiveDismissDisabled(everydayHasChanges)
+        .alert("변경 사항을 버릴까요?", isPresented: $confirmingDiscard) {
+            Button("변경 버리기", role: .destructive) { dismiss() }
+            Button("계속 편집", role: .cancel) {}
+        } message: { Text("저장하지 않은 변경은 사라져요.") }
+    }
+    private func finish(_ hasChanges: Bool) {
+        everydayHasChanges = hasChanges
+        if hasChanges { confirmingDiscard = true }
+        else { dismiss() }
     }
 }
