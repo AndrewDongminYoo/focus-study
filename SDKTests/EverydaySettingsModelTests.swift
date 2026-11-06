@@ -8,7 +8,7 @@ import ManagedSettings
     }()
     /// 10:00 in Seoul: inside the range 08:00-18:00 and before lunch.
     private var tenAM: Date { calendar.date(from: DateComponents(year: 2026, month: 11, day: 2, hour: 10))! }
-    private func fixture() -> (EverydaySettingsModel, ModelTestEverydayLayer, ModelTestMonitoring, ModelTestSelection) {
+    private func fixture(writeFailure: @escaping () -> Bool = { false }) -> (EverydaySettingsModel, ModelTestEverydayLayer, ModelTestMonitoring, ModelTestSelection) {
         let layer = ModelTestEverydayLayer(), monitoring = ModelTestMonitoring(), shield = ModelTestShield(), selection = ModelTestSelection()
         let engine = SessionControl(store: ModelTestStore(), monitoring: monitoring, shield: shield, breakSelection: ModelTestBreakSelection(), everyday: layer, calendar: calendar)
         var services = FocusServices(authorization: ModelTestAuthorization(), selection: selection, engine: engine,
@@ -16,7 +16,10 @@ import ManagedSettings
         services.settings = FocusSettings(defaults: UserDefaults(suiteName: UUID().uuidString)!)
         services.everydaySelection = { layer.schedule == nil ? nil : layer.selection }
         services.everydayContains = { layer.contains($0) }
-        services.writeEveryday = { layer.write($0, $1) }
+        services.writeEveryday = {
+            if writeFailure() { throw ModelTestError.storage }
+            layer.write($0, $1)
+        }
         let focus = FocusModel(services: services, history: ModelTestHistory(acknowledge: engine.acknowledgeTerminal))
         let settings = EverydaySettingsModel(focus: focus)
         settings.clock = { self.tenAM }
@@ -38,6 +41,57 @@ import ManagedSettings
         XCTAssertTrue(settings.draft.windows.isEmpty); XCTAssertNil(settings.status?.schedule)
         XCTAssertEqual(EverydaySettingsModel.statusLine(settings.status), "꺼져 있어요")
         XCTAssertTrue(settings.canEdit)
+    }
+    func testPreviewPartitionsTheRangeAndSortsThreeWindows() {
+        typealias Segment = EverydaySettingsModel.PreviewSegment
+        var schedule = EverydaySchedule(revision: UUID(), enabled: true, rangeStart: 480, rangeEnd: 1080, windows: [])
+        XCTAssertEqual(EverydaySettingsModel.previewSegments(for: schedule), [Segment(start: 480, end: 1080, blocked: true)])
+        schedule.windows = [EverydayWindow(kind: .lunch, start: 720, end: 780)]
+        XCTAssertEqual(EverydaySettingsModel.previewSegments(for: schedule), [
+            Segment(start: 480, end: 720, blocked: true), Segment(start: 720, end: 780, blocked: false), Segment(start: 780, end: 1080, blocked: true)
+        ])
+        schedule.windows = [EverydayWindow(kind: .fromSchool, start: 960, end: 990),
+                            EverydayWindow(kind: .lunch, start: 720, end: 780), EverydayWindow(kind: .toSchool, start: 480, end: 510)]
+        XCTAssertEqual(EverydaySettingsModel.previewSegments(for: schedule), [
+            Segment(start: 480, end: 510, blocked: false), Segment(start: 510, end: 720, blocked: true),
+            Segment(start: 720, end: 780, blocked: false), Segment(start: 780, end: 960, blocked: true),
+            Segment(start: 960, end: 990, blocked: false), Segment(start: 990, end: 1080, blocked: true)
+        ])
+    }
+    func testPreviewOmitsZeroLengthGapsAndRejectsInvalidOrDisabledSchedules() {
+        typealias Segment = EverydaySettingsModel.PreviewSegment
+        var schedule = EverydaySchedule(revision: UUID(), enabled: true, rangeStart: 480, rangeEnd: 1080, windows: [
+            EverydayWindow(kind: .custom, start: 960, end: 1080), EverydayWindow(kind: .custom, start: 900, end: 960)
+        ])
+        XCTAssertEqual(EverydaySettingsModel.previewSegments(for: schedule), [
+            Segment(start: 480, end: 900, blocked: true), Segment(start: 900, end: 960, blocked: false), Segment(start: 960, end: 1080, blocked: false)
+        ])
+        schedule.windows[1].end = 965
+        XCTAssertNil(EverydaySettingsModel.previewSegments(for: schedule), "overlap must not produce an applied-looking preview")
+        schedule.windows = []; schedule.rangeEnd = 500
+        XCTAssertNil(EverydaySettingsModel.previewSegments(for: schedule))
+        schedule.rangeEnd = 1080; schedule.enabled = false
+        XCTAssertEqual(EverydaySettingsModel.previewSegments(for: schedule), [])
+    }
+    func testPreviewKeepsStoredScheduleThroughRefusalFailureSaveAndReentry() {
+        var fail = false
+        let (settings, layer, _, _) = fixture(writeFailure: { fail })
+        storedLayer(layer, settings); settings.refresh()
+        let stored = settings.status?.schedule
+        settings.draft.enabled = false; settings.save()
+        XCTAssertEqual(settings.status?.schedule, stored); XCTAssertNotNil(settings.refusalMessage); XCTAssertNil(settings.successMessage)
+        settings.draft.enabled = true; settings.draft.windows = []
+        fail = true
+        settings.save()
+        XCTAssertEqual(settings.status?.schedule, stored); XCTAssertNotNil(settings.refusalMessage); XCTAssertNil(settings.successMessage)
+        XCTAssertEqual(EverydaySettingsModel.previewSegments(for: settings.draft)?.count, 1)
+        XCTAssertEqual(EverydaySettingsModel.previewSegments(for: settings.status!.schedule!)?.count, 3)
+        fail = false
+        settings.save()
+        XCTAssertNotNil(settings.successMessage); XCTAssertNil(settings.refusalMessage)
+        settings.refresh()
+        XCTAssertEqual(settings.status?.schedule, settings.draft)
+        XCTAssertEqual(EverydaySettingsModel.previewSegments(for: settings.status!.schedule!)?.count, 1)
     }
     func testDirtyStateComparesEditableValuesAndTokensRatherThanRevisionOrWindowOrder() {
         let (settings, layer, _, _) = fixture()

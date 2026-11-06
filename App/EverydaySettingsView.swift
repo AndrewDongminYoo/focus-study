@@ -25,7 +25,7 @@ struct EverydaySettingsView: View {
                 if let message = settings.strictOnlyMessage {
                     Text(message).font(.footnote).foregroundStyle(FocusTheme.Palette.secondaryText).accessibilityIdentifier("everydayStrictOnly")
                 }
-            }
+            } header: { Text("저장된 상태") }
             Section {
                 Toggle("매일 제한 켜기", isOn: $settings.draft.enabled).accessibilityIdentifier("everydayToggle")
                 TimeField(title: "제한 시작", minutes: $settings.draft.rangeStart).accessibilityIdentifier("everydayRangeStart")
@@ -63,6 +63,19 @@ struct EverydaySettingsView: View {
                 }.accessibilityIdentifier("everydaySelection")
                 if let issue = settings.selectionIssue { Text(issue).foregroundStyle(FocusTheme.Palette.error).accessibilityIdentifier("everydaySelectionIssue") }
             } footer: { Text("집중 시간에 제한할 앱과 따로 골라요.") }
+            Section {
+                schedulePreview(settings.draft, prefix: "everydayDraft")
+                DisclosureGroup("저장된 일정") {
+                    if let schedule = settings.status?.schedule {
+                        schedulePreview(schedule, prefix: "everydayStored")
+                    } else {
+                        Text(settings.status?.issue == nil ? "저장된 일정이 없어요." : "저장된 일정을 확인하지 못했어요.")
+                            .accessibilityIdentifier("everydayStoredUnavailable")
+                    }
+                }
+            } header: { Text("일정 미리보기") } footer: {
+                Text("편집 중인 일정이에요. 저장하면 매일 반복해요. 제한 시간 밖에는 매일 제한이 꺼져요. 집중 시간의 제한은 따로 적용해요.")
+            }
         }
         .contentMargins(.horizontal, FocusTheme.Layout.screenInset, for: .scrollContent)
         .safeAreaInset(edge: .bottom, spacing: 0) { saveActions }
@@ -99,6 +112,25 @@ struct EverydaySettingsView: View {
             await EverydaySettingsModel.followStatus({ settings.status }, now: settings.clock) { settings.refreshStatus() }
         }
         .sheet(isPresented: $picker) { selectionEditor }
+    }
+    @ViewBuilder private func schedulePreview(_ schedule: EverydaySchedule, prefix: String) -> some View {
+        if let segments = EverydaySettingsModel.previewSegments(for: schedule) {
+            if !schedule.enabled {
+                Text("매일 제한이 꺼져 있어요.").accessibilityIdentifier("\(prefix)Off")
+            } else {
+                ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
+                    let start = EverydaySettingsModel.time(segment.start), end = EverydaySettingsModel.time(segment.end)
+                    let state = segment.blocked ? "제한" : "해제"
+                    Text("\(start)–\(end) · \(state)")
+                        .monospacedDigit().fixedSize(horizontal: false, vertical: true)
+                        .accessibilityLabel("\(start)부터 \(end)까지, \(state)")
+                        .accessibilityIdentifier("\(prefix)Segment.\(index + 1)")
+                }
+            }
+        } else {
+            Text("시간을 확인하면 미리보기를 볼 수 있어요.")
+                .foregroundStyle(FocusTheme.Palette.secondaryText).accessibilityIdentifier("\(prefix)Invalid")
+        }
     }
     private var saveActions: some View {
         VStack(spacing: FocusTheme.Layout.inlineSpacing) {

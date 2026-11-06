@@ -50,6 +50,26 @@ import Observation
     var selectionIssue: String? {
         draft.enabled ? SelectionFeedback.draftIssue(appCount: counts.apps, websiteCount: counts.websites) : nil
     }
+    /// Display-only intervals inside the daily range; no selection tokens or engine state are changed.
+    struct PreviewSegment: Equatable {
+        let start: Int
+        let end: Int
+        let blocked: Bool
+    }
+    /// `nil` refuses an invalid schedule; an empty result means the everyday layer is off.
+    static func previewSegments(for schedule: EverydaySchedule) -> [PreviewSegment]? {
+        guard schedule.issue == nil else { return nil }
+        guard schedule.enabled else { return [] }
+        var result: [PreviewSegment] = []
+        var cursor = schedule.rangeStart
+        for window in schedule.windows.sorted(by: { $0.start < $1.start }) {
+            if cursor < window.start { result.append(PreviewSegment(start: cursor, end: window.start, blocked: true)) }
+            result.append(PreviewSegment(start: window.start, end: window.end, blocked: false))
+            cursor = window.end
+        }
+        if cursor < schedule.rangeEnd { result.append(PreviewSegment(start: cursor, end: schedule.rangeEnd, blocked: true)) }
+        return result
+    }
     /// The stored range locks edits even during an unblocked window; the engine rechecks at save time.
     var strictOnlyMessage: String? {
         guard let schedule = status?.schedule, schedule.enabled,

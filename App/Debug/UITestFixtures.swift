@@ -115,6 +115,10 @@ extension FocusServices {
         if let index = arguments.firstIndex(of: "--everyday-fixture"), index + 1 < arguments.count, arguments[index + 1] == "blocking" {
             everyday = .blocking(now: now, calendar: calendar)
         }
+        if let index = arguments.firstIndex(of: "--everyday-fixture"), index + 1 < arguments.count, arguments[index + 1] == "preview" {
+            everyday.schedule = EverydaySchedule(revision: UUID(), enabled: true, rangeStart: 480, rangeEnd: 1080, windows: [EverydaySchedule.template(.lunch)!])
+            everyday.selection = FixtureEverydayLayer.sampleSelection()
+        }
         let engine = SessionControl(store: SharedControlStore(directory: directory), monitoring: FixtureMonitoring(fail: arguments.contains("registration-failure"), startDelay: startDelay), shield: FixtureShield(), breakSelection: breakSelection, everyday: everyday, timing: timing, calendar: calendar)
         let onboarding = arguments.contains("onboarding")
         var services = FocusServices(authorization: FixtureAuthorization(denied: arguments.contains("denied"), notRequested: arguments.contains("not-requested") || onboarding), selection: FixtureSelection(selected: arguments.contains("--selected") && !onboarding), engine: engine, applySelection: { _ in }, matchesSelection: { _ in true }, isFixture: true)
