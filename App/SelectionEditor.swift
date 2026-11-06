@@ -12,7 +12,7 @@ struct SelectionEditor: View {
             VStack {
                 SelectionSummary(appCount: draft.applicationTokens.count, websiteCount: draft.webDomainTokens.count)
                 FamilyActivityPicker(selection: $draft)
-                if let issue { Text(issue).foregroundStyle(.red).padding() }
+                if let issue { Text(issue).foregroundStyle(FocusTheme.Palette.error).padding(FocusTheme.Layout.screenInset) }
             }
             .navigationTitle("집중할 동안 제한")
             .toolbar {
@@ -23,22 +23,23 @@ struct SelectionEditor: View {
                 }.disabled(SelectionFeedback.draftIssue(appCount: draft.applicationTokens.count, websiteCount: draft.webDomainTokens.count) != nil).accessibilityIdentifier("pickerSave") }
             }
         }
+        .modifier(FocusEditorSheet())
     }
 }
 private struct SelectionSummary: View {
     let appCount: Int
     let websiteCount: Int
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: FocusTheme.Layout.inlineSpacing) {
             Text("앱 \(appCount)개 · 웹사이트 \(websiteCount)개 선택")
                 .font(.subheadline.weight(.semibold)).monospacedDigit()
                 .accessibilityIdentifier("selectionCounts")
             Text("앱과 웹사이트는 각각 50개까지 고를 수 있어요. 카테고리 전체를 골라도 돼요.").font(.footnote)
-            Text("웹사이트 전체를 제한해요. 브라우저에 따라 제한되지 않을 수 있어요.").font(.footnote).foregroundStyle(.secondary)
+            Text("웹사이트 전체를 제한해요. 브라우저에 따라 제한되지 않을 수 있어요.").font(.footnote).foregroundStyle(FocusTheme.Palette.secondaryText)
             if let draftIssue = SelectionFeedback.draftIssue(appCount: appCount, websiteCount: websiteCount) {
-                Label(draftIssue, systemImage: "exclamationmark.circle").font(.footnote).foregroundStyle(.red).accessibilityIdentifier("selectionIssue")
+                Label(draftIssue, systemImage: "exclamationmark.circle").font(.footnote).foregroundStyle(FocusTheme.Palette.error).accessibilityIdentifier("selectionIssue")
             }
-        }.padding()
+        }.padding(FocusTheme.Layout.screenInset)
     }
 }
 #if DEBUG
@@ -59,6 +60,7 @@ struct FixtureSelectionEditor: View {
                 ToolbarItem(placement: .confirmationAction) { Button("저장") { repository.selected = selected; dismiss() }.disabled(SelectionFeedback.draftIssue(appCount: selected ? 1 : 0, websiteCount: 0) != nil).accessibilityIdentifier("pickerSave") }
             }
         }
+        .modifier(FocusEditorSheet())
     }
 }
 #endif

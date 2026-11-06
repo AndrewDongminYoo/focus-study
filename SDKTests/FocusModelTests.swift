@@ -75,6 +75,102 @@ import ManagedSettings
         XCTAssertEqual(model.remaining, 2400)
         model.start(); XCTAssertEqual(model.current?.length, 2400)
     }
+    func testPendingStartReservesAdmissionUntilPerformed() throws {
+        let (model, _, _, shield, engine) = fixture()
+        let request = try XCTUnwrap(model.requestStart())
+        XCTAssertTrue(model.isStarting); XCTAssertFalse(model.canStart)
+        XCTAssertNil(model.current); XCTAssertNil(try engine.snapshot().session)
+        XCTAssertNil(model.requestStart()); model.start()
+        XCTAssertNil(try engine.snapshot().session); XCTAssertFalse(shield.applied)
+        XCTAssertThrowsError(try model.saveSelection(FamilyActivitySelection()))
+        model.performPendingStart(request)
+        XCTAssertTrue(model.isActive); XCTAssertTrue(shield.applied)
+        XCTAssertFalse(model.isStarting); XCTAssertNil(model.startRequestID)
+        let id = model.current?.id
+        model.performPendingStart(request)
+        XCTAssertEqual(model.current?.id, id)
+    }
+    func testCancelledStartRejectsStalePerformAndCancel() throws {
+        let (model, _, _, _, engine) = fixture()
+        let old = try XCTUnwrap(model.requestStart())
+        model.cancelPendingStart(old)
+        XCTAssertFalse(model.isStarting); XCTAssertTrue(model.canStart)
+        let current = try XCTUnwrap(model.requestStart())
+        model.cancelPendingStart(old); model.performPendingStart(old)
+        XCTAssertEqual(model.startRequestID, current); XCTAssertTrue(model.isStarting)
+        XCTAssertNil(try engine.snapshot().session)
+        model.performPendingStart(current)
+        XCTAssertTrue(model.isActive); XCTAssertFalse(model.isStarting)
+    }
+    func testLeavingForegroundCancelsPendingStart() throws {
+        let (model, _, _, _, engine) = fixture()
+        let request = try XCTUnwrap(model.requestStart())
+        model.sceneDidLeaveForeground(); model.performPendingStart(request)
+        XCTAssertFalse(model.isStarting); XCTAssertNil(try engine.snapshot().session)
+    }
+    func testPendingStartRechecksRevokedAccessAndSelection() throws {
+        for revokeAccess in [true, false] {
+            let (model, _, _, shield, engine) = fixture()
+            let request = try XCTUnwrap(model.requestStart())
+            let (authorization, selection) = doubles(model)
+            if revokeAccess { authorization.status = .denied }
+            else { selection.counts = (0, 0, 0) }
+            model.performPendingStart(request)
+            XCTAssertFalse(model.isStarting); XCTAssertNil(model.current)
+            XCTAssertNil(try engine.snapshot().session); XCTAssertFalse(shield.applied)
+        }
+    }
+    func testPendingStartDoesNotReplaceAnotherSession() throws {
+        let (model, _, _, shield, engine) = fixture()
+        let request = try XCTUnwrap(model.requestStart())
+        let existing = try engine.start(now: Date(), authorized: { true }, apply: { shield.applied = true }, matches: { true })
+        model.performPendingStart(request)
+        XCTAssertFalse(model.isStarting); XCTAssertNil(model.errorMessage)
+        XCTAssertEqual(model.current?.id, existing.id)
+        XCTAssertEqual(try engine.snapshot().session?.id, existing.id)
+    }
+    func testPendingStartDoesNotReplaceAFocusFilterSession() throws {
+        let (model, _, _, shield, engine) = fixture()
+        let request = try XCTUnwrap(model.requestStart())
+        _ = try engine.startFromFocusFilter(now: Date(), length: 1500, authorized: { true }, selectionReady: true,
+                                           apply: { shield.applied = true }, matches: { true })
+        let existing = try XCTUnwrap(try engine.snapshot().session)
+        XCTAssertEqual(existing.origin, .focusFilter)
+        model.performPendingStart(request)
+        XCTAssertFalse(model.isStarting); XCTAssertNil(model.errorMessage)
+        XCTAssertEqual(model.current?.id, existing.id)
+        XCTAssertEqual(try engine.snapshot().session?.origin, .focusFilter)
+    }
+    func testPendingStartReleasesAdmissionAfterRefreshFailure() throws {
+        let (model, _, store, shield, _) = fixture()
+        let request = try XCTUnwrap(model.requestStart())
+        store.failRead = true; model.performPendingStart(request)
+        XCTAssertFalse(model.isStarting); XCTAssertNil(model.startRequestID)
+        XCTAssertNotNil(model.errorMessage); XCTAssertFalse(shield.applied)
+    }
+    func testPendingStartReleasesAdmissionAfterSelectionValidationFailure() throws {
+        let (model, _, _, shield, _) = fixture()
+        let monitoring = model.services.engine
+        // A selection validation failure exercises the start body's catch and final refresh.
+        let request = try XCTUnwrap(model.requestStart())
+        let (_, selection) = doubles(model); selection.counts = (51, 0, 0)
+        model.performPendingStart(request)
+        XCTAssertFalse(model.isStarting); XCTAssertNil(model.startRequestID)
+        XCTAssertNotNil(model.errorMessage); XCTAssertFalse(shield.applied)
+        XCTAssertNil(try monitoring.snapshot().session)
+    }
+    func testPendingStartReleasesAdmissionAfterRegistrationFailure() throws {
+        let store = ModelTestStore(), monitoring = ModelTestMonitoring(), shield = ModelTestShield()
+        monitoring.failRegistration = true
+        let (model, _, _) = makeModel(store: store, monitoring: monitoring, shield: shield,
+                                    defaults: UserDefaults(suiteName: UUID().uuidString)!, timing: .standard)
+        let request = try XCTUnwrap(model.requestStart())
+        model.performPendingStart(request)
+        XCTAssertFalse(model.isStarting); XCTAssertNil(model.startRequestID)
+        XCTAssertNotNil(model.errorMessage); XCTAssertFalse(shield.applied)
+        XCTAssertTrue(monitoring.ids.isEmpty)
+        XCTAssertNil(try model.services.engine.snapshot().session)
+    }
     func testStartMeasurementRunsAfterSuccessfulRefresh() {
         let (original, history, _, _, _) = fixture()
         var services = original.services
@@ -335,8 +431,12 @@ final class ModelTestStore: ControlStore, LockedControl {
     func save(_ envelope: ControlEnvelope) throws { self.envelope = envelope }
 }
 final class ModelTestMonitoring: MonitoringClient {
+    var failRegistration = false
     var ids = Set<UUID>(); var registeredSessionIDs: [UUID] { Array(ids) }
-    func register(id: UUID, start: Date, end: Date) throws { ids.insert(id) }
+    func register(id: UUID, start: Date, end: Date) throws {
+        if failRegistration { throw ModelTestError.storage }
+        ids.insert(id)
+    }
     func isRegistered(id: UUID) -> Bool { ids.contains(id) }
     func stop(id: UUID) { ids.remove(id); breaks.removeAll { $0.id == id } }
     var breaks: [(id: UUID, index: Int)] = []

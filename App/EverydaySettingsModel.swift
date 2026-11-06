@@ -9,15 +9,26 @@ import Observation
     /// Tests inject a fixed time; the engine's calendar reads it.
     @ObservationIgnored var clock: () -> Date = Date.init
     private(set) var status: EverydayStatus?
-    var draft: EverydaySchedule
-    var draftSelection: FamilyActivitySelection
+    var draft: EverydaySchedule {
+        didSet { if !Self.sameEditableSchedule(draft, oldValue) { clearFeedback() } }
+    }
+    var draftSelection: FamilyActivitySelection {
+        didSet { if !Self.sameSelection(draftSelection, oldValue) { clearFeedback() } }
+    }
+    private var savedDraft = EverydaySchedule.standard
+    private var savedSelection = FamilyActivitySelection(includeEntireCategory: true)
     private(set) var refusalMessage: String?
+    private(set) var successMessage: String?
     init(focus: FocusModel) {
         self.focus = focus
         draft = .standard; draftSelection = FamilyActivitySelection(includeEntireCategory: true)
     }
     /// No edit combines with a focus phase; the save checks it again under the lock.
     var canEdit: Bool { !focus.isInSession && !focus.isStarting }
+    var hasChanges: Bool { !Self.sameEditableSchedule(draft, savedDraft) || !Self.sameSelection(draftSelection, savedSelection) }
+    /// An unreadable file can be replaced with the standard draft without inventing an edit.
+    private var needsSave: Bool { hasChanges || status?.issue == .unreadable }
+    var canSave: Bool { canEdit && needsSave && draftIssue == nil }
     var canAddWindow: Bool { draft.windows.count < EverydaySchedule.maxWindows }
     var counts: (apps: Int, websites: Int) { (draftSelection.applicationTokens.count, draftSelection.webDomainTokens.count) }
     /// The first problem of the draft, before any save.
@@ -26,6 +37,39 @@ import Observation
         if draft.enabled { return SelectionFeedback.draftIssue(appCount: counts.apps, websiteCount: counts.websites) }
         return nil
     }
+    var rangeIssue: String? {
+        guard let issue = draft.issue else { return nil }
+        switch issue {
+        case .offGrid where draft.rangeStart % EverydaySchedule.grid != 0 || draft.rangeEnd % EverydaySchedule.grid != 0:
+            return Self.message(for: issue)
+        case .outOfDay, .rangeTooShort: return Self.message(for: issue)
+        default: return nil
+        }
+    }
+    var windowsIssue: String? { rangeIssue == nil ? draft.issue.map(Self.message(for:)) : nil }
+    var selectionIssue: String? {
+        draft.enabled ? SelectionFeedback.draftIssue(appCount: counts.apps, websiteCount: counts.websites) : nil
+    }
+    /// The stored range locks edits even during an unblocked window; the engine rechecks at save time.
+    var strictOnlyMessage: String? {
+        guard let schedule = status?.schedule, schedule.enabled,
+              schedule.isInsideRange(at: clock(), calendar: services.engine.calendar) else { return nil }
+        return "제한 시간에는 더 엄격하게만 바꿀 수 있어요. \(Self.time(schedule.rangeEnd))부터 자유롭게 바꿀 수 있어요."
+    }
+    private func clearFeedback() { refusalMessage = nil; successMessage = nil }
+    private static func sameEditableSchedule(_ lhs: EverydaySchedule, _ rhs: EverydaySchedule) -> Bool {
+        func windows(_ schedule: EverydaySchedule) -> [EverydayWindow] {
+            schedule.windows.sorted {
+                if $0.start != $1.start { return $0.start < $1.start }
+                if $0.end != $1.end { return $0.end < $1.end }
+                return $0.kind.rawValue < $1.kind.rawValue
+            }
+        }
+        return lhs.enabled == rhs.enabled && lhs.rangeStart == rhs.rangeStart && lhs.rangeEnd == rhs.rangeEnd && windows(lhs) == windows(rhs)
+    }
+    private static func sameSelection(_ lhs: FamilyActivitySelection, _ rhs: FamilyActivitySelection) -> Bool {
+        lhs.applicationTokens == rhs.applicationTokens && lhs.webDomainTokens == rhs.webDomainTokens && lhs.categoryTokens == rhs.categoryTokens
+    }
     /// Loads the stored layer into the draft. An unreadable file starts from the standard layer, so the person can set it up again.
     func refresh() {
         refreshStatus()
@@ -33,6 +77,8 @@ import Observation
         schedule.windows.sort { $0.start < $1.start }
         draft = schedule
         draftSelection = services.everydaySelection() ?? FamilyActivitySelection(includeEntireCategory: true)
+        savedDraft = draft; savedSelection = draftSelection
+        clearFeedback()
     }
     /// Reads the status again and keeps the draft. The screen calls it after the app's lock sections and when a boundary passes.
     func refreshStatus() {
@@ -83,8 +129,9 @@ import Observation
         } ?? draft.rangeStart
     }
     func save() {
-        refusalMessage = nil
+        clearFeedback()
         guard canEdit else { refusalMessage = SelectionFeedback.message(for: ControlIssue.busy); return }
+        guard needsSave else { return }
         if let draftIssue { refusalMessage = draftIssue; return }
         let selection = draftSelection
         var schedule = draft
@@ -105,7 +152,7 @@ import Observation
             refusalMessage = "매일 제한을 저장하지 못했어요. 다시 저장해 주세요."
         }
         focus.refreshEveryday(); refreshStatus()
-        if refusalMessage == nil { refresh() }
+        if refusalMessage == nil { refresh(); successMessage = "매일 제한을 저장했어요." }
     }
 
     // MARK: Copy

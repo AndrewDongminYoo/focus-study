@@ -38,12 +38,181 @@ final class FocusFlowTests: XCTestCase {
     func testLengthSettingAppliesToNextSession() {
         let app = app()
         XCTAssertTrue(app.buttons["settingsButton"].waitForExistence(timeout: 8)); app.buttons["settingsButton"].tap()
-        XCTAssertTrue(app.segmentedControls["lengthPicker"].waitForExistence(timeout: 5))
-        app.segmentedControls["lengthPicker"].buttons["45분"].tap()
+        XCTAssertTrue(app.buttons["lengthPicker"].waitForExistence(timeout: 5))
+        app.buttons["lengthPicker"].tap(); app.buttons["45분"].tap()
         captureReport(app, name: "settings")
         app.buttons["settingsDone"].tap()
         XCTAssertTrue(app.staticTexts["countdown"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["countdown"].label, "남은 시간 45분 0초")
+    }
+    func testTimerControlsHaveComfortableTouchTargets() {
+        let app = app()
+        for identifier in ["selection", "settingsButton", "todaySummary"] {
+            let button = app.buttons[identifier]
+            XCTAssertTrue(button.waitForExistence(timeout: ready))
+            XCTAssertGreaterThanOrEqual(button.frame.width, 44, identifier)
+            XCTAssertGreaterThanOrEqual(button.frame.height, 44, identifier)
+        }
+        captureReport(app, name: "timer-touch-targets")
+    }
+    func testEndConfirmationKeepsContinuationVisibleInBottomSheet() {
+        let app = app()
+        app.buttons["start"].tap()
+        XCTAssertTrue(app.buttons["end"].waitForExistence(timeout: 8))
+        app.buttons["end"].tap()
+        let keepFocusing = app.buttons["계속 집중하기"]
+        XCTAssertTrue(keepFocusing.waitForExistence(timeout: 5))
+        if keepFocusing.exists {
+            XCTAssertTrue(keepFocusing.isHittable)
+            let window = app.windows.firstMatch.frame
+            XCTAssertGreaterThan(app.staticTexts["endConfirmation"].frame.minY, window.minY + window.height * 0.5)
+            XCTAssertGreaterThan(keepFocusing.frame.minY, window.minY + window.height * 0.5)
+            captureReport(app, name: "compact-end-confirmation")
+            keepFocusing.tap()
+            XCTAssertTrue(app.buttons["end"].waitForExistence(timeout: 5))
+            XCTAssertFalse(app.buttons["start"].exists)
+        }
+    }
+    func testEndConfirmationAtLargestTextSizeKeepsContinuationReachable() {
+        let app = app(extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        app.buttons["start"].tap()
+        let end = app.buttons["end"]
+        XCTAssertTrue(end.waitForExistence(timeout: 8))
+        for _ in 0..<4 where !end.isHittable { app.swipeUp() }
+        end.tap()
+        let keepFocusing = app.buttons["계속 집중하기"]
+        XCTAssertTrue(keepFocusing.waitForExistence(timeout: 5))
+        for _ in 0..<5 where !keepFocusing.isHittable { app.swipeUp() }
+        XCTAssertTrue(keepFocusing.isHittable)
+        captureReport(app, name: "end-confirmation-largest-text")
+        keepFocusing.tap()
+        XCTAssertTrue(end.waitForExistence(timeout: 5))
+    }
+    func testEditorSheetsOpenAtLargeHeight() {
+        let app = app()
+        app.buttons["settingsButton"].tap()
+        let done = app.buttons["settingsDone"]
+        XCTAssertTrue(done.waitForExistence(timeout: ready))
+        XCTAssertLessThan(done.frame.minY, app.frame.height * 0.2)
+        captureReport(app, name: "large-settings-sheet")
+        done.tap()
+        app.buttons["selection"].tap()
+        let cancel = app.buttons["pickerCancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: ready))
+        XCTAssertLessThan(cancel.frame.minY, app.frame.height * 0.2)
+        captureReport(app, name: "large-selection-sheet")
+        cancel.tap()
+        XCTAssertTrue(app.buttons["start"].isEnabled)
+    }
+    func testSolidControlsPreserveTheFocusFlow() {
+        let app = app(extra: ["--solid-controls"])
+        XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: ready))
+        captureReport(app, name: "solid-controls-timer")
+        app.buttons["start"].tap()
+        XCTAssertTrue(app.buttons["end"].waitForExistence(timeout: 8))
+        app.buttons["end"].tap()
+        XCTAssertTrue(app.buttons["계속 집중하기"].waitForExistence(timeout: 5))
+        captureReport(app, name: "solid-controls-confirmation")
+        app.buttons["계속 집중하기"].tap()
+        XCTAssertTrue(app.buttons["end"].waitForExistence(timeout: 5))
+    }
+    func testEverydayUnsavedChangesCanBeKeptOrDiscardedFromSettings() {
+        let app = app()
+        _ = openEveryday(app)
+        let add = app.buttons["everydayAddWindow"]
+        waitHittable(add); add.tap()
+        app.buttons["직접 정하기"].tap()
+        XCTAssertTrue(app.otherElements["everydayWindow.1"].waitForExistence(timeout: 5))
+        captureReport(app, name: "everyday-unsaved-footer")
+        app.buttons["settingsDone"].tap()
+        let discard = app.buttons["변경 버리기"]
+        XCTAssertTrue(discard.waitForExistence(timeout: 5))
+        captureReport(app, name: "everyday-unsaved-confirmation")
+        let keepEditing = app.buttons["계속 편집"]
+        guard keepEditing.waitForExistence(timeout: 5) else {
+            XCTFail("Discard confirmation must expose the keep-editing action")
+            return
+        }
+        XCTAssertTrue(keepEditing.isHittable)
+        keepEditing.tap()
+        XCTAssertTrue(app.otherElements["everydayWindow.1"].exists)
+        app.buttons["settingsDone"].tap(); discard.tap()
+        XCTAssertTrue(app.buttons["settingsButton"].waitForExistence(timeout: 5))
+        _ = openEveryday(app)
+        XCTAssertFalse(app.otherElements["everydayWindow.1"].exists)
+        app.buttons["everydayAddWindow"].tap(); app.buttons["직접 정하기"].tap()
+        XCTAssertTrue(app.buttons["everydayBack"].waitForExistence(timeout: 5))
+        app.buttons["everydayBack"].tap()
+        XCTAssertTrue(keepEditing.waitForExistence(timeout: 5))
+        XCTAssertTrue(discard.isHittable)
+        captureReport(app, name: "everyday-back-unsaved-confirmation")
+        keepEditing.tap()
+        XCTAssertTrue(app.otherElements["everydayWindow.1"].exists)
+        app.buttons["everydayBack"].tap(); discard.tap()
+        XCTAssertTrue(app.buttons["lengthPicker"].waitForExistence(timeout: 5))
+        app.buttons["settingsDone"].tap()
+        XCTAssertTrue(app.buttons["settingsButton"].waitForExistence(timeout: 5))
+    }
+    func testSlowSyntheticStartCompletesAfterFeedback() {
+        let app = app(extra: ["--start-delay", "3"])
+        XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: ready))
+        captureReport(app, name: "slow-start-before")
+        app.buttons["start"].tap()
+        XCTAssertTrue(app.buttons["end"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.buttons["start"].exists)
+        captureReport(app, name: "slow-start-active")
+    }
+    func testDiscardAlertAtLargestTextKeepsBothActionsReachable() {
+        let app = app(extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        _ = openEveryday(app)
+        let toggle = app.switches["everydayToggle"]
+        flip(toggle)
+        let draftValue = toggle.value as? String
+        XCTAssertTrue(app.buttons["everydaySave"].isHittable)
+        captureReport(app, name: "everyday-unsaved-footer-largest-text")
+        app.buttons["settingsDone"].tap()
+        let keepEditing = app.buttons["계속 편집"], discard = app.buttons["변경 버리기"]
+        XCTAssertTrue(keepEditing.waitForExistence(timeout: 5))
+        XCTAssertTrue(keepEditing.isHittable)
+        XCTAssertTrue(discard.isHittable)
+        captureReport(app, name: "everyday-discard-largest-text")
+        keepEditing.tap()
+        XCTAssertEqual(toggle.value as? String, draftValue)
+        XCTAssertTrue(app.staticTexts["everydayUnsavedChanges"].isHittable)
+        app.buttons["everydayBack"].tap()
+        XCTAssertTrue(keepEditing.waitForExistence(timeout: 5))
+        XCTAssertTrue(discard.isHittable)
+        discard.tap()
+        XCTAssertTrue(app.buttons["lengthPicker"].waitForExistence(timeout: 5))
+        app.buttons["settingsDone"].tap()
+        XCTAssertTrue(app.buttons["settingsButton"].waitForExistence(timeout: 5))
+    }
+    func testEverydayEmptySelectionShowsLocalValidation() {
+        let app = app()
+        _ = openEveryday(app)
+        flip(app.switches["everydayToggle"])
+        let issue = app.staticTexts["everydaySelectionIssue"]
+        for _ in 0..<4 where !issue.isHittable { app.swipeUp() }
+        XCTAssertTrue(issue.isHittable)
+        let save = app.buttons["everydaySave"]
+        XCTAssertTrue(save.exists); XCTAssertFalse(save.isEnabled)
+        captureReport(app, name: "everyday-inline-selection-error")
+    }
+    func testOnboardingAtLargestTextSizeKeepsNavigationAndContentReachable() {
+        let app = app("onboarding", selected: false, extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        let next = app.buttons["onboardingNext"]
+        XCTAssertTrue(next.waitForExistence(timeout: ready))
+        XCTAssertTrue(next.isHittable)
+        let privacy = app.staticTexts["데이터는 기기에만 저장돼요"]
+        for _ in 0..<5 where !privacy.isHittable { app.swipeUp() }
+        XCTAssertTrue(privacy.isHittable)
+        XCTAssertTrue(next.isHittable)
+        captureReport(app, name: "onboarding-largest-text-scrolled")
+        next.tap()
+        let authorize = app.buttons["authorize"]
+        for _ in 0..<5 where !authorize.isHittable { app.swipeUp() }
+        XCTAssertTrue(authorize.isHittable)
+        captureReport(app, name: "onboarding-permission-largest-text")
     }
     func testHistoryDistinguishesCompletedSessionAtConfiguredLength() {
         let app = app("history", extra: ["-AppleLanguages", "(ko)", "-AppleLocale", "ko_KR"])
@@ -152,6 +321,9 @@ final class FocusFlowTests: XCTestCase {
         waitForExpectations(timeout: 5)
         let refusal = app.staticTexts["everydayRefusal"]
         XCTAssertFalse(refusal.exists, refusal.exists ? refusal.label : "")
+        let success = app.descendants(matching: .any).matching(NSPredicate(format: "identifier == 'everydaySaveSuccess' AND label CONTAINS '저장했어요' ")).firstMatch
+        XCTAssertTrue(success.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["everydaySave"].isEnabled)
         captureReport(app, name: "everyday-settings")
     }
     func testLooserEditInsideTheRangeIsRefused() {
@@ -275,8 +447,8 @@ final class FocusFlowTests: XCTestCase {
         app.buttons["chooseSelection"].tap(); app.buttons["fixtureSelect"].tap(); app.buttons["pickerSave"].tap()
         expectation(for: enabled, evaluatedWith: app.buttons["onboardingNext"]); waitForExpectations(timeout: 5)
         app.buttons["onboardingNext"].tap()
-        XCTAssertTrue(app.segmentedControls["lengthPicker"].waitForExistence(timeout: 5))
-        app.segmentedControls["lengthPicker"].buttons["40분"].tap()
+        XCTAssertTrue(app.buttons["lengthPicker"].waitForExistence(timeout: 5))
+        app.buttons["lengthPicker"].tap(); app.buttons["40분"].tap()
         captureReport(app, name: "onboarding-length")
         app.buttons["onboardingFinish"].tap()
         XCTAssertTrue(app.staticTexts["countdown"].waitForExistence(timeout: 5))
@@ -439,9 +611,9 @@ final class FocusFlowTests: XCTestCase {
         let app = shortBreaks("ending-soon")
         let start = app.buttons["start"], breakStart = app.buttons["breakStart"]
         XCTAssertTrue(start.waitForExistence(timeout: ready)); start.tap()
-        // A loaded host can drop a synthesized tap. `start()` is synchronous, so a delivered tap has shown the session controls before `tap()` returns;
-        // tap again only when they are absent and `start` still takes a tap. The 10 seconds count from the tap that starts the session.
-        if !breakStart.waitForExistence(timeout: 5), !app.buttons["end"].exists, start.exists, start.isHittable { start.tap() }
+        // A loaded host can drop a synthesized tap. A delivered tap first reserves the pending start and disables the button.
+        // Retry only if no session controls appeared and the button is still enabled. The 10 seconds count from the accepted start body.
+        if !breakStart.waitForExistence(timeout: 5), !app.buttons["end"].exists, start.exists, start.isEnabled, start.isHittable { start.tap() }
         XCTAssertTrue(breakStart.waitForExistence(timeout: ready)); breakStart.tap()
         XCTAssertTrue(app.staticTexts["breakCountdown"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.buttons["resume"].waitForExistence(timeout: 10))

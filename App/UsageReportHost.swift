@@ -14,12 +14,13 @@ struct UsageReportContainer<Report: View>: View {
     @State private var refreshID = UUID()
     init(@ViewBuilder report: @escaping (DateInterval) -> Report) { self.report = report }
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: FocusTheme.Layout.relatedSpacing) {
             report(TimeRules.today(now: date, calendar: .current))
                 .id(refreshID)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            Text("사용량이 표시되기까지 시간이 걸릴 수 있어요.").font(.footnote).foregroundStyle(.secondary).accessibilityIdentifier("reportWaiting")
-        }.padding().navigationTitle("오늘의 사용 보고서")
+            Text("사용량이 보이지 않으면 다시 불러와 주세요.").font(.footnote).foregroundStyle(FocusTheme.Palette.secondaryText)
+                .multilineTextAlignment(.center).accessibilityIdentifier("reportWaiting")
+        }.padding(FocusTheme.Layout.screenInset).navigationTitle("오늘의 사용 보고서")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { date = Date(); refreshID = UUID() } label: {

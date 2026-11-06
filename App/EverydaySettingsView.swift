@@ -7,16 +7,30 @@ struct EverydaySettingsView: View {
     @State private var picker = false
     @State private var loaded = false
     @State private var choosingWindow = false
-    init(model: FocusModel) { _settings = State(initialValue: EverydaySettingsModel(focus: model)) }
+    @State private var confirmingDiscard = false
+    @State private var saveFeedback = 0
+    @ScaledMetric(relativeTo: .footnote) private var saveStatusHeight = FocusTheme.Layout.minimumTapTarget
+    @Environment(\.dismiss) private var dismiss
+    private let onUnsavedChanges: (Bool) -> Void
+    private let onFinish: ((Bool) -> Void)?
+    init(model: FocusModel, onUnsavedChanges: @escaping (Bool) -> Void = { _ in }, onFinish: ((Bool) -> Void)? = nil) {
+        _settings = State(initialValue: EverydaySettingsModel(focus: model))
+        self.onUnsavedChanges = onUnsavedChanges
+        self.onFinish = onFinish
+    }
     var body: some View {
         Form {
             Section {
                 Text(EverydaySettingsModel.statusLine(settings.status, calendar: settings.focus.services.engine.calendar)).accessibilityIdentifier("everydayStatus")
+                if let message = settings.strictOnlyMessage {
+                    Text(message).font(.footnote).foregroundStyle(FocusTheme.Palette.secondaryText).accessibilityIdentifier("everydayStrictOnly")
+                }
             }
             Section {
                 Toggle("매일 제한 켜기", isOn: $settings.draft.enabled).accessibilityIdentifier("everydayToggle")
                 TimeField(title: "제한 시작", minutes: $settings.draft.rangeStart).accessibilityIdentifier("everydayRangeStart")
                 TimeField(title: "제한 끝", minutes: $settings.draft.rangeEnd).accessibilityIdentifier("everydayRangeEnd")
+                if let issue = settings.rangeIssue { Text(issue).foregroundStyle(FocusTheme.Palette.error).accessibilityIdentifier("everydayRangeIssue") }
             } header: { Text("제한 시간") } footer: { Text("매일 이 시간에 고른 앱과 웹사이트를 제한해요. 앱을 열지 않아도 돼요.") }
             Section {
                 ForEach(Array(settings.draft.windows.enumerated()), id: \.offset) { index, window in
@@ -37,29 +51,47 @@ struct EverydaySettingsView: View {
                         }
                         Button("닫기", role: .cancel) {}
                     }
+                if let issue = settings.windowsIssue { Text(issue).foregroundStyle(FocusTheme.Palette.error).accessibilityIdentifier("everydayWindowsIssue") }
             } header: { Text("잠시 풀어 두는 시간") } footer: { Text("점심이나 등하교처럼 제한을 풀어 둘 시간을 3개까지 정할 수 있어요. 한 번에 15분에서 2시간까지예요.") }
             Section {
                 Button { picker = true } label: {
                     HStack {
                         Text("제한할 앱")
                         Spacer()
-                        Text("앱 \(settings.counts.apps)개 · 웹사이트 \(settings.counts.websites)개").foregroundStyle(.secondary).monospacedDigit()
+                        Text("앱 \(settings.counts.apps)개 · 웹사이트 \(settings.counts.websites)개").foregroundStyle(FocusTheme.Palette.secondaryText).monospacedDigit()
                     }
                 }.accessibilityIdentifier("everydaySelection")
+                if let issue = settings.selectionIssue { Text(issue).foregroundStyle(FocusTheme.Palette.error).accessibilityIdentifier("everydaySelectionIssue") }
             } footer: { Text("집중 시간에 제한할 앱과 따로 골라요.") }
-            Section {
-                Button("저장") { settings.save() }.disabled(!settings.canEdit).accessibilityIdentifier("everydaySave")
-                if let message = settings.refusalMessage {
-                    Text(message).foregroundStyle(.red).accessibilityIdentifier("everydayRefusal")
-                } else if !settings.canEdit {
-                    Text(SelectionFeedback.message(for: ControlIssue.busy)).foregroundStyle(.secondary)
-                } else if let issue = settings.draftIssue {
-                    Text(issue).foregroundStyle(.secondary)
+        }
+        .contentMargins(.horizontal, FocusTheme.Layout.screenInset, for: .scrollContent)
+        .safeAreaInset(edge: .bottom, spacing: 0) { saveActions }
+        .navigationTitle("매일 제한").navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(settings.hasChanges)
+        .toolbar {
+            if settings.hasChanges {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { confirmingDiscard = true } label: { Label("뒤로", systemImage: "chevron.left") }
+                        .accessibilityIdentifier("everydayBack")
+                }
+            }
+            if let onFinish {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("완료") { onFinish(settings.hasChanges) }.accessibilityIdentifier("settingsDone")
                 }
             }
         }
-        .navigationTitle("매일 제한").navigationBarTitleDisplayMode(.inline)
-        .onAppear { if !loaded { loaded = true; settings.refresh() } }
+        .alert("변경 사항을 버릴까요?", isPresented: $confirmingDiscard) {
+            Button("변경 버리기", role: .destructive) { dismiss() }
+            Button("계속 편집", role: .cancel) {}
+        } message: { Text("저장하지 않은 변경은 사라져요.") }
+        .sensoryFeedback(.success, trigger: saveFeedback)
+        .onAppear {
+            if !loaded { loaded = true; settings.refresh() }
+            onUnsavedChanges(settings.hasChanges)
+        }
+        .onChange(of: settings.hasChanges) { _, hasChanges in onUnsavedChanges(hasChanges) }
+        .onDisappear { onUnsavedChanges(false) }
         // FocusView's foreground, day, time zone, clock and access refreshes run their lock section first, then change this value.
         .onChange(of: settings.focus.everydayStatus) { _, _ in settings.refreshStatus() }
         // While the screen stays open, a range or window boundary changes the status without any lock section of the app.
@@ -67,6 +99,45 @@ struct EverydaySettingsView: View {
             await EverydaySettingsModel.followStatus({ settings.status }, now: settings.clock) { settings.refreshStatus() }
         }
         .sheet(isPresented: $picker) { selectionEditor }
+    }
+    private var saveActions: some View {
+        VStack(spacing: FocusTheme.Layout.inlineSpacing) {
+            saveStatus
+                .frame(maxWidth: .infinity, minHeight: saveStatusHeight, alignment: .center)
+            Button {
+                settings.save()
+                if settings.successMessage != nil { saveFeedback += 1 }
+            } label: {
+                Text("저장").frame(maxWidth: .infinity)
+            }.modifier(FocusPrimaryAction()).controlSize(.large).modifier(ProminentLabel())
+                .disabled(!settings.canSave).accessibilityIdentifier("everydaySave")
+        }
+        .multilineTextAlignment(.center)
+        .padding(.horizontal, FocusTheme.Layout.screenInset)
+        .padding(.top, FocusTheme.Layout.relatedSpacing)
+        .padding(.bottom, FocusTheme.Layout.inlineSpacing)
+        .background(FocusTheme.Palette.groupedSurface)
+    }
+    private var saveStatus: some View {
+        VStack(spacing: FocusTheme.Layout.detailSpacing) {
+            if let message = settings.successMessage {
+                HStack(alignment: .center, spacing: FocusTheme.Layout.inlineSpacing) {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(FocusTheme.Palette.accent)
+                    Text(message).foregroundStyle(FocusTheme.Palette.primaryText)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(message).accessibilityIdentifier("everydaySaveSuccess")
+            }
+            if settings.hasChanges {
+                Text("저장하지 않은 변경이 있어요.").foregroundStyle(FocusTheme.Palette.secondaryText).accessibilityIdentifier("everydayUnsavedChanges")
+            }
+            if let message = settings.refusalMessage {
+                Text(message).foregroundStyle(FocusTheme.Palette.error).accessibilityIdentifier("everydayRefusal")
+            } else if !settings.canEdit {
+                Text(SelectionFeedback.message(for: ControlIssue.busy)).foregroundStyle(FocusTheme.Palette.secondaryText)
+            }
+        }
+        .font(.footnote)
     }
     @ViewBuilder private var selectionEditor: some View {
         #if DEBUG
@@ -81,6 +152,7 @@ struct EverydaySettingsView: View {
                 .navigationTitle("매일 제한할 앱").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("완료") { picker = false }.accessibilityIdentifier("pickerSave") } }
         }
+        .modifier(FocusEditorSheet())
     }
     private func windowBinding(_ index: Int, _ key: WritableKeyPath<EverydayWindow, Int>) -> Binding<Int> {
         Binding(get: { settings.draft.windows.indices.contains(index) ? settings.draft.windows[index][keyPath: key] : 0 },
@@ -114,6 +186,7 @@ private struct FixtureEverydaySelectionEditor: View {
                 Button("선택 지우기") { settings.draftSelection = FamilyActivitySelection(includeEntireCategory: true) }.accessibilityIdentifier("fixtureClear")
             }.toolbar { ToolbarItem(placement: .confirmationAction) { Button("완료") { dismiss() }.accessibilityIdentifier("pickerSave") } }
         }
+        .modifier(FocusEditorSheet())
     }
 }
 #endif

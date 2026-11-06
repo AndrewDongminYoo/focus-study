@@ -39,6 +39,8 @@ SDK 또는 UI만 확인할 때는 test 명령에 `-only-testing:FocusSDKTests` �
 화면만 확인하려면 Debug scheme의 Launch Arguments에 `--ui-testing approved --selected`를 넣습니다. 권한 거절 화면은 `--ui-testing denied --selected`, 등록 실패 화면은 `--ui-testing registration-failure --selected`입니다. 이 경로는 메모리 SwiftData와 고유 임시 제어 파일을 사용하고 Release에는 fixture 구현이 포함되지 않습니다. 실제 Screen Time API 지원의 증거가 아닙니다. `--ui-testing startup-failure --selected`는 합성 세션이 진행 중일 때 초기 저장소가 한 번 실패하는 복구 화면을 확인합니다.
 `--ui-testing onboarding`은 설정을 마치지 않은 새 사용자로 온보딩을 시작하고, 다른 모드는 온보딩을 마친 사용자로 시작합니다.
 `--length <분>`은 집중 시간 설정(25~50분, 5분 단위)을 지정합니다.
+`--solid-controls`는 `--ui-testing`에서 불투명 버튼 대체 스타일을 확인합니다. 시스템의 투명도 설정은 바꾸지 않습니다.
+`--start-delay <초>`는 합성 monitoring 등록만 최대 3초 지연해 시작 진행 표시를 확인합니다. `--ui-testing`에서만 적용되며, 실제 Screen Time 지연을 재현하거나 측정하지 않습니다.
 `--break-timing short`는 쉬는 시간 대기를 1·2·4초, 쉬는 시간을 3초, 마감 여유를 5초, 대기 유예를 2초로 줄이며 집중 시간은 줄이지 않습니다.
 `--ui-testing ending-soon`은 시작 버튼을 누르면 설정한 길이의 합성 세션을 집중 종료 10초 전부터 시작하며, `--break-timing short`와 함께 쓰면 바로 쉬고 다시 집중하지 않은 세션이 시작 버튼을 누른 뒤 약 19초에 마감에 닿습니다.
 `--ui-testing expiring`은 설정한 길이의 합성 세션을 만료 3초 전부터 시작해 완료 화면을 확인합니다.
@@ -61,6 +63,7 @@ fixture 엔진과 상태 줄은 실행 시각이 12시와 13시 사이가 되는
 이 모드에서 시작 조건을 통과한 `집중 시작하기` 호출은 처음 상태 확인부터 마지막 갱신·오류 처리까지 걸린 시간을 Xcode 콘솔의 `START_LATENCY total_ms=...` 로그로 남깁니다.
 시작 조건을 통과하지 못한 탭은 측정하지 않으며, 로그에는 경과 시간만 포함됩니다.
 첫 시작과 이후 시작의 값, 기기·OS·빌드와 성공 여부를 함께 기록하고, 합성 측정값과 구분합니다.
+시작 진행 안내를 화면에 표시하기 위한 프레임 대기는 이 측정에 포함하지 않습니다.
 측정 범위와 현재 결과는 [시작 지연 기록](docs/notes/2026-11-05-start-latency.md)을 참고하세요.
 
 1. 동의받은 선택과 정상 권한을 준비한 후 `다음 등록 후 실패 주입`을 누르고 세션을 시작합니다.

@@ -24,8 +24,14 @@ private final class FixtureMonitoring: MonitoringClient {
     var registeredSessionIDs: [UUID] { Array(registered) }
     var registered = Set<UUID>()
     let fail: Bool
-    init(fail: Bool) { self.fail = fail }
-    func register(id: UUID, start: Date, end: Date) throws { if fail { throw ControlIssue.io }; registered.insert(id) }
+    let startDelay: TimeInterval
+    init(fail: Bool, startDelay: TimeInterval = 0) { self.fail = fail; self.startDelay = startDelay }
+    func register(id: UUID, start: Date, end: Date) throws {
+        // Deliberately blocks the same synchronous path as the real adapter; no real Screen Time call runs.
+        if startDelay > 0 { Thread.sleep(forTimeInterval: startDelay) }
+        if fail { throw ControlIssue.io }
+        registered.insert(id)
+    }
     func isRegistered(id: UUID) -> Bool { registered.contains(id) }
     func stop(id: UUID) { registered.remove(id); breaks.removeAll { $0.id == id } }
     /// Break registrations stay in memory; the fixture has no Monitor, so the app's timer tick re-blocks.
@@ -92,6 +98,11 @@ private final class FixtureBreakSelection: BreakSelectionStore {
 extension FocusServices {
     static func fixture(arguments: [String]) -> FocusServices {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("FocusFixture-\(UUID().uuidString)")
+        var startDelay: TimeInterval = 0
+        if let index = arguments.firstIndex(of: "--start-delay"), index + 1 < arguments.count,
+           let requested = TimeInterval(arguments[index + 1]), requested.isFinite, requested >= 0 {
+            startDelay = min(requested, 3)
+        }
         // `--break-timing short` shortens waits, the break, the slack and the grace, but not the focus length.
         var timing = BreakTiming.standard
         if let index = arguments.firstIndex(of: "--break-timing"), index + 1 < arguments.count, arguments[index + 1] == "short" {
@@ -104,7 +115,7 @@ extension FocusServices {
         if let index = arguments.firstIndex(of: "--everyday-fixture"), index + 1 < arguments.count, arguments[index + 1] == "blocking" {
             everyday = .blocking(now: now, calendar: calendar)
         }
-        let engine = SessionControl(store: SharedControlStore(directory: directory), monitoring: FixtureMonitoring(fail: arguments.contains("registration-failure")), shield: FixtureShield(), breakSelection: breakSelection, everyday: everyday, timing: timing, calendar: calendar)
+        let engine = SessionControl(store: SharedControlStore(directory: directory), monitoring: FixtureMonitoring(fail: arguments.contains("registration-failure"), startDelay: startDelay), shield: FixtureShield(), breakSelection: breakSelection, everyday: everyday, timing: timing, calendar: calendar)
         let onboarding = arguments.contains("onboarding")
         var services = FocusServices(authorization: FixtureAuthorization(denied: arguments.contains("denied"), notRequested: arguments.contains("not-requested") || onboarding), selection: FixtureSelection(selected: arguments.contains("--selected") && !onboarding), engine: engine, applySelection: { _ in }, matchesSelection: { _ in true }, isFixture: true)
         services.saveBreakSelection = { _, id in breakSelection.copies.insert(id) }
