@@ -12,7 +12,7 @@ struct SelectionEditor: View {
             VStack {
                 SelectionSummary(appCount: draft.applicationTokens.count, websiteCount: draft.webDomainTokens.count)
                 FamilyActivityPicker(selection: $draft)
-                if let issue { Text(issue).foregroundStyle(FocusTheme.Palette.error).padding(FocusTheme.Layout.screenInset) }
+                if let issue { Label(issue, systemImage: "exclamationmark.circle").foregroundStyle(FocusTheme.Palette.error).padding(FocusTheme.Layout.screenInset) }
             }
             .navigationTitle("집중할 동안 제한")
             .toolbar {

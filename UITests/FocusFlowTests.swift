@@ -336,6 +336,7 @@ final class FocusFlowTests: XCTestCase {
         let lunch = app.buttons["점심"]
         if !lunch.waitForExistence(timeout: 3), add.isHittable { add.tap() }
         XCTAssertTrue(lunch.waitForExistence(timeout: 5)); lunch.tap()
+        XCTAssertTrue(app.staticTexts["everydayWindowsIssue"].waitForExistence(timeout: 5))
         let invalid = app.staticTexts["everydayDraftInvalid"]
         scrollEveryday(app, to: invalid)
         XCTAssertTrue(invalid.isHittable)

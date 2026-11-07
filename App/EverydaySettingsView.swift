@@ -30,7 +30,7 @@ struct EverydaySettingsView: View {
                 Toggle("매일 제한 켜기", isOn: $settings.draft.enabled).accessibilityIdentifier("everydayToggle")
                 TimeField(title: "제한 시작", minutes: $settings.draft.rangeStart).accessibilityIdentifier("everydayRangeStart")
                 TimeField(title: "제한 끝", minutes: $settings.draft.rangeEnd).accessibilityIdentifier("everydayRangeEnd")
-                if let issue = settings.rangeIssue { Text(issue).foregroundStyle(FocusTheme.Palette.error).accessibilityIdentifier("everydayRangeIssue") }
+                if let issue = settings.rangeIssue { Label(issue, systemImage: "exclamationmark.circle").foregroundStyle(FocusTheme.Palette.error).accessibilityIdentifier("everydayRangeIssue") }
             } header: { Text("제한 시간") } footer: { Text("매일 이 시간에 고른 앱과 웹사이트를 제한해요. 앱을 열지 않아도 돼요.") }
             Section {
                 ForEach(Array(settings.draft.windows.enumerated()), id: \.offset) { index, window in
@@ -51,7 +51,7 @@ struct EverydaySettingsView: View {
                         }
                         Button("닫기", role: .cancel) {}
                     }
-                if let issue = settings.windowsIssue { Text(issue).foregroundStyle(FocusTheme.Palette.error).accessibilityIdentifier("everydayWindowsIssue") }
+                if let issue = settings.windowsIssue { Label(issue, systemImage: "exclamationmark.circle").foregroundStyle(FocusTheme.Palette.error).accessibilityIdentifier("everydayWindowsIssue") }
             } header: { Text("잠시 풀어 두는 시간") } footer: { Text("점심이나 등하교처럼 제한을 풀어 둘 시간을 3개까지 정할 수 있어요. 한 번에 15분에서 2시간까지예요.") }
             Section {
                 Button { picker = true } label: {
@@ -61,7 +61,7 @@ struct EverydaySettingsView: View {
                         Text("앱 \(settings.counts.apps)개 · 웹사이트 \(settings.counts.websites)개").foregroundStyle(FocusTheme.Palette.secondaryText).monospacedDigit()
                     }
                 }.accessibilityIdentifier("everydaySelection")
-                if let issue = settings.selectionIssue { Text(issue).foregroundStyle(FocusTheme.Palette.error).accessibilityIdentifier("everydaySelectionIssue") }
+                if let issue = settings.selectionIssue { Label(issue, systemImage: "exclamationmark.circle").foregroundStyle(FocusTheme.Palette.error).accessibilityIdentifier("everydaySelectionIssue") }
             } footer: { Text("집중 시간에 제한할 앱과 따로 골라요.") }
             Section {
                 schedulePreview(settings.draft, prefix: "everydayDraft")
@@ -164,7 +164,7 @@ struct EverydaySettingsView: View {
                 Text("저장하지 않은 변경이 있어요.").foregroundStyle(FocusTheme.Palette.secondaryText).accessibilityIdentifier("everydayUnsavedChanges")
             }
             if let message = settings.refusalMessage {
-                Text(message).foregroundStyle(FocusTheme.Palette.error).accessibilityIdentifier("everydayRefusal")
+                Label(message, systemImage: "exclamationmark.circle").foregroundStyle(FocusTheme.Palette.error).accessibilityIdentifier("everydayRefusal")
             } else if !settings.canEdit {
                 Text(SelectionFeedback.message(for: ControlIssue.busy)).foregroundStyle(FocusTheme.Palette.secondaryText)
             }
