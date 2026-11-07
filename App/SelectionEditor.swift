@@ -12,6 +12,7 @@ struct SelectionEditor: View {
             VStack {
                 SelectionSummary(appCount: draft.applicationTokens.count, websiteCount: draft.webDomainTokens.count)
                 FamilyActivityPicker(selection: $draft)
+                SelectionBrowserNote().padding(.horizontal, FocusTheme.Layout.screenInset)
                 if let issue { Label(issue, systemImage: "exclamationmark.circle").foregroundStyle(FocusTheme.Palette.error).padding(FocusTheme.Layout.screenInset) }
             }
             .navigationTitle("집중할 동안 제한")
@@ -35,11 +36,16 @@ private struct SelectionSummary: View {
                 .font(.subheadline.weight(.semibold)).monospacedDigit()
                 .accessibilityIdentifier("selectionCounts")
             Text("앱과 웹사이트는 각각 50개까지 고를 수 있어요. 카테고리 전체를 골라도 돼요.").font(.footnote)
-            Text("웹사이트 전체를 제한해요. 브라우저에 따라 제한되지 않을 수 있어요.").font(.footnote).foregroundStyle(FocusTheme.Palette.secondaryText)
             if let draftIssue = SelectionFeedback.draftIssue(appCount: appCount, websiteCount: websiteCount) {
                 Label(draftIssue, systemImage: "exclamationmark.circle").font(.footnote).foregroundStyle(FocusTheme.Palette.error).accessibilityIdentifier("selectionIssue")
             }
         }.padding(FocusTheme.Layout.screenInset)
+    }
+}
+/// Footer copy below the selection, so it does not read as a tappable row.
+private struct SelectionBrowserNote: View {
+    var body: some View {
+        Text("웹사이트 전체를 제한해요. 브라우저에 따라 제한되지 않을 수 있어요.").font(.footnote).foregroundStyle(FocusTheme.Palette.secondaryText)
     }
 }
 #if DEBUG
@@ -51,7 +57,7 @@ struct FixtureSelectionEditor: View {
     var body: some View {
         NavigationStack {
             Form {
-                SelectionSummary(appCount: selected ? 1 : 0, websiteCount: 0)
+                Section { SelectionSummary(appCount: selected ? 1 : 0, websiteCount: 0) } footer: { SelectionBrowserNote() }
                 Text("합성 선택 데이터")
                 Button("샘플 선택") { selected = true }.accessibilityIdentifier("fixtureSelect")
                 Button("선택 지우기") { selected = false }.accessibilityIdentifier("fixtureClear")

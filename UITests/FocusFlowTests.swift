@@ -729,6 +729,7 @@ final class FocusFlowTests: XCTestCase {
         let counts = app.staticTexts["selectionCounts"]
         XCTAssertTrue(counts.waitForExistence(timeout: 5))
         XCTAssertEqual(counts.label, "앱 1개 · 웹사이트 0개 선택")
+        XCTAssertTrue(app.staticTexts["웹사이트 전체를 제한해요. 브라우저에 따라 제한되지 않을 수 있어요."].exists)
         app.buttons["fixtureClear"].tap()
         XCTAssertEqual(counts.label, "앱 0개 · 웹사이트 0개 선택")
         app.buttons["pickerCancel"].tap(); app.buttons["selection"].tap()
