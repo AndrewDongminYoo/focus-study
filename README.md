@@ -137,7 +137,7 @@ App과 Monitor만 같은 App Group을 사용하며 Report와 Activity에는 App 
 
 ## 공개 PR의 CI
 
-`.github/workflows/verify.yml`은 PR의 실제 head를 checkout하고 SwiftPM 테스트, 두 프로세스 경쟁 검증, 서명 없는 SDK/mock UI 테스트와 기기용 Release 빌드를 실행합니다. `contents: read` 권한만 사용하며 계정·인증서·시크릿·entitlement를 구성하지 않습니다.
+`.github/workflows/verify.yml`은 PR의 실제 head를 checkout하고 SwiftPM 테스트와 두 프로세스 경쟁 검증, 서명 없는 Simulator SDK 테스트와 mock UI 테스트, 서명 없는 기기용 Release 빌드를 각각 별도 job으로 실행합니다. `contents: read` 권한만 사용하며 계정·인증서·시크릿·entitlement를 구성하지 않습니다.
 합성 UI 테스트의 xcresult 첨부파일은 `focus-test-attachments` artifact로 3일간 보관하므로 CI에서 생성한 화면 캡처를 검토할 수 있습니다.
 
 runner·Xcode·Simulator 버전은 workflow에 명시된 값을 기준으로 합니다.
