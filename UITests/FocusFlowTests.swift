@@ -336,6 +336,7 @@ final class FocusFlowTests: XCTestCase {
         let lunch = app.buttons["점심"]
         if !lunch.waitForExistence(timeout: 3), add.isHittable { add.tap() }
         XCTAssertTrue(lunch.waitForExistence(timeout: 5)); lunch.tap()
+        XCTAssertTrue(app.staticTexts["everydayWindowsIssue"].waitForExistence(timeout: 5))
         let invalid = app.staticTexts["everydayDraftInvalid"]
         scrollEveryday(app, to: invalid)
         XCTAssertTrue(invalid.isHittable)
@@ -719,6 +720,23 @@ final class FocusFlowTests: XCTestCase {
         app.buttons["completionDismiss"].tap()
         XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: 5)); XCTAssertFalse(completion.exists)
     }
+    func testReleaseDelayNoteShowsOnlyOnCompletion() {
+        let app = app("expiring")
+        let note = app.descendants(matching: .any)["releaseDelayNote"]
+        XCTAssertTrue(app.descendants(matching: .any)["completion"].waitForExistence(timeout: 15))
+        XCTAssertTrue(note.waitForExistence(timeout: 5))
+        XCTAssertEqual(note.label, "제한이 풀리기까지 조금 걸릴 수 있어요.")
+        app.buttons["completionDismiss"].tap()
+        XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: 5)); XCTAssertFalse(note.exists)
+        // An expiring-mode restart ends after 3 seconds, so idle and in-progress are checked in a full-length launch.
+        app.terminate()
+        let idle = self.app()
+        XCTAssertTrue(idle.buttons["start"].waitForExistence(timeout: ready))
+        XCTAssertFalse(idle.descendants(matching: .any)["releaseDelayNote"].exists)
+        idle.buttons["start"].tap()
+        XCTAssertTrue(idle.buttons["end"].waitForExistence(timeout: ready))
+        XCTAssertFalse(idle.descendants(matching: .any)["releaseDelayNote"].exists)
+    }
     func testPickerCancelKeepsExistingSelection() {
         let app = app(); app.buttons["selection"].tap(); app.buttons["fixtureClear"].tap(); app.buttons["pickerCancel"].tap()
         XCTAssertTrue(app.buttons["start"].isEnabled)
@@ -728,6 +746,7 @@ final class FocusFlowTests: XCTestCase {
         let counts = app.staticTexts["selectionCounts"]
         XCTAssertTrue(counts.waitForExistence(timeout: 5))
         XCTAssertEqual(counts.label, "앱 1개 · 웹사이트 0개 선택")
+        XCTAssertTrue(app.staticTexts["웹사이트 전체를 제한해요. 브라우저에 따라 제한되지 않을 수 있어요."].exists)
         app.buttons["fixtureClear"].tap()
         XCTAssertEqual(counts.label, "앱 0개 · 웹사이트 0개 선택")
         app.buttons["pickerCancel"].tap(); app.buttons["selection"].tap()
