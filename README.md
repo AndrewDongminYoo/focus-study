@@ -15,7 +15,8 @@ iOS 17 이상을 지원하며 SwiftUI, SwiftData, Screen Time API(FamilyControls
 
 ## 실행과 검증
 
-macOS 14 이상과 Xcode가 필요하며, CI는 Xcode 26.6을 사용합니다.
+`swift test`와 경합 검사에는 macOS 14 이상과 Swift 6.0 도구(Xcode 16 이상)가 필요합니다.
+iOS 테스트와 Release 빌드는 CI와 같은 Xcode 26.6과 iOS 26.5 시뮬레이터를 기준으로 확인하며, 이 버전은 [verify.yml](.github/workflows/verify.yml)이 정합니다.
 `FocusStudy.xcodeproj`는 `project.yml`에서 XcodeGen으로 생성하므로 직접 수정하지 않습니다([프로젝트 생성 규칙](AGENTS.md#sources-and-project-generation)).
 아래 명령은 저장소 루트에서 실행합니다.
 

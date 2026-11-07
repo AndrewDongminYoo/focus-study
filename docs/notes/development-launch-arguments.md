@@ -44,7 +44,7 @@ Live Activity는 마지막으로 확인한 집중·휴식·복귀 계획을 보�
 일반 `--ui-testing` 모드는 ActivityKit 요청을 보내지 않습니다.
 
 - `--activity-preview <모드>`는 Activity를 요청하지 않고 공용 view만 그립니다. 모드는 `focus`, `break`, `return`, `waiting`, `stale`, `deadline`, `late`이며, 라이트·다크 모드와 큰 글씨를 확인할 때 씁니다. 시스템의 갱신이나 백그라운드 전달은 확인하지 못합니다.
-- `--ui-testing approved --selected --live-activity-probe <UUID>`는 합성 Screen Time 데이터로 실제 ActivityKit 표시를 확인합니다. 실제 monitoring이나 제한은 켜지 않습니다.
+- `--ui-testing approved --selected --live-activity-probe <UUID>`는 합성 Screen Time 데이터로 실제 ActivityKit 표시를 확인합니다. 실제 monitoring이나 제한은 켜지 않습니다. 다만 probe는 자기 임시 제어 파일에 없는 세션의 Activity를 모두 끝내므로, 같은 기기에 실제 세션의 Live Activity가 떠 있으면 그 세션을 먼저 마친 뒤 실행합니다.
 - 같은 UUID로 다시 실행하면 같은 임시 제어 디렉터리와 UserDefaults를 쓰므로, 닫은 Activity가 다시 생기지 않는지 확인할 수 있습니다. 독립된 실행에는 새 UUID를 씁니다.
 - probe 실행에서는 표시 작업이 `LIVE_ACTIVITY_PROBE`로 시작하는 콘솔 로그로 남습니다.
 - 휴식 경계는 `--break-timing short`로, 집중 종료는 `--ui-testing ending-soon`으로 앞당길 수 있습니다.
