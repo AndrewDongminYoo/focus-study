@@ -15,9 +15,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify:
+  host:
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 15
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     steps:
@@ -35,6 +35,31 @@ jobs:
         run: |
           xcrun swiftc Shared/ControlTypes.swift Shared/SharedControlStore.swift Shared/SessionControl.swift Shared/FocusLength.swift Shared/BreakTiming.swift Shared/EverydaySchedule.swift Tests/Fixtures/ControlRaceHelper.swift -o "$RUNNER_TEMP/focus-control-race"
           "$RUNNER_TEMP/focus-control-race" --verify
+
+  simulator:
+    name: simulator (${{ matrix.bundle }})
+    runs-on: macos-26
+    timeout-minutes: ${{ matrix.timeout }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - bundle: FocusSDKTests
+            timeout: 20
+          - bundle: FocusUITests
+            # About 27 min of UI tests observed on 2026-11-07 (PR #77), so 45 min.
+            timeout: 45
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          xcrun swift --version
       - name: Select installed iOS 26.5 simulator
         shell: bash
         run: |
@@ -47,21 +72,16 @@ jobs:
           with open(os.environ["GITHUB_ENV"], "a") as output:
               output.write("SIMULATOR_ID=" + candidates[0]["udid"] + "\n")
           PYTHON
-      - name: Test SDK adapters and synthetic UI without signing
+      - name: Test ${{ matrix.bundle }} without signing
         run: >-
           xcodebuild test -project FocusStudy.xcodeproj -scheme FocusStudy
           -destination "platform=iOS Simulator,id=$SIMULATOR_ID"
+          -only-testing:${{ matrix.bundle }}
           -derivedDataPath "$RUNNER_TEMP/focus-derived"
           -resultBundlePath "$RUNNER_TEMP/focus-tests.xcresult"
           CODE_SIGNING_ALLOWED=NO -parallel-testing-enabled NO
-      - name: Build unsigned device Release
-        run: >-
-          xcodebuild build -project FocusStudy.xcodeproj -scheme FocusStudy
-          -configuration Release -destination 'generic/platform=iOS'
-          -derivedDataPath "$RUNNER_TEMP/focus-release"
-          CODE_SIGNING_ALLOWED=NO
       - name: Export synthetic UI attachments
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.bundle == 'FocusUITests' }}
         run: |
           if [ -d "$RUNNER_TEMP/focus-tests.xcresult" ]; then
             xcrun xcresulttool export attachments \
@@ -69,10 +89,31 @@ jobs:
               --output-path "$RUNNER_TEMP/focus-test-attachments"
           fi
       - name: Preserve synthetic UI attachments
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.bundle == 'FocusUITests' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           if-no-files-found: ignore
           name: focus-test-attachments
           path: ${{ runner.temp }}/focus-test-attachments
           retention-days: 3
+
+  release:
+    runs-on: macos-26
+    timeout-minutes: 20
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          xcrun swift --version
+      - name: Build unsigned device Release
+        run: >-
+          xcodebuild build -project FocusStudy.xcodeproj -scheme FocusStudy
+          -configuration Release -destination 'generic/platform=iOS'
+          -derivedDataPath "$RUNNER_TEMP/focus-release"
+          CODE_SIGNING_ALLOWED=NO

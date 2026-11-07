@@ -34,6 +34,7 @@ Use these current documentation paths:
 - [Implementation decisions](docs/implementation-ledger.md)
 - [Review regressions](docs/notes/independent-review.md)
 - [Physical-device acceptance](docs/notes/screen-time-device-matrix.md)
+- [Development launch arguments](docs/notes/development-launch-arguments.md): UI fixtures, Live Activity probes, device diagnostics
 
 The plan preserves the initial task breakdown and links to current interfaces.
 Use source and manifests for executable behavior, and the implementation ledger for historical decisions.

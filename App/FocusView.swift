@@ -133,7 +133,7 @@ struct FocusView: View {
             Button("집중 종료", role: .destructive) { sheet = .endConfirmation }.frame(minHeight: FocusTheme.Layout.minimumTapTarget).accessibilityIdentifier("end")
         }
     }
-    /// DEBUG device diagnostics live in settings and must stay reachable during a session (README device procedure 2).
+    /// DEBUG device diagnostics live in settings and must stay reachable during a session (docs/notes/development-launch-arguments.md, device diagnostics step 2).
     private var showsDiagnostics: Bool {
         #if DEBUG
         model.services.diagnostics != nil
