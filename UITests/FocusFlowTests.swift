@@ -720,6 +720,23 @@ final class FocusFlowTests: XCTestCase {
         app.buttons["completionDismiss"].tap()
         XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: 5)); XCTAssertFalse(completion.exists)
     }
+    func testReleaseDelayNoteShowsOnlyOnCompletion() {
+        let app = app("expiring")
+        let note = app.descendants(matching: .any)["releaseDelayNote"]
+        XCTAssertTrue(app.descendants(matching: .any)["completion"].waitForExistence(timeout: 15))
+        XCTAssertTrue(note.waitForExistence(timeout: 5))
+        XCTAssertEqual(note.label, "제한이 풀리기까지 조금 걸릴 수 있어요.")
+        app.buttons["completionDismiss"].tap()
+        XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: 5)); XCTAssertFalse(note.exists)
+        // An expiring-mode restart ends after 3 seconds, so idle and in-progress are checked in a full-length launch.
+        app.terminate()
+        let idle = self.app()
+        XCTAssertTrue(idle.buttons["start"].waitForExistence(timeout: ready))
+        XCTAssertFalse(idle.descendants(matching: .any)["releaseDelayNote"].exists)
+        idle.buttons["start"].tap()
+        XCTAssertTrue(idle.buttons["end"].waitForExistence(timeout: ready))
+        XCTAssertFalse(idle.descendants(matching: .any)["releaseDelayNote"].exists)
+    }
     func testPickerCancelKeepsExistingSelection() {
         let app = app(); app.buttons["selection"].tap(); app.buttons["fixtureClear"].tap(); app.buttons["pickerCancel"].tap()
         XCTAssertTrue(app.buttons["start"].isEnabled)

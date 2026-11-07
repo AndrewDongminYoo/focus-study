@@ -90,6 +90,7 @@ struct FocusView: View {
             if model.completedSessionID != nil {
                 Label("\(completedMinutes)분 집중을 마쳤어요", systemImage: "checkmark.circle.fill").font(.title2.weight(.semibold)).foregroundStyle(FocusTheme.Palette.accent).accessibilityIdentifier("completion")
                 Text("오늘의 세션에 기록했어요. 잠시 쉬었다가 다음 집중을 시작해 보세요.").multilineTextAlignment(.center).foregroundStyle(FocusTheme.Palette.secondaryText)
+                Text("제한이 풀리기까지 조금 걸릴 수 있어요.").font(.footnote).multilineTextAlignment(.center).foregroundStyle(FocusTheme.Palette.secondaryText).accessibilityIdentifier("releaseDelayNote")
                 Button("닫기") { model.dismissCompletion() }.modifier(FocusSecondaryAction()).accessibilityIdentifier("completionDismiss")
             } else {
                 clock(model.remaining)
