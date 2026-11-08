@@ -144,6 +144,12 @@ extension FocusServices {
         services.everydaySelection = { everyday.schedule == nil ? nil : everyday.selection }
         services.everydayContains = { everyday.contains($0) }
         services.writeEveryday = { everyday.write($0, selection: $1) }
+        // `--break-delay <seconds>`: the break feedback stays up to 5 seconds before the transition runs, so a UI test can read it.
+        // It does not block the main thread, because the accessibility queries of a UI test need it.
+        if let index = arguments.firstIndex(of: "--break-delay"), index + 1 < arguments.count,
+           let requested = TimeInterval(arguments[index + 1]), requested.isFinite, requested >= 0 {
+            services.fixtureBreakHold = min(requested, 5)
+        }
         // `ending-soon`: the start button begins a session with 10 seconds of focus left, so the test's own tap, not launch, starts the clock.
         if arguments.contains("ending-soon") { services.fixtureFocusLeft = 10 }
         // In-memory settings: `onboarding` starts a new person; every other mode is a person who finished onboarding.

@@ -71,6 +71,7 @@ import SwiftData
             services.diagnostics = diagnostics
             if diagnostics != nil {
                 services.didMeasureStart = { duration in NSLog("START_LATENCY total_ms=%.3f", duration * 1000) }
+                services.didMeasureBreak = { action, duration in NSLog("BREAK_LATENCY action=%@ total_ms=%.3f", action.rawValue, duration * 1000) }
             }
             #endif
             let container = try ModelContainer(for: SessionRecord.self, configurations: ModelConfiguration(cloudKitDatabase: .none))

@@ -9,6 +9,7 @@ struct BreakSessionView: View {
     @AccessibilityFocusState private var phaseHeadingFocused: Bool
     private var isWaiting: Bool { model.current?.phase == .waiting }
     private var isOnBreak: Bool { model.current?.phase == .onBreak }
+    private var isPending: Bool { model.pendingBreak != nil }
     var body: some View {
         VStack(spacing: 0) {
             Spacer(minLength: 32)
@@ -33,19 +34,29 @@ struct BreakSessionView: View {
             Spacer(minLength: 48)
             VStack(spacing: FocusTheme.Layout.controlSpacing) {
                 if isWaiting {
-                    breakWait
+                    // Returning from the wait, or the automatic start at its end, replaces the progress bar until the transition runs.
+                    if let pending = model.pendingBreak {
+                        BreakFeedback(model: model, pending: pending).frame(minHeight: FocusTheme.Layout.minimumTapTarget)
+                    } else {
+                        breakWait
+                    }
                     Text("다른 앱으로 나가면 집중으로 돌아가요. 이번 쉬는 시간을 쓰면 \(model.breaksLeft - 1)번 남아요.")
                         .font(.footnote).foregroundStyle(FocusTheme.Palette.secondaryText).multilineTextAlignment(.center).accessibilityIdentifier("breaksLeft")
-                    Button("집중으로 돌아가기") { model.cancelWait() }.frame(minHeight: FocusTheme.Layout.minimumTapTarget).accessibilityIdentifier("breakWaitCancel")
+                    Button("집중으로 돌아가기") { model.requestBreakAction(.cancelWait) }.frame(minHeight: FocusTheme.Layout.minimumTapTarget)
+                        .disabled(isPending).accessibilityIdentifier("breakWaitCancel")
                 } else {
-                    Button("다시 집중하기") { model.resume() }
-                        .modifier(FocusPrimaryAction()).controlSize(.large).modifier(ProminentLabel()).accessibilityIdentifier("resume")
+                    Button("다시 집중하기") { model.requestBreakAction(.resume) }
+                        .modifier(FocusPrimaryAction()).controlSize(.large).modifier(ProminentLabel()).disabled(isPending).accessibilityIdentifier("resume")
+                    if let pending = model.pendingBreak {
+                        BreakFeedback(model: model, pending: pending).frame(minHeight: FocusTheme.Layout.minimumTapTarget)
+                    }
                     if !isOnBreak {
                         Text(deadlineNotice).font(.footnote).foregroundStyle(FocusTheme.Palette.secondaryText).multilineTextAlignment(.center)
                             .monospacedDigit().accessibilityIdentifier("deadlineNotice")
                     }
                 }
-                Button("집중 종료", role: .destructive, action: onEnd).frame(minHeight: FocusTheme.Layout.minimumTapTarget).accessibilityIdentifier("end")
+                Button("집중 종료", role: .destructive, action: onEnd).frame(minHeight: FocusTheme.Layout.minimumTapTarget)
+                    .disabled(isPending).accessibilityIdentifier("end")
                 if let error = model.errorMessage {
                     Label(error, systemImage: "exclamationmark.circle").font(.footnote).foregroundStyle(FocusTheme.Palette.error).accessibilityIdentifier("startError")
                     Button("다시 확인하기") { model.refresh() }.accessibilityIdentifier("retry")

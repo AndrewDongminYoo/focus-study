@@ -60,6 +60,7 @@ struct FocusView: View {
             // Only the background cancels a wait (spec: background or close); `.inactive` overlays such as Control Center do not.
             switch value {
             case .active: refreshIfIdle()
+            case .inactive: model.sceneDidBecomeInactive()
             case .background: model.sceneDidLeaveForeground()
             default: break
             }
@@ -68,7 +69,7 @@ struct FocusView: View {
         .onChange(of: model.isInSession) { _, inSession in
             if !inSession, sheet == .endConfirmation { sheet = nil }
         }
-        .onReceive(timer) { _ in if scenePhase == .active, !model.isStarting { model.tick() } }
+        .onReceive(timer) { _ in if scenePhase == .active, !model.isStarting, model.pendingBreak == nil { model.tick(defersBreakStart: true) } }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in refreshIfIdle() }
         .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in refreshIfIdle() }
         .onReceive(NotificationCenter.default.publisher(for: .NSSystemClockDidChange)) { _ in cancelPendingStart(); model.refresh(clockChanged: true) }
@@ -108,7 +109,7 @@ struct FocusView: View {
                     Button("집중 시작하기") { model.requestStart() }.modifier(FocusPrimaryAction()).controlSize(.large).modifier(ProminentLabel())
                         .disabled(!model.canStart).accessibilityIdentifier("start")
                     if let request = model.startRequestID {
-                        StartFeedback(request: request, ready: model.performPendingStart, cancel: model.cancelPendingStart)
+                        PendingFeedback(request: request, ready: model.performPendingStart, cancel: model.cancelPendingStart)
                             .frame(minHeight: FocusTheme.Layout.minimumTapTarget)
                     }
                     Text("앱 \(model.counts.apps)개 · 웹사이트 \(model.counts.websites)개 제한").font(.footnote).foregroundStyle(FocusTheme.Palette.secondaryText)
@@ -147,10 +148,17 @@ struct FocusView: View {
         VStack(spacing: FocusTheme.Layout.controlSpacing) {
             // After the third break, the only way to leave before completion is `end`.
             if model.breaksLeft > 0 {
-                Button("쉬는 시간 갖기") { model.requestBreak() }.modifier(FocusSecondaryAction()).controlSize(.large).accessibilityIdentifier("breakStart")
-                Text("쉬는 시간 \(model.breaksLeft)번 남았어요").font(.footnote).foregroundStyle(FocusTheme.Palette.secondaryText).accessibilityIdentifier("breaksLeft")
+                Button("쉬는 시간 갖기") { model.requestBreakAction(.request) }.modifier(FocusSecondaryAction()).controlSize(.large)
+                    .disabled(model.pendingBreak != nil).accessibilityIdentifier("breakStart")
+                // The request re-registers monitoring synchronously, which can take seconds on a device; the feedback renders first.
+                if let pending = model.pendingBreak, pending.action == .request {
+                    BreakFeedback(model: model, pending: pending).frame(minHeight: FocusTheme.Layout.minimumTapTarget)
+                } else {
+                    Text("쉬는 시간 \(model.breaksLeft)번 남았어요").font(.footnote).foregroundStyle(FocusTheme.Palette.secondaryText).accessibilityIdentifier("breaksLeft")
+                }
             }
-            Button("집중 종료", role: .destructive) { sheet = .endConfirmation }.frame(minHeight: FocusTheme.Layout.minimumTapTarget).accessibilityIdentifier("end")
+            Button("집중 종료", role: .destructive) { sheet = .endConfirmation }.frame(minHeight: FocusTheme.Layout.minimumTapTarget)
+                .disabled(model.pendingBreak != nil).accessibilityIdentifier("end")
         }
     }
     /// DEBUG device diagnostics live in settings and must stay reachable during a session (docs/notes/development-launch-arguments.md, device diagnostics step 2).
@@ -189,34 +197,62 @@ struct FocusView: View {
 }
 private enum FocusSheet: String, Identifiable { case selection, settings, everydaySettings, history, endConfirmation; var id: String { rawValue } }
 
-/// A mounted native feedback view provides a frame opportunity before the synchronous start work.
-private struct StartFeedback: UIViewRepresentable {
+/// The feedback of a pending break action, in the place of the action on the screen that shows it.
+struct BreakFeedback: View {
+    let model: FocusModel
+    let pending: PendingBreak
+    var body: some View {
+        PendingFeedback(request: pending.id, text: text, identifier: "breakProgress", hold: hold, ready: model.performPendingBreak, cancel: model.cancelPendingBreak)
+    }
+    private var text: String {
+        switch pending.action {
+        case .request: "쉬는 시간을 준비하고 있어요"
+        case .startBreak: "쉬는 시간을 시작하고 있어요"
+        case .cancelWait, .resume: "집중으로 돌아가고 있어요"
+        }
+    }
+    private var hold: TimeInterval {
+        #if DEBUG
+        model.services.fixtureBreakHold
+        #else
+        0
+        #endif
+    }
+}
+
+/// A mounted native feedback view provides a frame opportunity before a synchronous control call.
+/// The start and the break transitions share it; each passes its own text and accessibility identifier.
+struct PendingFeedback: UIViewRepresentable {
     let request: UUID
+    var text = "집중 시간을 시작하고 있어요"
+    var identifier = "startProgress"
+    /// DEBUG fixtures only: seconds to keep the feedback after the frame boundary, without blocking the main thread.
+    var hold: TimeInterval = 0
     let ready: (UUID) -> Void
     let cancel: (UUID) -> Void
-    func makeUIView(context: Context) -> StartFeedbackView { StartFeedbackView() }
-    func updateUIView(_ uiView: StartFeedbackView, context: Context) {
-        uiView.configure(request: request, ready: ready, cancel: cancel)
+    func makeUIView(context: Context) -> PendingFeedbackView { PendingFeedbackView() }
+    func updateUIView(_ uiView: PendingFeedbackView, context: Context) {
+        uiView.configure(request: request, text: text, identifier: identifier, hold: hold, ready: ready, cancel: cancel)
     }
-    func sizeThatFits(_ proposal: ProposedViewSize, uiView: StartFeedbackView, context: Context) -> CGSize? {
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: PendingFeedbackView, context: Context) -> CGSize? {
         uiView.systemLayoutSizeFitting(CGSize(width: proposal.width ?? 320, height: UIView.layoutFittingCompressedSize.height),
                                        withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
     }
-    static func dismantleUIView(_ uiView: StartFeedbackView, coordinator: ()) { uiView.cancel() }
+    static func dismantleUIView(_ uiView: PendingFeedbackView, coordinator: ()) { uiView.cancel() }
 }
-private final class StartFeedbackView: UIView {
+final class PendingFeedbackView: UIView {
     private var request: UUID?
     private var ready: ((UUID) -> Void)?
     private var cancellation: ((UUID) -> Void)?
+    private var hold: TimeInterval = 0
     private var displayLink: CADisplayLink?
     private var firstFrame: CFTimeInterval?
     private var completed = false
+    private let label = UILabel()
     init() {
         super.init(frame: .zero)
         let indicator = UIActivityIndicatorView(style: .medium)
         indicator.startAnimating()
-        let label = UILabel()
-        label.text = "집중 시간을 시작하고 있어요"
         label.font = .preferredFont(forTextStyle: .subheadline)
         label.adjustsFontForContentSizeCategory = true
         label.textColor = UIColor(FocusTheme.Palette.secondaryText); label.numberOfLines = 0
@@ -232,12 +268,12 @@ private final class StartFeedbackView: UIView {
             stack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor)
         ])
         isUserInteractionEnabled = false; isAccessibilityElement = true
-        accessibilityLabel = label.text; accessibilityIdentifier = "startProgress"
         accessibilityTraits = .staticText
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-    func configure(request: UUID, ready: @escaping (UUID) -> Void, cancel: @escaping (UUID) -> Void) {
-        self.ready = ready; cancellation = cancel
+    func configure(request: UUID, text: String, identifier: String, hold: TimeInterval, ready: @escaping (UUID) -> Void, cancel: @escaping (UUID) -> Void) {
+        self.ready = ready; cancellation = cancel; self.hold = hold
+        label.text = text; accessibilityLabel = text; accessibilityIdentifier = identifier
         guard self.request != request else { return }
         invalidate(); self.request = request; completed = false
         setNeedsLayout()
@@ -258,7 +294,13 @@ private final class StartFeedbackView: UIView {
         guard let firstFrame else { firstFrame = link.timestamp; return }
         guard link.timestamp > firstFrame, let request else { return }
         // Two distinct display ticks provide a render opportunity, not proof of physical presentation.
-        completed = true; invalidate(); ready?(request)
+        completed = true; invalidate()
+        guard hold > 0 else { ready?(request); return }
+        // A held request runs only if it is still this view's request; a cancel or a new request in the meantime drops it.
+        DispatchQueue.main.asyncAfter(deadline: .now() + hold) { [weak self] in
+            guard let self, self.request == request, self.window != nil else { return }
+            self.ready?(request)
+        }
     }
     private func invalidate() { displayLink?.invalidate(); displayLink = nil; firstFrame = nil }
     func cancel() {
