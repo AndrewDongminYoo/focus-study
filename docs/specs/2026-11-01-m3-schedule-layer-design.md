@@ -46,6 +46,7 @@ M3 must not block M4, but M3 does not build it.
 - History, statistics or a report for the everyday layer.
 - A notification at the start or end of the range or a window (M4 owns notification decisions).
 - A new element on the timer screen. The settings show the layer state.
+  - Reconciliation (2026-11-08, #70): the idle timer screen and the completion card now show a one-line everyday status, as the [everyday status on the timer screen](2026-11-08-everyday-status-on-timer.md) spec says; the in-progress and break screens still show none, and the settings row does not change.
 - Protection against a manual clock change, a revoked Screen Time access or a deleted app. The 2026-10-26 design already excludes anti-cheating guarantees ("부정행위 방지를 증명하지 않는다").
 
 ## Anti-goals (never, by decision)
@@ -112,6 +113,7 @@ M3 must not block M4, but M3 does not build it.
 
 - The settings sheet (`SettingsView`) gets a section for the everyday layer, with one row that opens the everyday settings screen.
 - The row shows the state in one line, for example whether the layer blocks now and until when. The timer screen does not change.
+  - Reconciliation (2026-11-08, #70): the idle timer screen and the completion card now show a one-line everyday status, as the [everyday status on the timer screen](2026-11-08-everyday-status-on-timer.md) spec says; the in-progress and break screens still show none, and this settings row does not change.
 - The layer is off by default. Onboarding does not change.
 
 ### Everyday selection in the App Group (privacy boundary change)
