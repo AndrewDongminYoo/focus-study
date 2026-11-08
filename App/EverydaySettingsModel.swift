@@ -121,7 +121,7 @@ import Observation
         return [boundary, retry].compactMap { $0 }.min()
     }
     /// Reads the status again after each `statusReadDelay`, until the task is cancelled or no read is due.
-    /// The settings row and this screen each run it for the status they show, because a boundary changes it without any lock section of the app.
+    /// The settings row, this screen and the timer screen each run it for the status they show, because a boundary changes it without any lock section of the app.
     static func followStatus(_ status: () -> EverydayStatus?, now: () -> Date,
                              sleep: (TimeInterval) async -> Void = { try? await Task.sleep(for: .seconds($0)) },
                              read: () -> Void) async {
@@ -192,6 +192,14 @@ import Observation
         let next = status.nextChange.map { Self.clock($0, calendar: calendar) }
         if status.blocksNow { return "지금 제한하고 있어요" + (next.map { " · \($0)까지" } ?? "") }
         return "켜져 있어요" + (next.map { " · \($0)부터 제한해요" } ?? "")
+    }
+    /// The timer screen row, without its chevron: a layer that blocks now, or any status the app could not confirm. `nil` hides the row.
+    static func timerLine(_ status: EverydayStatus?, calendar: Calendar = .autoupdatingCurrent) -> String? {
+        guard let status else { return nil }
+        // Before the schedule check: an unreadable file has no schedule, and an unconfirmed state never reads as released.
+        if status.issue != nil { return "매일 제한을 확인해 주세요" }
+        guard let schedule = status.schedule, schedule.enabled, status.blocksNow else { return nil }
+        return "매일 제한 중" + (status.nextChange.map { " · \(Self.clock($0, calendar: calendar))까지" } ?? "")
     }
     /// The draft line for the first broken rule of the schedule, in the terms of the screen.
     static func message(for issue: EverydayScheduleIssue) -> String {

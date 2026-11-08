@@ -1,7 +1,7 @@
 import SwiftUI
 import FamilyControls
 
-/// The everyday layer, opened from the settings sheet. The timer screen does not show it.
+/// The everyday layer, opened in the settings sheet from its settings row or from the timer screen's everyday status row.
 struct EverydaySettingsView: View {
     @State private var settings: EverydaySettingsModel
     @State private var picker = false

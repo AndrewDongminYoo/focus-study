@@ -32,6 +32,8 @@ Debug 빌드의 scheme 설정에서 Launch Arguments에 넣어 특정 화면이�
 | `--start-delay <초>`            | 합성 monitoring 등록을 최대 3초 늦춰 시작 진행 표시를 확인합니다. 실제 Screen Time 지연을 재현하지는 않습니다.                                         |
 | `--break-timing short`          | 쉬는 시간 대기를 1·2·4초, 쉬는 시간을 3초, 마감 여유를 5초, 대기 유예를 2초로 줄입니다. 집중 시간은 줄이지 않습니다.                                   |
 | `--everyday-fixture blocking`   | 실행 5분 전(5분 단위)에 시작해 2시간 동안 이어지는 합성 매일 제한을 합성 앱 1개와 함께 저장합니다. 범위가 자정에 닿지 않도록 고정 시간대로 계산합니다. |
+| `--everyday-fixture preview`    | 08:00~18:00 범위에 점심 12:00~13:00을 풀어 두는 켜진 매일 제한을 합성 앱 1개와 함께 저장합니다. 고정 시간대에서 실행 시각은 12:00~12:30입니다.         |
+| `--everyday-fixture off`        | `preview`와 같은 일정을 꺼진 상태로 저장합니다.                                                                                                        |
 | `--focus-filter-refusal <사유>` | 마지막 집중 모드 시작 거절을 저장해 설정의 집중 모드 안내에서 보여 줍니다. 사유는 `access`, `selection`, `busy`, `history`, `error` 중 하나입니다.     |
 
 `--ui-testing ending-soon`과 `--break-timing short`를 함께 쓰면, 쉬는 시간을 가진 뒤 다시 집중하지 않은 세션이 시작 버튼을 누르고 약 19초 뒤에 마감에 닿습니다.

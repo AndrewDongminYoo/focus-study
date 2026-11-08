@@ -430,13 +430,96 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(add.exists)
         XCTAssertFalse(add.isEnabled)
     }
-    func testTimerScreenIsUnchangedWithTheLayerOn() {
+    func testTimerScreenShowsTheEverydayStatusRowWhileTheLayerBlocks() {
         let app = app(extra: ["--everyday-fixture", "blocking"])
-        XCTAssertTrue(app.staticTexts["countdown"].waitForExistence(timeout: 8))
+        let row = app.buttons["everydayStatusRow"]
+        XCTAssertTrue(row.waitForExistence(timeout: ready))
+        let time = assertBlockingLine(row)
         for identifier in ["start", "settingsButton", "todaySummary"] { XCTAssertTrue(app.buttons[identifier].exists, identifier) }
+        // The settings controls stay in the settings sheet; only the one-line row is on the timer screen.
         for identifier in ["everydayRow", "everydayStatus", "everydayToggle", "everydaySave"] {
             XCTAssertFalse(app.descendants(matching: .any)[identifier].exists, identifier)
         }
+        XCTAssertGreaterThanOrEqual(row.frame.minY, app.staticTexts["restrictionSummary"].frame.maxY)
+        XCTAssertLessThanOrEqual(row.frame.maxY, app.buttons["todaySummary"].frame.minY)
+        captureReport(app, name: "everyday-status-row-idle")
+        let status = openEverydayFromRow(app, row)
+        // The row and the settings screen read the same planned end in the engine's calendar.
+        XCTAssertEqual(status.label, "지금 제한하고 있어요 · \(time)")
+        // Back returns to the settings list, and closing the sheet returns to the timer.
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        let settingsRow = app.buttons["everydayRow"]
+        XCTAssertTrue(settingsRow.waitForExistence(timeout: ready)); waitHittable(settingsRow)
+        app.buttons["settingsDone"].tap()
+        XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: ready)); waitHittable(row)
+    }
+    func testCompletionCardShowsTheEverydayStatusRowBelowTheReleaseNote() {
+        let app = app("expiring", extra: ["--everyday-fixture", "blocking"])
+        let completion = app.descendants(matching: .any).matching(NSPredicate(format: "identifier == 'completion' AND label CONTAINS '집중을 마쳤어요'")).firstMatch
+        XCTAssertTrue(completion.waitForExistence(timeout: 15))
+        let row = app.buttons["everydayStatusRow"]
+        XCTAssertTrue(row.waitForExistence(timeout: ready))
+        let time = assertBlockingLine(row)
+        XCTAssertGreaterThanOrEqual(row.frame.minY, app.staticTexts["releaseDelayNote"].frame.maxY)
+        XCTAssertLessThanOrEqual(row.frame.maxY, app.buttons["completionDismiss"].frame.minY)
+        captureReport(app, name: "everyday-status-row-completion")
+        XCTAssertEqual(openEverydayFromRow(app, row).label, "지금 제한하고 있어요 · \(time)")
+    }
+    func testEverydayStatusRowIsHiddenDuringASessionAndOnBreak() {
+        let app = app(extra: ["--everyday-fixture", "blocking", "--break-timing", "short"])
+        let row = app.descendants(matching: .any)["everydayStatusRow"], start = app.buttons["start"]
+        XCTAssertTrue(row.waitForExistence(timeout: ready)); waitHittable(start)
+        start.tap()
+        XCTAssertTrue(app.buttons["breakStart"].waitForExistence(timeout: ready))
+        XCTAssertFalse(row.exists)
+        app.buttons["breakStart"].tap()
+        XCTAssertTrue(app.otherElements["breakScreen"].waitForExistence(timeout: 5))
+        XCTAssertFalse(row.exists)
+        XCTAssertTrue(app.staticTexts["breakCountdown"].waitForExistence(timeout: 8))
+        XCTAssertFalse(row.exists)
+    }
+    func testEverydayStatusRowIsHiddenWhileTheLayerDoesNotBlock() {
+        // No schedule; an enabled layer that the fixture's noon puts inside the 12:00-13:00 lunch window; the same layer turned off.
+        let cases: [(extra: [String], settingsLine: String)] = [
+            ([], "꺼져 있어요"), (["--everyday-fixture", "preview"], "켜져 있어요 · 13:00부터 제한해요"), (["--everyday-fixture", "off"], "꺼져 있어요")
+        ]
+        for (extra, settingsLine) in cases {
+            let app = app(extra: extra)
+            // The settings row proves that the model read this status before the timer screen is checked.
+            XCTAssertTrue(app.buttons["settingsButton"].waitForExistence(timeout: ready)); app.buttons["settingsButton"].tap()
+            let settingsRow = app.buttons["everydayRow"]
+            XCTAssertTrue(settingsRow.waitForExistence(timeout: ready))
+            XCTAssertTrue(settingsRow.label.contains(settingsLine), "\(extra): \(settingsRow.label)")
+            app.buttons["settingsDone"].tap()
+            expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: settingsRow); waitForExpectations(timeout: ready)
+            XCTAssertTrue(app.buttons["start"].exists)
+            XCTAssertFalse(app.descendants(matching: .any)["everydayStatusRow"].exists, "\(extra)")
+            app.terminate()
+        }
+    }
+    func testEverydayStatusRowAtLargestTextStaysReachable() {
+        let app = app(extra: ["--everyday-fixture", "blocking", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        let row = app.buttons["everydayStatusRow"]
+        XCTAssertTrue(row.waitForExistence(timeout: ready))
+        _ = assertBlockingLine(row)
+        for _ in 0..<3 where !row.isHittable { app.swipeUp() }
+        XCTAssertTrue(row.isHittable)
+        captureReport(app, name: "everyday-status-row-largest-text")
+    }
+    /// Asserts the blocking copy of the timer's everyday row and returns its planned end, "HH:MM까지".
+    private func assertBlockingLine(_ row: XCUIElement) -> String {
+        XCTAssertNotNil(row.label.range(of: #"^매일 제한 중 · \d{2}:\d{2}까지$"#, options: .regularExpression), row.label)
+        return row.label.components(separatedBy: " · ").last ?? ""
+    }
+    /// The timer's everyday row opens the settings sheet with the everyday screen already pushed.
+    private func openEverydayFromRow(_ app: XCUIApplication, _ row: XCUIElement) -> XCUIElement {
+        let status = app.staticTexts["everydayStatus"]
+        waitHittable(row)
+        row.tap()
+        // Retry only while the row still takes a tap and the sheet has not appeared.
+        if !status.waitForExistence(timeout: 3), row.isHittable { row.tap() }
+        XCTAssertTrue(status.waitForExistence(timeout: ready))
+        return status
     }
     private func openFocusGuide(_ app: XCUIApplication) {
         XCTAssertTrue(app.buttons["settingsButton"].waitForExistence(timeout: 8)); app.buttons["settingsButton"].tap()

@@ -470,6 +470,8 @@ The focus restrictions follow the M2 [break artifacts](2026-11-01-m2-break-pass-
 
 The settings row and the everyday settings screen use it. The timer screen does not.
 
+- Reconciliation (2026-11-08, #70): the idle timer screen and the completion card now also read it for their one-line everyday status, as the [everyday status on the timer screen](2026-11-08-everyday-status-on-timer.md) spec says; the in-progress and break screens still do not.
+
 ## Superseded lines
 
 The implementation PR adds dated reconciliation sections (it does not rewrite the original lines) for these:
