@@ -510,7 +510,7 @@ final class FocusFilterControlTests: XCTestCase {
         try engine.acknowledgeTerminal(id: s.id); check("acknowledgeTerminal")
         XCTAssertNil(world.state.envelope.session)
         let schedule = EverydaySchedule(revision: UUID(), enabled: true, rangeStart: 8 * 60, rangeEnd: 18 * 60, windows: [])
-        try engine.saveEveryday(schedule, now: breakEnd.addingTimeInterval(30), authorized: { true }, containsStoredSelection: { true }, write: { world.schedule = schedule })
+        try engine.saveEveryday(schedule, now: breakEnd.addingTimeInterval(30), authorized: { true }, containsStoredSelection: { true }, write: { world.schedule = $0 })
         check("saveEveryday")
     }
     func testControlReadFailureInAFilterSectionThrows() throws {

@@ -230,7 +230,9 @@ final class SessionControl {
     // MARK: Everyday layer
 
     /// Turn on, edit or turn off, in the order of the spec "Save": check, register, write (the commit point), stop the other revisions, converge.
-    func saveEveryday(_ schedule: EverydaySchedule, now: Date, authorized: () -> Bool, containsStoredSelection: () throws -> Bool, write: () throws -> Void) throws {
+    /// `write` gets the schedule to store: the new schedule with the `offDay` that the section sets, never one that the app passes.
+    func saveEveryday(_ schedule: EverydaySchedule, now: Date, authorized: () -> Bool, containsStoredSelection: () throws -> Bool,
+                      write: (EverydaySchedule) throws -> Void) throws {
         try section(now: now) { locked in
             var envelope = try read(locked)
             try cleanup(&envelope, locked: locked, now: now)
@@ -240,15 +242,20 @@ final class SessionControl {
             if let session = envelope.session, session.phase != .terminal { throw ControlIssue.busy }
             guard schedule.isValid else { throw ControlIssue.invalidState }
             // An unreadable file counts as no stored layer, so that the person can set the layer up again.
-            if let stored = try? everyday.load(), stored.enabled, stored.isInsideRange(at: now, calendar: calendar) {
+            let stored = try? everyday.load()
+            if let stored, stored.enabled, stored.isInsideRange(at: now, calendar: calendar) {
                 // The new range keeps `now` and ends no earlier, so the lock lasts until at least the stored range end after every accepted edit.
-                guard schedule.isAtLeastAsStrict(as: stored, from: now, calendar: calendar), schedule.isInsideRange(at: now, calendar: calendar),
-                      schedule.rangeEnd >= stored.rangeEnd, try containsStoredSelection() else { throw ControlIssue.everydayLocked }
+                // The conditions compare with the stored schedule without its off day, and the first one that fails names the refusal.
+                if let reason = schedule.lockReason(against: stored, at: now, calendar: calendar) { throw reason }
+                guard try containsStoredSelection() else { throw EverydayLockReason.removesSelection }
             }
+            // An accepted edit never turns the layer back on for today, and an off day of an earlier date goes away.
+            var written = schedule
+            written.offDay = stored?.isOff(at: now, calendar: calendar) == true ? stored?.offDay : nil
             let activities = schedule.enabled ? Self.everydayActivities(schedule) : []
             do {
                 for activity in activities { try monitoring.registerEveryday(revision: schedule.revision, part: activity.part, start: activity.start, end: activity.end) }
-                try write()
+                try write(written)
             } catch {
                 // The stored file and the store stay as they were; a registration that threw may still exist, so every new name is stopped.
                 for activity in activities { monitoring.stopEveryday(revision: schedule.revision, part: activity.part) }
@@ -258,6 +265,28 @@ final class SessionControl {
                 monitoring.stopEveryday(revision: registered.revision, part: registered.part)
             }
             // Step 5 is the convergence at the end of this section, against the new file.
+        }
+    }
+    /// The spec "The off-for-today section": check, write the stored file again with today's `offDay` (the commit point), converge.
+    /// `revision` is the stored revision that the waiting screen was shown for; `write` replaces the file with the same revision, schedule and tokens.
+    func turnEverydayOffForToday(revision: UUID, now: Date, authorized: () -> Bool, write: (EverydaySchedule) throws -> Void) throws {
+        try section(now: now) { locked in
+            var envelope = try read(locked)
+            try cleanup(&envelope, locked: locked, now: now)
+            // A refusal for access writes nothing; the convergence of this section then stops every everyday activity.
+            locked.access = authorized()
+            guard locked.access == true else { throw ControlIssue.unauthorized }
+            // A Focus filter can start a session during the wait.
+            if let session = envelope.session, session.phase != .terminal { throw ControlIssue.busy }
+            let stored: EverydaySchedule?
+            do { stored = try everyday.load() } catch { throw EverydayOffRefusal.unreadable }
+            guard var schedule = stored, schedule.enabled else { throw EverydayOffRefusal.notOn }
+            guard schedule.revision == revision else { throw EverydayOffRefusal.revisionChanged }
+            guard schedule.isInsideRange(at: now, calendar: calendar) else { throw EverydayOffRefusal.outsideRange }
+            guard !schedule.isOff(at: now, calendar: calendar) else { throw EverydayOffRefusal.alreadyOff }
+            schedule.offDay = EverydaySchedule.dayKey(of: now, calendar: calendar)
+            try write(schedule)
+            // The convergence at the end of this section finds the revision registered and clears the store.
         }
     }
     /// No convergence step; unreadable control metadata still invokes the recovery reader.
@@ -277,7 +306,8 @@ final class SessionControl {
             // Without access the shield is not in force, and the app's next lock section clears it.
             if issue == nil, authorized, !blocksNow, everyday.hasShield { issue = .notCleared }
             let nextChange = EverydayRules.nextChange(schedule: schedule, session: envelope.session, authorized: authorized, now: now, calendar: calendar)
-            return EverydayStatus(schedule: schedule, blocksNow: blocksNow, nextChange: nextChange, issue: issue)
+            let offForToday = schedule.map { $0.enabled && $0.isOff(at: now, calendar: calendar) } ?? false
+            return EverydayStatus(schedule: schedule, blocksNow: blocksNow, nextChange: nextChange, issue: issue, offForToday: offForToday)
         }
     }
 

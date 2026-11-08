@@ -163,4 +163,82 @@ final class EverydayScheduleTests: XCTestCase {
         XCTAssertEqual(EverydaySchedule.template(.toSchool)?.start, 480); XCTAssertEqual(EverydaySchedule.template(.fromSchool)?.end, 990)
         XCTAssertNil(EverydaySchedule.template(.custom))
     }
+    // MARK: Off for today
+
+    private func off(_ schedule: EverydaySchedule, day: Int = 2) -> EverydaySchedule {
+        var schedule = schedule; schedule.offDay = EverydaySchedule.dayKey(of: at(12, 0, day: day), calendar: calendar); return schedule
+    }
+    func testDayKeyIsTheLocalCalendarDayInTheEngineCalendar() {
+        XCTAssertEqual(EverydaySchedule.dayKey(of: at(0, 0), calendar: calendar), "2026-11-02")
+        XCTAssertEqual(EverydaySchedule.dayKey(of: at(23, 59, 59), calendar: calendar), "2026-11-02")
+        XCTAssertEqual(EverydaySchedule.dayKey(of: at(0, 0, day: 3), calendar: calendar), "2026-11-03")
+        // 08:00 in Seoul is 23:00 of the day before in UTC, so a time zone change recomputes the key.
+        var utc = Calendar(identifier: .gregorian); utc.timeZone = TimeZone(identifier: "UTC")!
+        XCTAssertEqual(EverydaySchedule.dayKey(of: at(8, 0), calendar: utc), "2026-11-01")
+        let january = calendar.date(from: DateComponents(year: 2027, month: 1, day: 5, hour: 9))!
+        XCTAssertEqual(EverydaySchedule.dayKey(of: january, calendar: calendar), "2027-01-05")
+    }
+    func testAnOffDayBlocksNothingThatDayAndTheScheduleAgainTheNextDay() {
+        let schedule = off(layer(windows: [lunch]))
+        for time in [at(8, 0), at(10, 0), at(13, 0), at(17, 59, 59)] { XCTAssertFalse(schedule.blocks(at: time, calendar: calendar), "\(time)") }
+        for time in [at(8, 0, day: 3), at(13, 0, day: 3)] { XCTAssertTrue(schedule.blocks(at: time, calendar: calendar), "\(time)") }
+        XCTAssertTrue(schedule.isOff(at: at(10, 0), calendar: calendar)); XCTAssertFalse(schedule.isOff(at: at(10, 0, day: 3), calendar: calendar))
+        XCTAssertTrue(schedule.isInsideRange(at: at(10, 0), calendar: calendar), "the range does not read the off day")
+        // A malformed or earlier key matches no day, so the layer blocks by its schedule.
+        for key in ["2026-11-2", "garbage", "2026-11-01"] {
+            var other = schedule; other.offDay = key
+            XCTAssertTrue(other.blocks(at: at(10, 0), calendar: calendar), key)
+        }
+    }
+    func testTheWholeRuleReadsTheOffDayAlsoForTheReBlockAndAfterABreak() {
+        let schedule = off(layer()), now = at(10, 0)
+        var session = ControlSession(startedAt: now.addingTimeInterval(-300)); session.phase = .onBreak; session.breakEndsAt = now
+        // The re-block evaluates the rule without its break line (`session: nil`); the session end evaluates it with the stored `ending` phase.
+        XCTAssertFalse(EverydayRules.blocks(schedule: schedule, session: nil, authorized: nil, now: now, calendar: calendar))
+        for phase in [SessionPhase.onBreak, .breakOver, .ending, .terminal] {
+            var other = session; other.phase = phase
+            XCTAssertFalse(EverydayRules.blocks(schedule: schedule, session: other, authorized: true, now: now, calendar: calendar), "\(phase)")
+        }
+        XCTAssertEqual(EverydayRules.nextChange(schedule: schedule, session: session, authorized: true, now: now.addingTimeInterval(-60), calendar: calendar),
+                       at(8, 0, day: 3), "a break that ends on a day that is off changes nothing that day")
+    }
+    func testNextChangeOnADayThatIsOffIsTheNextDaysFirstBlockedTime() {
+        XCTAssertEqual(off(layer(windows: [lunch])).nextChange(after: at(10, 0), calendar: calendar), at(8, 0, day: 3))
+        XCTAssertEqual(off(layer(windows: [lunch])).nextChange(after: at(12, 30), calendar: calendar), at(8, 0, day: 3), "skips the window end")
+        XCTAssertEqual(off(layer(windows: [lunch])).nextChange(after: at(19, 0), calendar: calendar), at(8, 0, day: 3))
+        // A chain of touching windows at the range start: the end of the last one.
+        let chain = off(layer(windows: [window(8 * 60, 8 * 60 + 30), window(8 * 60 + 30, 9 * 60)]))
+        XCTAssertEqual(chain.nextChange(after: at(10, 0), calendar: calendar), at(9, 0, day: 3))
+        XCTAssertEqual(off(layer(windows: [window(8 * 60, 8 * 60 + 30)])).nextChange(after: at(10, 0), calendar: calendar), at(8, 30, day: 3))
+        // A range that starts at 00:00 blocks again at midnight.
+        XCTAssertEqual(off(layer(0, 10 * 60)).nextChange(after: at(9, 0), calendar: calendar), at(0, 0, day: 3))
+        // A day that is not off keeps the existing edges.
+        XCTAssertEqual(off(layer(windows: [lunch]), day: 1).nextChange(after: at(10, 0), calendar: calendar), at(12, 0))
+    }
+    func testLockReasonNamesTheFirstFailedConditionInTheSpecOrder() {
+        let stored = layer(windows: [lunch]), now = at(10, 0)
+        let cases: [(String, EverydaySchedule, Date, EverydayLockReason?)] = [
+            ("turn off, also with a shorter range", layer(8 * 60, 17 * 60, windows: [lunch], enabled: false), now, .turnsOff),
+            ("range starts after now, also ends earlier", layer(11 * 60, 17 * 60, windows: [lunch]), now, .rangeExcludesNow),
+            ("range ends before now", layer(6 * 60, 9 * 60, windows: []), now, .rangeExcludesNow),
+            ("range ends earlier, also with a new window", layer(8 * 60, 17 * 60, windows: [lunch, window(15 * 60, 15 * 60 + 30)]), now, .rangeEndsEarlier),
+            ("a new window", layer(windows: [lunch, window(15 * 60, 15 * 60 + 30)]), now, .unblocksTime),
+            ("a longer window", layer(windows: [window(12 * 60, 13 * 60 + 30)]), now, .unblocksTime),
+            ("a window moved into blocked time", layer(windows: [window(14 * 60, 15 * 60)]), now, .unblocksTime),
+            ("stricter", layer(7 * 60, 19 * 60), now, nil),
+            ("outside the range", layer(enabled: false), at(19, 0), nil),
+        ]
+        for (name, schedule, time, reason) in cases {
+            XCTAssertEqual(schedule.lockReason(against: stored, at: time, calendar: calendar), reason, name)
+            // The conditions compare with the stored schedule without its off day.
+            XCTAssertEqual(schedule.lockReason(against: off(stored), at: time, calendar: calendar), reason, "off for today: \(name)")
+        }
+        XCTAssertEqual(EverydayLockReason.allCases, [.turnsOff, .rangeExcludesNow, .rangeEndsEarlier, .unblocksTime, .removesSelection])
+    }
+    func testAScheduleWithoutOffDayDecodesWithNoOffDay() throws {
+        let json = #"{"revision":"\#(UUID().uuidString)","enabled":true,"rangeStart":480,"rangeEnd":1080,"windows":[]}"#
+        XCTAssertNil(try JSONDecoder().decode(EverydaySchedule.self, from: Data(json.utf8)).offDay)
+        let keyed = off(layer())
+        XCTAssertEqual(try JSONDecoder().decode(EverydaySchedule.self, from: JSONEncoder().encode(keyed)), keyed)
+    }
 }

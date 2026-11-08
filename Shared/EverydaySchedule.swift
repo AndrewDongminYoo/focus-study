@@ -28,6 +28,19 @@ public enum EverydayScheduleIssue: CaseIterable, Equatable {
     /// The windows cover the whole range.
     case windowsCoverRange
 }
+/// The editing conditions of the spec "Refused save: conditions and their order", in the order that a save checks them.
+public enum EverydayLockReason: Error, CaseIterable, Equatable {
+    /// The new schedule turns the layer off.
+    case turnsOff
+    /// The new range does not contain `now`.
+    case rangeExcludesNow
+    /// The new range ends before the stored range end.
+    case rangeEndsEarlier
+    /// Between `now` and the stored range end, the new schedule leaves a time free that the stored schedule blocks.
+    case unblocksTime
+    /// The new selection leaves out an app or a website of the stored selection.
+    case removesSelection
+}
 /// The schedule part of `everyday-layer.json`. The tokens are encoded in `Integration/` only.
 public struct EverydaySchedule: Codable, Equatable {
     public static let grid = 5
@@ -40,9 +53,18 @@ public struct EverydaySchedule: Codable, Equatable {
     public var rangeStart: Int
     public var rangeEnd: Int
     public var windows: [EverydayWindow]
-    public init(revision: UUID, enabled: Bool, rangeStart: Int, rangeEnd: Int, windows: [EverydayWindow]) {
-        self.revision = revision; self.enabled = enabled; self.rangeStart = rangeStart; self.rangeEnd = rangeEnd; self.windows = windows
+    /// The day key of the day that the layer is off for; `nil` when no day is off. The load does not validate it.
+    public var offDay: String?
+    public init(revision: UUID, enabled: Bool, rangeStart: Int, rangeEnd: Int, windows: [EverydayWindow], offDay: String? = nil) {
+        self.revision = revision; self.enabled = enabled; self.rangeStart = rangeStart; self.rangeEnd = rangeEnd; self.windows = windows; self.offDay = offDay
     }
+    /// The local calendar day of `date` in `calendar`, as `yyyy-MM-dd`, independent of the locale.
+    public static func dayKey(of date: Date, calendar: Calendar) -> String {
+        let parts = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+    }
+    /// The layer is off for the local day of `now`. A malformed `offDay` matches no day.
+    public func isOff(at now: Date, calendar: Calendar) -> Bool { offDay == Self.dayKey(of: now, calendar: calendar) }
     /// A new layer: off, 08:00-18:00, no windows.
     public static let standard = EverydaySchedule(revision: UUID(), enabled: false, rangeStart: 8 * 60, rangeEnd: 18 * 60, windows: [])
     /// The suggested time of a template, and `nil` for `custom`.
@@ -75,18 +97,22 @@ public struct EverydaySchedule: Codable, Equatable {
         // Windows inside the range that do not overlap cover it only when their lengths add up to it.
         return sorted.reduce(0) { $0 + $1.end - $1.start } < rangeEnd - rangeStart ? nil : .windowsCoverRange
     }
-    /// The schedule part of the blocking rule: enabled, inside the range, outside every window.
-    public func blocks(at now: Date, calendar: Calendar) -> Bool { blocks(second: Self.second(of: now, calendar: calendar)) }
+    /// The schedule part of the blocking rule: enabled, not off for today, inside the range, outside every window.
+    public func blocks(at now: Date, calendar: Calendar) -> Bool {
+        !isOff(at: now, calendar: calendar) && blocks(second: Self.second(of: now, calendar: calendar))
+    }
     public func isInsideRange(at now: Date, calendar: Calendar) -> Bool { isInsideRange(second: Self.second(of: now, calendar: calendar)) }
     /// The next time that `blocks` changes, today or tomorrow; `nil` for a layer that is off.
+    /// A day that is off blocks nothing, so on such a day the next change is the next day's first blocked time.
     public func nextChange(after now: Date, calendar: Calendar) -> Date? {
         guard enabled else { return nil }
-        let second = Self.second(of: now, calendar: calendar), current = blocks(second: second)
+        let second = Self.second(of: now, calendar: calendar), current = blocks(at: now, calendar: calendar)
         let today = calendar.startOfDay(for: now)
         let edges = Set([rangeStart, rangeEnd] + windows.flatMap { [$0.start, $0.end] }).map { $0 * 60 }.sorted()
         for (dayOffset, candidates) in [(0, edges.filter { $0 > second }), (1, edges)] {
-            for edge in candidates where blocks(second: edge) != current {
-                guard let day = calendar.date(byAdding: .day, value: dayOffset, to: today) else { return nil }
+            guard let day = calendar.date(byAdding: .day, value: dayOffset, to: today) else { return nil }
+            let off = isOff(at: day, calendar: calendar)
+            for edge in candidates where (!off && blocks(second: edge)) != current {
                 return calendar.date(bySettingHour: edge / 3600, minute: edge % 3600 / 60, second: 0, of: day)
             }
         }
@@ -97,7 +123,20 @@ public struct EverydaySchedule: Codable, Equatable {
     public func isAtLeastAsStrict(as stored: EverydaySchedule, from now: Date, calendar: Calendar) -> Bool {
         let second = Self.second(of: now, calendar: calendar)
         guard stored.enabled, stored.isInsideRange(second: second) else { return true }
-        guard enabled else { return false }
+        return enabled && blocksWherever(stored, from: second)
+    }
+    /// The first schedule condition of the spec "Refused save: conditions and their order" that the new schedule breaks, or `nil`.
+    /// The gate reads `enabled` and the stored range, never `offDay`; the selection condition is checked by the caller after these.
+    public func lockReason(against stored: EverydaySchedule, at now: Date, calendar: Calendar) -> EverydayLockReason? {
+        let second = Self.second(of: now, calendar: calendar)
+        guard stored.enabled, stored.isInsideRange(second: second) else { return nil }
+        guard enabled else { return .turnsOff }
+        guard isInsideRange(second: second) else { return .rangeExcludesNow }
+        guard rangeEnd >= stored.rangeEnd else { return .rangeEndsEarlier }
+        return blocksWherever(stored, from: second) ? nil : .unblocksTime
+    }
+    /// At every time from `second` to the stored range end, this schedule blocks wherever `stored` blocks; the off day is not read.
+    private func blocksWherever(_ stored: EverydaySchedule, from second: Int) -> Bool {
         // Both schedules are constant between their edges, so the start of each segment decides it.
         let end = stored.rangeEnd * 60
         let edges = (edgeSeconds + stored.edgeSeconds).filter { $0 > second && $0 < end }

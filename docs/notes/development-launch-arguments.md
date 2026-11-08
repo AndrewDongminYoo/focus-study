@@ -35,6 +35,7 @@ Debug 빌드의 scheme 설정에서 Launch Arguments에 넣어 특정 화면이�
 | `--everyday-fixture blocking`   | 실행 5분 전(5분 단위)에 시작해 2시간 동안 이어지는 합성 매일 제한을 합성 앱 1개와 함께 저장합니다. 범위가 자정에 닿지 않도록 고정 시간대로 계산합니다. |
 | `--everyday-fixture preview`    | 08:00~18:00 범위에 점심 12:00~13:00을 풀어 두는 켜진 매일 제한을 합성 앱 1개와 함께 저장합니다. 고정 시간대에서 실행 시각은 12:00~12:30입니다.         |
 | `--everyday-fixture off`        | `preview`와 같은 일정을 꺼진 상태로 저장합니다.                                                                                                        |
+| `--everyday-off-wait <초>`      | 매일 제한 `오늘만 끄기`의 30초 대기를 1~30초로 줄입니다. 대기가 끝난 뒤의 유예는 바꾸지 않습니다. 합성 매일 제한에만 적용됩니다.                       |
 | `--focus-filter-refusal <사유>` | 마지막 집중 모드 시작 거절을 저장해 설정의 집중 모드 안내에서 보여 줍니다. 사유는 `access`, `selection`, `busy`, `history`, `error` 중 하나입니다.     |
 
 `--ui-testing ending-soon`과 `--break-timing short`를 함께 쓰면, 쉬는 시간을 가진 뒤 다시 집중하지 않은 세션이 시작 버튼을 누르고 약 19초 뒤에 마감에 닿습니다.

@@ -67,6 +67,7 @@ import SwiftData
             services.everydaySelection = { (try? everyday.selection()) ?? nil }
             services.everydayContains = { try everyday.contains($0) }
             services.writeEveryday = { try everyday.write($0, selection: $1) }
+            services.writeEverydayOffDay = { try everyday.writeOffDay($0) }
             #if DEBUG
             services.diagnostics = diagnostics
             if diagnostics != nil {
