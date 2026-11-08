@@ -31,13 +31,17 @@ This document changes no code; a separate implementation issue follows it.
 - The row's time is the schedule's planned change, as in settings, not a confirmed application or release.
 - The row changes at a boundary while the app stays open on the idle screen or the completion card.
   While the idle screen or the completion card shows, whether or not the row shows, the timer screen reads the status again with `EverydaySettingsModel.followStatus`, as the settings row does, because `tick()` does not refresh `everydayStatus`.
-  So the row follows each range and window boundary: it appears when the range starts or a window ends, it disappears when a window starts or the range ends, and an `issue` that `statusReadDelay` retries gets its one retry read.
+  So, while `issue == nil`, the row follows each change of `blocksNow`: it appears when `blocksNow` becomes `true`, for example when the range starts or a window ends, and it disappears when `blocksNow` becomes `false`, for example when a window starts or the range ends.
+  At a boundary where `blocksNow` stays `false`, the row does not appear: for example, a window that starts at the range start (the range 08:00-18:00 with the 등교 window 08:00-08:30), or a window that ends when the next window starts (12:00-13:00 and 13:00-13:30).
+  An `issue` that `statusReadDelay` retries gets its one retry read.
+  One exception: a read that times out on the lock keeps the passed `nextChange` and sets `unchecked`, so when a boundary read and its retry both time out, `followStatus` schedules no further read, and the row stays on `매일 제한을 확인해 주세요 ›` until the next refresh of the timer screen, such as when the app becomes active again or the day or time zone changes; the settings row behaves the same way, and the row never shows a release it did not read.
 - The settings row and its status line do not change.
 
 ## Verification and boundaries
 
 The implementation adds the accessibility identifier `everydayStatusRow` to the row and keeps every existing identifier.
 Synthetic UI tests with `--everyday-fixture blocking` check that the row is present on the idle screen and opens the everyday settings screen, and that it is absent during a session and on break.
+A launch with the `expiring` mode and `--everyday-fixture blocking` checks that the row shows below `releaseDelayNote` on the completion card and opens the everyday settings screen.
 Three launches check that the row is absent while `issue == nil`:
 
 - without the everyday fixture, for a layer with no schedule;
