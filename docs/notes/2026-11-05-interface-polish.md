@@ -50,7 +50,7 @@ The first toolbar repair also failed; the final implementation declares completi
 The affected four-test rerun passed, including keep/discard and child-back behavior.
 There was no second full UI run during that initial pass; its latest-result coverage combines the full run with affected reruns.
 
-The local sibling directory `focus-study-interface-review-2026-11-05/` retains screenshots, the start recording, exported XCTest attachments, and sampled frames.
+The screenshots, the start recording, exported XCTest attachments, and sampled frames were kept in a local sibling directory during the review; those local captures were removed on 2026-11-08 after the review.
 The suite logs and result bundles use the `/tmp/focus-interface-` prefix on this machine.
 These local media are review evidence, not published release artifacts.
 
@@ -86,7 +86,7 @@ Host tests passed again after the SwiftPM exclusion changes, and unsigned Releas
 Existing XcodeGen source globs include the two new app-only files; regenerated output was stable on a repeated generation.
 The independent reviewer found no blocking source regressions and checked the final compact light/dark captures.
 Final formatting, spelling, and internal-link checks are recorded with the local gate logs.
-The local sibling `focus-study-sheet-theme-review-2026-11-05/` directory retains the captures and XCTest attachments, with `/tmp/focus-glass-` logs for this pass.
+The captures and XCTest attachments were kept in a local sibling directory during the review, with `/tmp/focus-glass-` logs for this pass; those local captures were removed on 2026-11-08 after the review.
 Oracle query for sheet presentation and accent color returned **[no precedent found]**; current code, approved assets, Apple documentation, and rendered evidence determined the choices.
 The iOS 17 fallback was compiled, but no iOS 17 runtime or physical-device acceptance was performed.
 
@@ -108,7 +108,7 @@ Verification: ten affected UI tests passed in `/tmp/focus-spacing-ui.log`, inclu
 After the background correction, the two affected light tests passed in `/tmp/focus-spacing-light2.log`; three dark checks passed in `/tmp/focus-spacing-dark2.log`.
 The first dark attempt was interrupted when machine load exceeded the core count and was not counted as a passing check.
 The final jobs waited for acceptable load, ran sequentially, restored the SDK/runtime override, and restored light appearance.
-The local sibling directory `focus-study-spacing-review-2026-11-05/` holds exported attachments and readable captures; `everyday-settings-light.png` and `everyday-settings-dark.png` are from the final build.
+Exported attachments and readable captures were kept in a local sibling directory during the review, including `everyday-settings-light.png` and `everyday-settings-dark.png` from the final build; those local captures were removed on 2026-11-08 after the review.
 The large-text everyday save state, iOS 17 runtime, physical-device behavior, and actual accessibility settings were not exercised in this follow-up.
 Host and SDK logic suites were not repeated because this refinement changes only presentation and documentation.
 
@@ -129,6 +129,6 @@ The final light and dark runs each passed both tests in `/tmp/focus-discard-ligh
 The first light run executed only the existing test despite requesting both identifiers; its pass was not treated as evidence for the new largest-text test.
 The follow-up light run explicitly executed both tests and exported all five expected captures.
 Final captures for both appearances were read back, including the alert and pending-edit footer at default and largest text.
-The local sibling directory `focus-study-discard-review-2026-11-06/` retains them and the exported XCTest attachment manifests.
+The captures and the exported XCTest attachment manifests were kept in a local sibling directory during the review; those local captures were removed on 2026-11-08 after the review.
 SDK/runtime overrides and light appearance were restored after verification.
 Host/SDK logic suites, unsigned Release, iOS 17 runtime, and physical-device checks were not repeated for this native presentation correction.
