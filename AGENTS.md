@@ -26,6 +26,7 @@ Use these current documentation paths:
 - [M2 break pass and deadline design](docs/specs/2026-11-01-m2-break-pass-design.md)
 - [M3 everyday schedule blocking layer design](docs/specs/2026-11-01-m3-schedule-layer-design.md)
 - [M4 Focus filter design](docs/specs/2026-11-01-m4-focus-filter-design.md)
+- [Everyday status on the timer screen](docs/specs/2026-11-08-everyday-status-on-timer.md), which amends the M3 design for the timer screen
 - [Implementation plan](docs/plans/2026-10-26-focus-study.md)
 - [M1 implementation plan](docs/plans/2026-10-31-m1-launch-flow.md)
 - [M2 implementation plan](docs/plans/2026-11-01-m2-break-pass.md)
