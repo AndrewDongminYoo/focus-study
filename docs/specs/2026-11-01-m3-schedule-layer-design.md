@@ -33,6 +33,7 @@ M3 must not block M4, but M3 does not build it.
 - An M2 break lifts both layers for its 3 minutes. After the break, each layer comes back as it applies at that time.
 - The layer turns on and off every day without the app.
 - Inside today's range, the person cannot loosen the layer through the settings.
+  - Reconciliation (2026-11-08, #87): one loosening is now allowed inside the range: after a 30-second wait, the person can turn the layer off for the rest of today, once a day, as the [everyday off-for-today](2026-11-08-everyday-off-today.md) spec says; every other edit inside the range stays strict-only.
 
 ## Non-goals in M3 (deliberately excluded)
 
@@ -42,6 +43,7 @@ M3 must not block M4, but M3 does not build it.
 - A range that crosses midnight.
 - Exceptions per app, or a different selection per window.
 - A manual "pause the layer" button, and any break that belongs only to the everyday layer.
+  - Reconciliation (2026-11-08, #87): the everyday settings screen now has one "off for today" action inside the range, behind a 30-second wait, as the [everyday off-for-today](2026-11-08-everyday-off-today.md) spec says; it ends at local midnight, and there is still no pause with a chosen length, no "turn back on for today" and no break of the everyday layer alone.
 - A copy action from the focus-session selection to the everyday selection.
 - History, statistics or a report for the everyday layer.
 - A notification at the start or end of the range or a window (M4 owns notification decisions).
@@ -99,6 +101,9 @@ M3 must not block M4, but M3 does not build it.
   They also refuse an edit that keeps or adds blocked times but moves the range start past now during a window (for example, a range of 12:45-18:00 at 12:30 during lunch); the person can get the same blocking by shortening the window instead.
   `SessionControl.saveEveryday` in `Shared/SessionControl.swift` is the authority, and `testAcceptedEditsKeepTheLockUntilTheStoredRangeEnd` and `testSaveRefusesARangeEndPulledBackToATrailingWindow` in `CoreTests/EverydayControlTests.swift` cover it.
 - Every other edit inside the range is refused, and the screen says when editing opens again (the stored range end). The person can still close the sheet without a change. The builder writes the copy with the `user-facing-copy` skill, in 해요체.
+- Reconciliation (2026-11-08, #87): the five conditions and their gate do not change, also while the layer is off for today, and the lock still ends no earlier than the stored range end after any sequence of accepted edits.
+  The refusal now names the first failed condition, in the order that the [everyday off-for-today](2026-11-08-everyday-off-today.md#refused-save-conditions-and-their-order) spec gives, and points to the off-for-today action.
+  That action is a separate section, not an edit; an accepted save keeps today's off day and removes an off day of an earlier date.
 - An accepted edit applies at once.
 - A refused edit is not saved for later. A "pending" setting would add a second stored schedule and its own transitions.
 - If the stored layer is off, or no layer is stored, every edit is accepted.
@@ -205,6 +210,7 @@ Not documented, so these stay `[UNCERTAIN]` until a device check:
 - `Shared/` gets `EverydaySchedule` (all fields except the tokens) and its rules. The load checks every rule in [Times](#times) and [Selection](#selection). A file that breaks one is a read failure, as `ControlIssue.invalidState` is for `control.json`.
 - No file means that no layer is set up. That is not an error.
 - The layer is off after "turn off", but the file keeps the schedule and the selection, so that the person can turn it on again.
+- Reconciliation (2026-11-08, #87): the file gets the optional field `offDay`, the local day that the layer is off for, and `schemaVersion` stays `1`, as the [everyday off-for-today](2026-11-08-everyday-off-today.md#stored-off-day) spec says; the off-for-today section also writes the file, with the same revision.
 
 #### The blocking rule
 
@@ -222,6 +228,8 @@ everyday store blocks = the file is readable
 
 `minute(now)` is the local wall-clock time of `now` in `Calendar.current`, in minutes and seconds after midnight.
 The rule depends on the focus layer only through the last line.
+
+- Reconciliation (2026-11-08, #87): the schedule part gets the line `and offDay != dayKey(now)`, as the [everyday off-for-today](2026-11-08-everyday-off-today.md#the-blocking-rule) spec says; it is not part of the break line, so the transition 4 re-block and the transition 6 everyday step read it too.
 
 ### Monitoring activities
 
@@ -408,6 +416,8 @@ They do not depend on the focus phase, with the one exception in the last row:
 The M2 [break artifacts](2026-11-01-m2-break-pass-design.md#break-artifacts) table does not change.
 The everyday file is not a break artifact, and no M2 cleanup deletes it.
 
+- Reconciliation (2026-11-08, #87): both tables get the state "On, off for today": the store is empty in every focus phase, and the activities of the stored revision stay registered, as the [everyday off-for-today](2026-11-08-everyday-off-today.md#stored-states-and-side-artifacts) spec says. In the row "On (blocking now or not)", the file is replaced by a save or, inside the stored range, by the off-for-today section, which writes the same revision and schedule with `offDay` set.
+
 ### Gaps between steps
 
 For each gap: a thrown error at a step gives the state of a process exit after the step before it, or the rollback that the transition states.
@@ -446,6 +456,8 @@ The focus restrictions follow the M2 [break artifacts](2026-11-01-m2-break-pass-
 | `control.json` unreadable                                                                                | stored        | unchanged                                | empty                                  | Looser while `control.json` stays unreadable, as the focus layer is.                                                                                            |
 | Access revoked                                                                                           | stored        | none after a section that knows it       | empty                                  | When access is approved again, the next app section registers the activities and applies the layer.                                                             |
 
+- Reconciliation (2026-11-08, #87): the off-for-today section adds its own rows, and a save while the layer is off for today changes no store in any save row, as the [everyday off-for-today](2026-11-08-everyday-off-today.md#gaps-between-steps) spec says.
+
 ### Process lock and recovery contract
 
 - The lock, its 0.25-second timeout and the atomic JSON replace do not change. The everyday file uses the same `control.lock`, so the blocking rule always reads a focus phase and a schedule that belong together.
@@ -471,6 +483,7 @@ The focus restrictions follow the M2 [break artifacts](2026-11-01-m2-break-pass-
 The settings row and the everyday settings screen use it. The timer screen does not.
 
 - Reconciliation (2026-11-08, #70): the idle timer screen and the completion card now also read it for their one-line everyday status, as the [everyday status on the timer screen](2026-11-08-everyday-status-on-timer.md) spec says; the in-progress and break screens still do not.
+- Reconciliation (2026-11-08, #87): the status also says whether the layer is off for today, and then its next change is the next day's first blocked time, as the [everyday off-for-today](2026-11-08-everyday-off-today.md#status-for-the-app) spec says; the timer-screen row shows nothing for that state.
 
 ## Superseded lines
 
@@ -504,6 +517,8 @@ Steps:
 12. Revoke Screen Time access while the layer blocks. Record the store state and `DeviceActivityCenter.activities`.
 13. After the range end, read `DeviceActivityCenter.activities` and check that the everyday activities are still listed.
 14. Save a layer with edges in the same minute: the range 08:00-18:00 with the 등교 window 08:00-08:30, and two touching windows (12:00-13:00 and 13:00-13:30), with the start times shifted to a few minutes from now. Record whether `startMonitoring` throws, which callbacks arrive at each shared minute, and the shield state after each edge.
+
+- Reconciliation (2026-11-08, #87): step 8's refused turn-off stays refused as an edit; steps 15 to 19 for the off-for-today action are in the [everyday off-for-today](2026-11-08-everyday-off-today.md#physical-device-verification) spec.
 
 Unverified until those steps run:
 
