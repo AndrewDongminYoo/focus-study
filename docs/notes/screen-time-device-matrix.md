@@ -235,3 +235,16 @@ The timer started normally, and a subsequent break was confirmed on the phone.
 This is one successful real-path sample, not a percentile, tap-to-render duration, or shield-delivery measurement.
 See the [measurement record](2026-11-05-start-latency.md) for build identity and boundaries.
 The new early-return operation and dedicated break screen remain unverified on a physical device.
+
+## 쉬는 시간 전환 지연 제보: 2026-11-08
+
+iPhone 16 Pro, iOS 27.0.1 (`24A446`)에 `e3e9116`에서 만든 서명된 Debug 빌드를 설치해 직접 사용한 결과다.
+
+- Live Activity와 Dynamic Island는 대체로 잘 동작했다.
+- 집중 모드 필터("집중 모드 연결")가 iPhone 설정에 나타나는 것을 확인했다.
+- `쉬는 시간 갖기`를 누르면 화면이 아무 변화 없이 잠시 멈췄다가 대기 화면("N초 뒤에 쉬는 시간이 시작돼요"와 진행 막대)이 나타났다.
+  `다시 집중하기`도 같았다.
+  멈춘 사이에 버튼을 다시 누르는 것도 막아 달라는 요청이 있었다.
+
+쉬는 시간 전환의 기기 시간은 아직 재지 않았다.
+이 기록은 위 세 가지 관찰만 남기며, 위 표의 다른 시나리오를 확인한 것으로 바꾸지 않는다.
