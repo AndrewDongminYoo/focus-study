@@ -191,7 +191,7 @@ A thrown error at a step gives the state of a process exit after the step before
 
 The section expects no new activity and no new callback.
 
-- The off day ends at local midnight. No range crosses midnight, so the first time on the next day that the rule can give "block" is an existing edge: the range start, or, when a window starts at the range start, that window's end.
+- The off day ends at local midnight. No range crosses midnight, so the first time on the next day that the rule can give "block" is an existing edge: the range start, or, when a window starts at the range start, the end of the last window in the chain of touching windows that starts there (for 08:00-08:30 and 08:30-09:00, 09:00). The windows cannot cover the whole range, so the chain ends before the range end.
 - For a range that starts at 00:00, the range activity's `intervalDidStart(for:)` arrives at 00:00 and evaluates the rule with a day key that no longer matches.
 - The callbacks of later edges today (window start or end, range end) start a lock section as before. Each evaluates the rule, gets "not block", and leaves the store empty.
 - A lost or late callback at the next day's first blocked time leaves the layer off until the next section, as M3 already accepts for a lost range start. A callback that arrives before midnight by the Monitor's clock evaluates the earlier day and gives "not block"; that early callback is `[UNCERTAIN]` in M3 as well.
@@ -221,12 +221,12 @@ Each guard that compares an action with the stored state, checked after sequence
 
 - `everydayStatus(now:authorized:)` returns one more value: whether the stored layer is on and off for today (`offForToday`).
 - `blocksNow` is `false` while the layer is off for today.
-- `nextChange` is the first time at or after the start of the next local day at which the rule gives "block": the next day's range start, or the end of a window that starts at the range start. It skips today's edges.
+- `nextChange` is the first time at or after the start of the next local day at which the rule gives "block": the next day's range start, or the end of the last window in the chain of touching windows that starts at the range start. It skips today's edges. `EverydaySchedule.nextChange` already walks every edge in order, so it finds the end of such a chain.
 - The issue checks do not change. A layer that is off for today is still `enabled`, so a missing activity of the stored revision is still `registrationFailed`, and a store that keeps a shield is `notCleared`.
 - The settings row (`EverydaySettingsModel.statusLine`) says that the layer is off for today and when it blocks again, with the time of `nextChange`, so the time does not read as later today. The builder writes the copy with the `user-facing-copy` skill.
 - The everyday settings screen keeps its strict-only message inside the range, also when the layer is off for today, because the five conditions still apply. It shows the off-for-today action only under the conditions in [The app-side wait](#the-app-side-wait).
 - The timer-screen row of the [everyday status on the timer screen](2026-11-08-everyday-status-on-timer.md) spec does not change. With `issue == nil` and `blocksNow == false`, it shows no row, and the idle screen gets no "off for today" line. Any `issue` still shows `매일 제한을 확인해 주세요 ›`.
-- `EverydaySettingsModel.followStatus` reads the status again at `nextChange` as before.
+- `EverydaySettingsModel.followStatus` reads the status again at `nextChange` as before, and the everyday settings screen also reads it at today's stored range start and range end when either is still ahead. The action depends on whether `now` is inside the range, and `nextChange` can skip the range start: with a window at the range start, a screen opened before the range would otherwise show the action only at the window end.
 
 ### Earlier builds and schema
 
