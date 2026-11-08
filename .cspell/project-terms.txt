@@ -60,6 +60,7 @@ xcresulttool
 xcrun
 xctest
 XCUIApplication
+XCUIDevice
 XCUIElement
 xcuserdata
 xcuserstate

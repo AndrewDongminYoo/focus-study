@@ -587,6 +587,8 @@ final class ModelTestEverydayLayer: EverydayLayerStore {
         selection.applicationTokens.isSubset(of: new.applicationTokens) && selection.webDomainTokens.isSubset(of: new.webDomainTokens)
     }
     func write(_ schedule: EverydaySchedule, _ selection: FamilyActivitySelection) { self.schedule = schedule; self.selection = selection; unreadable = false; writes += 1 }
+    /// The off-for-today write keeps the selection.
+    func writeOffDay(_ schedule: EverydaySchedule) { self.schedule = schedule; writes += 1 }
 }
 /// Synthetic Codable tokens for count tests, never Screen Time calls.
 func syntheticApps(_ range: Range<Int>) -> Set<ApplicationToken> {

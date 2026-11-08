@@ -457,8 +457,61 @@ final class FocusFlowTests: XCTestCase {
         app.buttons["everydaySave"].tap()
         let refusal = app.staticTexts["everydayRefusal"]
         XCTAssertTrue(refusal.waitForExistence(timeout: 5))
-        XCTAssertTrue(refusal.label.hasPrefix("제한 시간에는 더 엄격하게만 바꿀 수 있어요."), refusal.label)
+        // The refusal names the failed condition and points to the off-for-today action, which is offered inside the range.
+        XCTAssertTrue(refusal.label.hasPrefix("제한 시간에는 매일 제한을 끌 수 없어요."), refusal.label)
+        XCTAssertTrue(refusal.label.hasSuffix("‘오늘만 끄기’를 누르면 오늘은 제한을 끌 수 있어요."), refusal.label)
         XCTAssertTrue(status.label.hasPrefix("지금 제한하고 있어요"), status.label)
+        XCTAssertTrue(app.buttons["everydayOffToday"].exists)
+    }
+    func testEverydayOffForTodayWaitsCanBeCancelledAndThenTurnsTheLayerOff() {
+        // A shortened synthetic wait; nothing reaches real restrictions.
+        let app = app(extra: ["--everyday-fixture", "blocking", "--everyday-off-wait", "8"])
+        let status = openEveryday(app)
+        XCTAssertTrue(status.label.hasPrefix("지금 제한하고 있어요"), status.label)
+        let action = app.buttons["everydayOffToday"], wait = app.descendants(matching: .any)["everydayOffWait"], cancel = app.buttons["everydayOffCancel"]
+        XCTAssertTrue(action.waitForExistence(timeout: ready)); waitHittable(action)
+        action.tap()
+        XCTAssertTrue(wait.waitForExistence(timeout: ready))
+        XCTAssertNotNil(wait.label.range(of: #"^\d+초 뒤에 오늘 매일 제한이 꺼져요$"#, options: .regularExpression), wait.label)
+        captureReport(app, name: "everyday-off-wait")
+        cancel.tap()
+        XCTAssertTrue(action.waitForExistence(timeout: ready))
+        XCTAssertFalse(wait.exists)
+        XCTAssertTrue(status.label.hasPrefix("지금 제한하고 있어요"), "a cancelled wait changes nothing: \(status.label)")
+        waitHittable(action)
+        action.tap()
+        XCTAssertTrue(wait.waitForExistence(timeout: ready))
+        expectation(for: NSPredicate(format: "label BEGINSWITH '오늘은 꺼 두었어요 · 내일 ' AND label ENDSWITH '부터 다시 제한해요'"), evaluatedWith: status)
+        waitForExpectations(timeout: ready)
+        XCTAssertFalse(action.exists, "once a day")
+        XCTAssertFalse(app.staticTexts["everydayRefusal"].exists)
+        captureReport(app, name: "everyday-off-today")
+    }
+    func testEverydayOffForTodayWaitStopsInTheBackgroundAndWhenSettingsClose() {
+        // The same 8-second synthetic wait; nothing reaches real restrictions.
+        let app = app(extra: ["--everyday-fixture", "blocking", "--everyday-off-wait", "8"])
+        var status = openEveryday(app)
+        let action = app.buttons["everydayOffToday"], wait = app.descendants(matching: .any)["everydayOffWait"]
+        XCTAssertTrue(action.waitForExistence(timeout: ready)); waitHittable(action)
+        action.tap()
+        XCTAssertTrue(wait.waitForExistence(timeout: ready))
+        // Leaving the app cancels the wait, as it cancels the M2 wait.
+        XCUIDevice.shared.press(.home)
+        expectation(for: NSPredicate { _, _ in app.state != .runningForeground }, evaluatedWith: nil)
+        waitForExpectations(timeout: ready)
+        app.activate()
+        XCTAssertTrue(action.waitForExistence(timeout: ready), "the cancelled wait gives the action back")
+        XCTAssertFalse(wait.exists)
+        XCTAssertTrue(status.label.hasPrefix("지금 제한하고 있어요"), "a cancelled wait changes nothing: \(status.label)")
+        // Closing the settings sheet cancels it too: the layer still blocks after the wait would have ended.
+        waitHittable(action); action.tap()
+        XCTAssertTrue(wait.waitForExistence(timeout: ready))
+        app.buttons["settingsDone"].tap()
+        XCTAssertTrue(app.buttons["settingsButton"].waitForExistence(timeout: ready))
+        _ = XCTWaiter.wait(for: [XCTestExpectation(description: "past the wait end")], timeout: 10)
+        status = openEveryday(app)
+        XCTAssertTrue(status.label.hasPrefix("지금 제한하고 있어요"), status.label)
+        XCTAssertTrue(action.waitForExistence(timeout: ready))
     }
     func testThreeWindowsAreTheLimit() {
         let app = app()

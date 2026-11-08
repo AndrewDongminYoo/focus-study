@@ -20,6 +20,10 @@ import ManagedSettings
             if writeFailure() { throw ModelTestError.storage }
             layer.write($0, $1)
         }
+        services.writeEverydayOffDay = {
+            if writeFailure() { throw ModelTestError.storage }
+            layer.writeOffDay($0)
+        }
         let focus = FocusModel(services: services, history: ModelTestHistory(acknowledge: engine.acknowledgeTerminal))
         let settings = EverydaySettingsModel(focus: focus)
         settings.clock = { self.tenAM }
@@ -217,7 +221,7 @@ import ManagedSettings
         settings.refresh()
         settings.draft.enabled = false
         settings.save()
-        XCTAssertEqual(settings.refusalMessage, "제한 시간에는 더 엄격하게만 바꿀 수 있어요. 18:00부터 자유롭게 바꿀 수 있어요.")
+        XCTAssertEqual(settings.refusalMessage, "제한 시간에는 매일 제한을 끌 수 없어요. 18:00부터 자유롭게 바꿀 수 있어요. ‘오늘만 끄기’를 누르면 오늘은 제한을 끌 수 있어요.")
         XCTAssertEqual(layer.schedule, stored); XCTAssertEqual(layer.writes, 1)
         // A stricter edit is accepted at once.
         settings.draft.enabled = true; settings.draft.windows = []
@@ -362,5 +366,198 @@ import ManagedSettings
             XCTAssertEqual(line(nil, blocks: false, issue: issue), "매일 제한을 확인해 주세요", "\(issue)")
             XCTAssertEqual(line(off, blocks: false, next: noon, issue: issue), "매일 제한을 확인해 주세요", "\(issue)")
         }
+    }
+    // MARK: Off for today
+
+    private func at(_ hour: Int, _ minute: Int = 0, _ second: Int = 0, day: Int = 2) -> Date {
+        calendar.date(from: DateComponents(year: 2026, month: 11, day: day, hour: hour, minute: minute, second: second))!
+    }
+    /// The stored layer, read at 10:00, with the off-for-today wait started then.
+    private func waiting() -> (EverydaySettingsModel, ModelTestEverydayLayer) {
+        let (settings, layer, _, _) = fixture()
+        storedLayer(layer, settings); settings.refresh()
+        XCTAssertTrue(settings.offersOffForToday)
+        settings.startOffWait()
+        XCTAssertNotNil(settings.offWait)
+        return (settings, layer)
+    }
+    /// One tick of the wait's timer at `time`, in the scene phase that the screen reported last.
+    private func tick(_ settings: EverydaySettingsModel, at time: Date) {
+        settings.clock = { time }; settings.tickOffWait()
+    }
+    func testOffWaitRunsTheSectionOnceAtItsEndAndKeepsTheDraft() {
+        let (settings, layer) = waiting()
+        settings.draft.windows = []
+        XCTAssertEqual(settings.offWaitRemaining, 30); XCTAssertEqual(settings.offWaitProgress, 0)
+        tick(settings, at: tenAM.addingTimeInterval(10))
+        XCTAssertEqual(settings.offWaitRemaining, 20); XCTAssertEqual(settings.offWaitProgress ?? 0, 1.0 / 3, accuracy: 0.001)
+        XCTAssertNil(layer.schedule?.offDay); XCTAssertEqual(layer.writes, 1)
+        tick(settings, at: tenAM.addingTimeInterval(30))
+        XCTAssertEqual(layer.schedule?.offDay, "2026-11-02"); XCTAssertEqual(layer.writes, 2)
+        XCTAssertNil(settings.offWait); XCTAssertNil(settings.refusalMessage)
+        XCTAssertEqual(settings.status?.offForToday, true); XCTAssertEqual(settings.status?.blocksNow, false)
+        XCTAssertEqual(EverydaySettingsModel.statusLine(settings.status, calendar: calendar), "오늘은 꺼 두었어요 · 내일 08:00부터 다시 제한해요")
+        XCTAssertFalse(settings.offersOffForToday, "once a day")
+        XCTAssertEqual(settings.draft.windows, [], "the action does not save or reset the draft"); XCTAssertTrue(settings.hasChanges)
+        // The strict-only message stays inside the range, because the five conditions still apply.
+        XCTAssertNotNil(settings.strictOnlyMessage)
+        tick(settings, at: tenAM.addingTimeInterval(31))
+        XCTAssertEqual(layer.writes, 2, "the section runs once")
+        // The timer-screen row shows nothing for a layer that is off for today.
+        XCTAssertNil(EverydaySettingsModel.timerLine(settings.status, calendar: calendar))
+    }
+    func testBackgroundCancelsTheWaitAndChangesNothing() {
+        let (settings, layer) = waiting()
+        settings.sceneDidLeaveForeground()
+        XCTAssertNil(settings.offWait)
+        settings.clock = { self.tenAM.addingTimeInterval(30) }; settings.sceneDidBecomeActive()
+        tick(settings, at: tenAM.addingTimeInterval(30))
+        XCTAssertEqual(layer.writes, 1); XCTAssertNil(layer.schedule?.offDay)
+        XCTAssertTrue(settings.offersOffForToday, "a cancelled wait does not use the day's action")
+    }
+    func testClosingTheScreenCancelsTheWaitAndChangesNothing() {
+        let (settings, layer) = waiting()
+        settings.screenDidClose()
+        XCTAssertNil(settings.offWait)
+        tick(settings, at: tenAM.addingTimeInterval(30))
+        XCTAssertEqual(layer.writes, 1); XCTAssertNil(layer.schedule?.offDay)
+    }
+    func testInactiveKeepsTheWaitAndActiveRunsItOnceWithinTheGrace() {
+        let (settings, layer) = waiting()
+        settings.sceneDidBecomeInactive()
+        tick(settings, at: tenAM.addingTimeInterval(30))
+        XCTAssertNotNil(settings.offWait, "an inactive overlay keeps the wait"); XCTAssertEqual(layer.writes, 1)
+        settings.clock = { self.tenAM.addingTimeInterval(39) }; settings.sceneDidBecomeActive()
+        XCTAssertEqual(layer.schedule?.offDay, "2026-11-02"); XCTAssertEqual(layer.writes, 2); XCTAssertNil(settings.offWait)
+        tick(settings, at: tenAM.addingTimeInterval(40))
+        XCTAssertEqual(layer.writes, 2, "the section runs once")
+    }
+    func testAWaitPastItsGraceCountsAsCancelled() {
+        let (settings, layer) = waiting()
+        settings.sceneDidBecomeInactive()
+        tick(settings, at: tenAM.addingTimeInterval(35))
+        settings.clock = { self.tenAM.addingTimeInterval(40) }; settings.sceneDidBecomeActive()
+        XCTAssertNil(settings.offWait); XCTAssertNil(settings.refusalMessage)
+        XCTAssertEqual(layer.writes, 1); XCTAssertNil(layer.schedule?.offDay)
+    }
+    /// The spec's guard row: a wait started at 23:54:45 in a range of 00:00-23:55, then Control Center held open past midnight.
+    func testAWaitHeldInactivePastMidnightNeverTurnsTheNextDayOff() {
+        let (settings, layer, _, _) = fixture()
+        let start = at(23, 54, 45)
+        layer.write(EverydaySchedule(revision: UUID(), enabled: true, rangeStart: 0, rangeEnd: 1435, windows: []), apps(0..<1))
+        _ = try? settings.focus.services.engine.reconcile(now: start, authorized: true)
+        settings.clock = { start }; settings.refresh()
+        XCTAssertTrue(settings.offersOffForToday)
+        settings.startOffWait()
+        settings.sceneDidBecomeInactive()
+        tick(settings, at: at(23, 55, 20))
+        XCTAssertNotNil(settings.offWait, "the grace runs to 23:55:25")
+        settings.clock = { self.at(0, 0, 5, day: 3) }; settings.sceneDidBecomeActive()
+        XCTAssertNil(settings.offWait); XCTAssertNil(settings.refusalMessage)
+        XCTAssertEqual(layer.writes, 1); XCTAssertNil(layer.schedule?.offDay, "the section never runs with a now of the next day")
+    }
+    func testTheActionIsOfferedOnlyInsideTheRangeWithTheLayerOnEditingOpenAndAccess() {
+        let (settings, layer, _, _) = fixture()
+        settings.refresh()
+        XCTAssertFalse(settings.offersOffForToday, "no stored layer")
+        storedLayer(layer, settings); settings.refresh()
+        XCTAssertTrue(settings.offersOffForToday)
+        settings.clock = { self.at(12, 30) }; settings.refreshStatus()
+        XCTAssertTrue(settings.offersOffForToday, "also during a window")
+        for time in [at(7, 59), at(18, 0)] {
+            settings.clock = { time }; settings.refreshStatus()
+            XCTAssertFalse(settings.offersOffForToday, "\(time)")
+        }
+        settings.clock = { self.tenAM }; settings.refreshStatus()
+        (settings.focus.services.authorization as? ModelTestAuthorization)?.status = .denied
+        settings.refreshStatus()
+        XCTAssertFalse(settings.offersOffForToday, "without access")
+        (settings.focus.services.authorization as? ModelTestAuthorization)?.status = .approved
+        settings.refreshStatus()
+        XCTAssertTrue(settings.offersOffForToday)
+        settings.startOffWait()
+        XCTAssertFalse(settings.offersOffForToday, "not while the wait is open")
+        settings.cancelOffWait()
+        layer.schedule?.enabled = false; settings.refreshStatus()
+        XCTAssertFalse(settings.offersOffForToday, "a stored layer that is off")
+    }
+    func testTheActionIsNotOfferedDuringAFocusSession() {
+        let (settings, layer, _, _) = fixture()
+        storedLayer(layer, settings)
+        settings.focus.completeOnboarding(); settings.focus.start()
+        XCTAssertTrue(settings.focus.isActive)
+        settings.refresh()
+        XCTAssertFalse(settings.offersOffForToday)
+        settings.startOffWait()
+        XCTAssertNil(settings.offWait)
+    }
+    func testARefusedSectionShowsItsReasonAndReadsTheStatusAgain() {
+        let (settings, layer) = waiting()
+        // A save elsewhere changed the stored revision during the wait.
+        layer.schedule?.revision = UUID()
+        tick(settings, at: tenAM.addingTimeInterval(30))
+        XCTAssertEqual(settings.refusalMessage, "매일 제한이 바뀌어서 끄지 않았어요. 다시 시도해 주세요.")
+        XCTAssertNil(layer.schedule?.offDay); XCTAssertNil(settings.offWait)
+        XCTAssertEqual(settings.status?.schedule?.revision, layer.schedule?.revision)
+        // The range end passed during the wait: editing is open now.
+        let (late, lateLayer, _, _) = fixture()
+        storedLayer(lateLayer, late)
+        late.clock = { self.at(17, 59, 50) }; late.refresh(); late.startOffWait()
+        tick(late, at: at(18, 0, 20))
+        XCTAssertEqual(late.refusalMessage, "제한 시간이 끝났어요. 지금은 자유롭게 바꿀 수 있어요.")
+        XCTAssertNil(lateLayer.schedule?.offDay)
+    }
+    func testOffRefusalCopy() {
+        let cases: [(Error, String)] = [
+            (ControlIssue.unauthorized, "스크린 타임 권한을 허용하면 끌 수 있어요."),
+            (ControlIssue.busy, "집중 시간이 끝난 뒤에 끌 수 있어요."),
+            (EverydayOffRefusal.unreadable, "설정을 불러오지 못해서 끄지 않았어요. 다시 설정해 주세요."),
+            (EverydayOffRefusal.notOn, "매일 제한이 이미 꺼져 있어요."),
+            (EverydayOffRefusal.revisionChanged, "매일 제한이 바뀌어서 끄지 않았어요. 다시 시도해 주세요."),
+            (EverydayOffRefusal.outsideRange, "제한 시간이 끝났어요. 지금은 자유롭게 바꿀 수 있어요."),
+            (EverydayOffRefusal.alreadyOff, "오늘은 이미 꺼 두었어요."),
+            (ControlIssue.lockTimeout, "오늘만 끄지 못했어요. 제한은 그대로예요. 다시 시도해 주세요."),
+        ]
+        for (error, message) in cases { XCTAssertEqual(EverydaySettingsModel.offMessage(for: error), message, "\(error)") }
+    }
+    func testRefusedSaveNamesTheConditionAndPointsToTheActionOnlyWhenOffered() {
+        let (settings, layer, _, _) = fixture()
+        storedLayer(layer, settings); settings.refresh()
+        settings.draft.windows = [EverydaySchedule.template(.lunch)!, EverydayWindow(kind: .custom, start: 900, end: 930)]
+        settings.save()
+        XCTAssertEqual(settings.refusalMessage, "제한 시간에는 풀어 두는 시간을 더하거나 늘리거나 옮길 수 없어요. 18:00부터 자유롭게 바꿀 수 있어요. ‘오늘만 끄기’를 누르면 오늘은 제한을 끌 수 있어요.")
+        settings.startOffWait(); tick(settings, at: tenAM.addingTimeInterval(30))
+        settings.draft.windows = [EverydaySchedule.template(.lunch)!]; settings.draft.enabled = false
+        settings.save()
+        XCTAssertEqual(settings.refusalMessage, "제한 시간에는 매일 제한을 끌 수 없어요. 18:00부터 자유롭게 바꿀 수 있어요.", "no pointer while off for today")
+        let messages = EverydayLockReason.allCases.map { EverydaySettingsModel.lockMessage($0, opensAt: 1080, offersOffForToday: false) }
+        XCTAssertEqual(messages, [
+            "제한 시간에는 매일 제한을 끌 수 없어요. 18:00부터 자유롭게 바꿀 수 있어요.",
+            "제한 시간에는 지금 시각이 빠지게 제한 시간을 바꿀 수 없어요. 18:00부터 자유롭게 바꿀 수 있어요.",
+            "제한 시간에는 제한 끝을 앞당길 수 없어요. 18:00부터 자유롭게 바꿀 수 있어요.",
+            "제한 시간에는 풀어 두는 시간을 더하거나 늘리거나 옮길 수 없어요. 18:00부터 자유롭게 바꿀 수 있어요.",
+            "제한 시간에는 고른 앱과 웹사이트를 뺄 수 없어요. 18:00부터 자유롭게 바꿀 수 있어요.",
+        ])
+    }
+    func testAStricterSaveWhileOffForTodayKeepsTheOffDay() {
+        let (settings, layer) = waiting()
+        tick(settings, at: tenAM.addingTimeInterval(30))
+        settings.draft.windows = []
+        settings.save()
+        XCTAssertNil(settings.refusalMessage); XCTAssertEqual(layer.schedule?.windows, [])
+        XCTAssertEqual(layer.schedule?.offDay, "2026-11-02"); XCTAssertEqual(settings.status?.offForToday, true)
+        XCTAssertFalse(settings.hasChanges, "the off day never counts as an unsaved edit")
+    }
+    func testTheScreenAlsoReadsTheStatusAtTodaysRangeStartAndEnd() {
+        let early = EverydaySchedule(revision: UUID(), enabled: true, rangeStart: 480, rangeEnd: 1080, windows: [EverydayWindow(kind: .toSchool, start: 480, end: 510)])
+        // Before a range that starts with a window, the next change is the window end; the screen also reads at the range start.
+        let before = EverydayStatus(schedule: early, blocksNow: false, nextChange: at(8, 30), issue: nil)
+        XCTAssertEqual(EverydaySettingsModel.statusReadDelay(before, now: at(7, 0), retried: false), 5400 + EverydaySettingsModel.boundaryGrace)
+        XCTAssertEqual(EverydaySettingsModel.statusReadDelay(before, now: at(7, 0), retried: false, rangeCalendar: calendar), 3600 + EverydaySettingsModel.boundaryGrace)
+        // On a day that is off, the next change is tomorrow; the screen also reads at today's range end.
+        let off = EverydayStatus(schedule: early, blocksNow: false, nextChange: at(8, 30, day: 3), issue: nil, offForToday: true)
+        XCTAssertEqual(EverydaySettingsModel.statusReadDelay(off, now: at(10, 0), retried: false, rangeCalendar: calendar), 8 * 3600 + EverydaySettingsModel.boundaryGrace)
+        XCTAssertEqual(EverydaySettingsModel.statusReadDelay(off, now: at(18, 0), retried: false, rangeCalendar: calendar),
+                       at(8, 30, day: 3).timeIntervalSince(at(18, 0)) + EverydaySettingsModel.boundaryGrace, "edges that have passed are skipped")
     }
 }

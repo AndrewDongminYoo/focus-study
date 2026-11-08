@@ -14,7 +14,11 @@ final class EverydayLayerFile: EverydayLayerStore {
         var windows: [EverydayWindow]
         var applications: Set<ApplicationToken>
         var webDomains: Set<WebDomainToken>
-        var schedule: EverydaySchedule { EverydaySchedule(revision: revision, enabled: enabled, rangeStart: rangeStart, rangeEnd: rangeEnd, windows: windows) }
+        /// Optional, so that a file without the key loads with no off day and an earlier build ignores it; `nil` is not written.
+        var offDay: String?
+        var schedule: EverydaySchedule {
+            EverydaySchedule(revision: revision, enabled: enabled, rangeStart: rangeStart, rangeEnd: rangeEnd, windows: windows, offDay: offDay)
+        }
         var selection: FamilyActivitySelection {
             var selection = FamilyActivitySelection(includeEntireCategory: true)
             selection.applicationTokens = applications; selection.webDomainTokens = webDomains
@@ -46,8 +50,14 @@ final class EverydayLayerFile: EverydayLayerStore {
     func write(_ schedule: EverydaySchedule, selection: FamilyActivitySelection) throws {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let value = Stored(schemaVersion: Self.schemaVersion, revision: schedule.revision, enabled: schedule.enabled, rangeStart: schedule.rangeStart,
-                           rangeEnd: schedule.rangeEnd, windows: schedule.windows, applications: selection.applicationTokens, webDomains: selection.webDomainTokens)
+                           rangeEnd: schedule.rangeEnd, windows: schedule.windows, applications: selection.applicationTokens, webDomains: selection.webDomainTokens,
+                           offDay: schedule.offDay)
         try JSONEncoder().encode(value).write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+    }
+    /// The off-for-today write: the whole file again with the stored tokens and the schedule that the section passes, which keeps the stored revision.
+    func writeOffDay(_ schedule: EverydaySchedule) throws {
+        guard let stored = try stored(), stored.revision == schedule.revision else { throw ControlIssue.invalidState }
+        try write(schedule, selection: stored.selection)
     }
     func storeMatches() -> Bool {
         guard let selection = (try? stored())?.selection else { return false }

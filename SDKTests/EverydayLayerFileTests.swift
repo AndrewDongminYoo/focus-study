@@ -40,4 +40,33 @@ final class EverydayLayerFileTests: XCTestCase {
         try Data("{".utf8).write(to: url)
         XCTAssertThrowsError(try file.load())
     }
+    func testOffDayIsOptionalAndTheOffDayWriteKeepsTheTokens() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = EverydayLayerFile(directory: directory, shield: ScreenTimeEverydayShield())
+        let url = directory.appendingPathComponent("everyday-layer.json")
+        let stored = try selection(apps: [1, 2], sites: [3])
+        try file.write(schedule, selection: stored)
+        XCTAssertNil(try file.load()?.offDay, "a file without the key has no off day")
+        var off = schedule; off.offDay = "2026-11-02"
+        try file.writeOffDay(off)
+        XCTAssertEqual(try file.load(), off)
+        XCTAssertEqual(try file.selection()?.applicationTokens, stored.applicationTokens); XCTAssertEqual(try file.selection()?.webDomainTokens, stored.webDomainTokens)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        XCTAssertEqual(object["offDay"] as? String, "2026-11-02"); XCTAssertEqual(object["schemaVersion"] as? Int, 1)
+        var other = off; other.revision = UUID()
+        XCTAssertThrowsError(try file.writeOffDay(other), "the off-day write keeps the stored revision")
+        XCTAssertEqual(try file.load(), off)
+        // A malformed value is not a read failure: the rule matches no day with it.
+        var malformed = object; malformed["offDay"] = "not a day"
+        try JSONSerialization.data(withJSONObject: malformed).write(to: url)
+        XCTAssertEqual(try file.load()?.offDay, "not a day")
+        // A file that an earlier build wrote has no `offDay` key.
+        var earlier = object; earlier["offDay"] = nil
+        try JSONSerialization.data(withJSONObject: earlier).write(to: url)
+        XCTAssertEqual(try file.load(), schedule)
+        // A save writes the schedule's `offDay`, and none when it is `nil`.
+        try file.write(schedule, selection: stored)
+        XCTAssertNil((try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]))["offDay"])
+    }
 }

@@ -59,7 +59,20 @@ struct ControlEnvelope: Codable { var schemaVersion = 2; var session: ControlSes
 /// Why a Focus on call started no session.
 enum FocusFilterRefusal: String, Codable { case access, selection, busy, history, error }
 enum FocusFilterStart: Equatable { case started(ControlSession), repeated, refused(FocusFilterRefusal) }
-enum ControlIssue: Error { case unauthorized, busy, pendingHistory, verificationFailed, lockTimeout, io, unsupportedSchema, invalidState, breakUnavailable, everydayLocked }
+enum ControlIssue: Error { case unauthorized, busy, pendingHistory, verificationFailed, lockTimeout, io, unsupportedSchema, invalidState, breakUnavailable }
+/// Why the off-for-today section wrote nothing, after the access and session checks, in the order that it checks them.
+enum EverydayOffRefusal: Error, CaseIterable, Equatable {
+    /// The everyday file cannot be read.
+    case unreadable
+    /// No layer is stored, or the stored layer is off.
+    case notOn
+    /// The stored revision is not the one that the waiting screen was shown for.
+    case revisionChanged
+    /// `now` is outside the stored range.
+    case outsideRange
+    /// The stored `offDay` is already today's key.
+    case alreadyOff
+}
 enum CallbackKind { case didStart, didEnd, willEndWarning }
 protocol LockedControl {
     func load() throws -> ControlEnvelope
@@ -112,6 +125,8 @@ struct EverydayStatus: Equatable {
     var blocksNow: Bool
     var nextChange: Date?
     var issue: EverydayIssue?
+    /// The stored layer is on and off for the local day of the read.
+    var offForToday = false
 }
 /// `notCleared`: the store keeps a shield while the layer does not block. `unchecked`: the app could not take the lock for the status, so it keeps the last status it read.
 enum EverydayIssue: Equatable { case unreadable, registrationFailed, notApplied, notCleared, unchecked }

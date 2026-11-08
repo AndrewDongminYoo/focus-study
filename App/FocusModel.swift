@@ -21,6 +21,8 @@ import Observation
     var everydayContains: (FamilyActivitySelection) throws -> Bool = { _ in true }
     /// Writes `everyday-layer.json`; it runs inside the engine's save section.
     var writeEveryday: (EverydaySchedule, FamilyActivitySelection) throws -> Void = { _, _ in throw ControlIssue.io }
+    /// Writes `everyday-layer.json` again with the stored selection and the schedule's `offDay`; it runs inside the engine's off-for-today section.
+    var writeEverydayOffDay: (EverydaySchedule) throws -> Void = { _ in throw ControlIssue.io }
     #if DEBUG
     var diagnostics: DeviceDiagnostics?
     /// Opt-in timing of the complete synchronous start call; never carries selection or usage data.

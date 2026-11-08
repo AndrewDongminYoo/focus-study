@@ -124,7 +124,7 @@ private func waitForReady(_ root: URL) {
                 try engine.saveEveryday(next, now: everydayNow, authorized: { true }, containsStoredSelection: { true }, write: {
                     try! Data().write(to: root.appendingPathComponent("ready"))
                     usleep(60_000) // Hold the lock between the registration and the write of the new revision while the stale worker attempts entry.
-                    try layer.write(SyntheticLayer(schedule: next, selection: "B"))
+                    try layer.write(SyntheticLayer(schedule: $0, selection: "B"))
                 })
             case "everyday-stale":
                 waitForReady(root)
@@ -188,7 +188,7 @@ private func waitForReady(_ root: URL) {
         let layer = FileLayer(root), monitor = LocalMonitor(root), shield = FileShield(root)
         let engine = SessionControl(store: SharedControlStore(directory: root), monitoring: monitor, shield: shield, breakSelection: FileCopies(root, shield: shield), everyday: layer, calendar: utc)
         let first = everydayLayer()
-        try engine.saveEveryday(first, now: everydayNow, authorized: { true }, containsStoredSelection: { true }, write: { try layer.write(SyntheticLayer(schedule: first, selection: "A")) })
+        try engine.saveEveryday(first, now: everydayNow, authorized: { true }, containsStoredSelection: { true }, write: { try layer.write(SyntheticLayer(schedule: $0, selection: "A")) })
         guard layer.applied == "A" else { exit(1) }
         let exited = try run(executable, ["everyday-stale", root.path, "everyday.\(first.revision.uuidString).range"], ["everyday-new", root.path])
         guard exited, let stored = try layer.stored(), stored.schedule.revision != first.revision,

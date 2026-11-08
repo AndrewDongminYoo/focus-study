@@ -11,6 +11,8 @@ struct EverydaySettingsView: View {
     @State private var saveFeedback = 0
     @ScaledMetric(relativeTo: .footnote) private var saveStatusHeight = FocusTheme.Layout.minimumTapTarget
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let onUnsavedChanges: (Bool) -> Void
     private let onFinish: ((Bool) -> Void)?
     init(model: FocusModel, onUnsavedChanges: @escaping (Bool) -> Void = { _ in }, onFinish: ((Bool) -> Void)? = nil) {
@@ -19,11 +21,71 @@ struct EverydaySettingsView: View {
         self.onFinish = onFinish
     }
     var body: some View {
+        // A real container, so that swapping the form for the waiting screen does not run the lifecycle modifiers below.
+        ZStack {
+            if settings.offWait != nil { offWaitScreen } else { form }
+        }
+        .navigationTitle("매일 제한").navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(settings.hasChanges)
+        .toolbar {
+            if settings.hasChanges {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { confirmingDiscard = true } label: { Label("뒤로", systemImage: "chevron.left") }
+                        .accessibilityIdentifier("everydayBack")
+                }
+            }
+            if let onFinish {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("완료") { onFinish(settings.hasChanges) }.accessibilityIdentifier("settingsDone")
+                }
+            }
+        }
+        .alert("변경 사항을 버릴까요?", isPresented: $confirmingDiscard) {
+            Button("변경 버리기", role: .destructive) { dismiss() }
+            Button("계속 편집", role: .cancel) {}
+        } message: { Text("저장하지 않은 변경은 사라져요.") }
+        .sensoryFeedback(.success, trigger: saveFeedback)
+        .onAppear {
+            if !loaded { loaded = true; settings.refresh() }
+            onUnsavedChanges(settings.hasChanges)
+        }
+        .onChange(of: settings.hasChanges) { _, hasChanges in onUnsavedChanges(hasChanges) }
+        // Closing this screen or the settings sheet cancels the off-for-today wait.
+        .onDisappear { onUnsavedChanges(false); settings.screenDidClose() }
+        // The model decides what each phase does to the off-for-today wait.
+        .onChange(of: scenePhase, initial: true) { _, value in
+            switch value {
+            case .active: settings.sceneDidBecomeActive()
+            case .inactive: settings.sceneDidBecomeInactive()
+            case .background: settings.sceneDidLeaveForeground()
+            default: break
+            }
+        }
+        .task(id: settings.offWait?.id) {
+            while !Task.isCancelled, settings.offWait != nil {
+                settings.tickOffWait()
+                try? await Task.sleep(for: .milliseconds(250))
+            }
+        }
+        // FocusView's foreground, day, time zone, clock and access refreshes run their lock section first, then change this value.
+        .onChange(of: settings.focus.everydayStatus) { _, _ in settings.refreshStatus() }
+        // While the screen stays open, a range or window boundary changes the status without any lock section of the app.
+        .task(id: settings.status) {
+            await EverydaySettingsModel.followStatus({ settings.status }, now: settings.clock, rangeCalendar: settings.focus.services.engine.calendar) {
+                settings.refreshStatus()
+            }
+        }
+        .sheet(isPresented: $picker) { selectionEditor }
+    }
+    private var form: some View {
         Form {
             Section {
                 Text(EverydaySettingsModel.statusLine(settings.status, calendar: settings.focus.services.engine.calendar)).accessibilityIdentifier("everydayStatus")
                 if let message = settings.strictOnlyMessage {
                     Text(message).font(.footnote).foregroundStyle(FocusTheme.Palette.secondaryText).accessibilityIdentifier("everydayStrictOnly")
+                }
+                if settings.offersOffForToday {
+                    Button("오늘만 끄기") { settings.startOffWait() }.accessibilityIdentifier("everydayOffToday")
                 }
             } header: { Text("저장된 상태") }
             Section {
@@ -79,39 +141,29 @@ struct EverydaySettingsView: View {
         }
         .contentMargins(.horizontal, FocusTheme.Layout.screenInset, for: .scrollContent)
         .safeAreaInset(edge: .bottom, spacing: 0) { saveActions }
-        .navigationTitle("매일 제한").navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(settings.hasChanges)
-        .toolbar {
-            if settings.hasChanges {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { confirmingDiscard = true } label: { Label("뒤로", systemImage: "chevron.left") }
-                        .accessibilityIdentifier("everydayBack")
+    }
+    /// The off-for-today wait, in the manner of the M2 break wait: a progress bar with the countdown and a cancel button.
+    private var offWaitScreen: some View {
+        let progress = settings.offWaitProgress ?? 0, left = settings.offWaitRemaining ?? 0
+        let line = "\(left)초 뒤에 오늘 매일 제한이 꺼져요"
+        return VStack(spacing: FocusTheme.Layout.controlSpacing) {
+            Spacer(minLength: 32)
+            Text(line).font(.headline).monospacedDigit()
+                .padding(.vertical, FocusTheme.Layout.controlSpacing).padding(.horizontal, FocusTheme.Layout.screenInset).frame(maxWidth: .infinity)
+                .background(alignment: .leading) {
+                    GeometryReader { proxy in Capsule().fill(FocusTheme.Palette.progressFill).frame(width: proxy.size.width * progress) }
                 }
-            }
-            if let onFinish {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("완료") { onFinish(settings.hasChanges) }.accessibilityIdentifier("settingsDone")
-                }
-            }
+                .background(Capsule().fill(FocusTheme.Palette.progressTrack)).clipShape(Capsule())
+                .animation(reduceMotion ? nil : .linear(duration: 1), value: progress)
+                .accessibilityElement(children: .ignore).accessibilityLabel(line).accessibilityAddTraits(.updatesFrequently)
+                .accessibilityIdentifier("everydayOffWait")
+            Button("그대로 두기") { settings.cancelOffWait() }.frame(minHeight: FocusTheme.Layout.minimumTapTarget)
+                .accessibilityIdentifier("everydayOffCancel")
+            Spacer(minLength: 48)
         }
-        .alert("변경 사항을 버릴까요?", isPresented: $confirmingDiscard) {
-            Button("변경 버리기", role: .destructive) { dismiss() }
-            Button("계속 편집", role: .cancel) {}
-        } message: { Text("저장하지 않은 변경은 사라져요.") }
-        .sensoryFeedback(.success, trigger: saveFeedback)
-        .onAppear {
-            if !loaded { loaded = true; settings.refresh() }
-            onUnsavedChanges(settings.hasChanges)
-        }
-        .onChange(of: settings.hasChanges) { _, hasChanges in onUnsavedChanges(hasChanges) }
-        .onDisappear { onUnsavedChanges(false) }
-        // FocusView's foreground, day, time zone, clock and access refreshes run their lock section first, then change this value.
-        .onChange(of: settings.focus.everydayStatus) { _, _ in settings.refreshStatus() }
-        // While the screen stays open, a range or window boundary changes the status without any lock section of the app.
-        .task(id: settings.status) {
-            await EverydaySettingsModel.followStatus({ settings.status }, now: settings.clock) { settings.refreshStatus() }
-        }
-        .sheet(isPresented: $picker) { selectionEditor }
+        .padding(.horizontal, FocusTheme.Layout.screenInset)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(FocusTheme.Palette.groupedSurface)
     }
     @ViewBuilder private func schedulePreview(_ schedule: EverydaySchedule, prefix: String) -> some View {
         if let segments = EverydaySettingsModel.previewSegments(for: schedule) {

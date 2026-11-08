@@ -63,6 +63,11 @@ final class FixtureEverydayLayer: EverydayLayerStore {
         selection.applicationTokens.isSubset(of: new.applicationTokens) && selection.webDomainTokens.isSubset(of: new.webDomainTokens)
     }
     func write(_ schedule: EverydaySchedule, selection: FamilyActivitySelection) { self.schedule = schedule; self.selection = selection }
+    /// The off-for-today write keeps the synthetic selection, as the real file keeps its tokens.
+    func writeOffDay(_ schedule: EverydaySchedule) throws {
+        guard self.schedule?.revision == schedule.revision else { throw ControlIssue.invalidState }
+        self.schedule = schedule
+    }
     /// One synthetic app token, decoded from opaque bytes; it is never applied to a real store.
     static func sampleSelection() -> FamilyActivitySelection {
         var selection = FamilyActivitySelection(includeEntireCategory: true)
@@ -114,6 +119,11 @@ extension FocusServices {
         if let index = arguments.firstIndex(of: "--break-timing"), index + 1 < arguments.count, arguments[index + 1] == "short" {
             timing = BreakTiming(waits: [1, 2, 4], breakLength: 3, slack: 5, staleWaitGrace: 2)
         }
+        // `--everyday-off-wait <seconds>` shortens the off-for-today wait, bounded to 1-30 seconds; the grace stays as the timing gives it.
+        if let index = arguments.firstIndex(of: "--everyday-off-wait"), index + 1 < arguments.count,
+           let requested = TimeInterval(arguments[index + 1]), requested.isFinite {
+            timing.everydayOffWait = min(max(requested, 1), 30)
+        }
         let breakSelection = FixtureBreakSelection()
         var everyday = FixtureEverydayLayer()
         // The engine and the status line read the layer in this calendar, not the device time zone.
@@ -144,6 +154,7 @@ extension FocusServices {
         services.everydaySelection = { everyday.schedule == nil ? nil : everyday.selection }
         services.everydayContains = { everyday.contains($0) }
         services.writeEveryday = { everyday.write($0, selection: $1) }
+        services.writeEverydayOffDay = { try everyday.writeOffDay($0) }
         // `--break-delay <seconds>`: the break feedback stays up to 5 seconds before the transition runs, so a UI test can read it.
         // It does not block the main thread, because the accessibility queries of a UI test need it.
         if let index = arguments.firstIndex(of: "--break-delay"), index + 1 < arguments.count,

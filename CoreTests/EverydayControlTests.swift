@@ -136,7 +136,7 @@ final class EverydayControlTests: XCTestCase {
     }
     private func save(_ engine: SessionControl, _ world: EverydayWorld, _ schedule: EverydaySchedule, _ selection: Set<String>, at now: Date, access: Bool = true) throws {
         try engine.saveEveryday(schedule, now: now, authorized: { access }, containsStoredSelection: { selection.isSuperset(of: world.state.file?.selection ?? []) },
-                                write: { try world.writeFile(StoredLayer(schedule: schedule, selection: selection)) })
+                                write: { try world.writeFile(StoredLayer(schedule: $0, selection: selection)) })
     }
     /// The default layer with lunch and `s1`, saved at 07:00 and applied at 10:00.
     private func onLayer(_ world: EverydayWorld) throws -> (SessionControl, EverydaySchedule) {
@@ -329,20 +329,20 @@ final class EverydayControlTests: XCTestCase {
         XCTAssertTrue(approved.blocksNow); XCTAssertEqual(approved.nextChange, clock(12, 0)); XCTAssertNil(approved.issue)
     }
     func testSaveInsideTheRangeRefusesLooserEdits() throws {
-        let looser: [(String, EverydaySchedule, Set<String>, Date)] = [
-            ("turn off", layer(enabled: false), s1, t0),
-            ("lengthen lunch", layer(windows: [EverydayWindow(kind: .lunch, start: 12 * 60, end: 13 * 60 + 30)]), s1, t0),
-            ("add a window at 15:00", layer(windows: [lunch, EverydayWindow(kind: .custom, start: 15 * 60, end: 15 * 60 + 30)]), s1, t0),
-            ("move the range end earlier", layer(8 * 60, 17 * 60), s1, t0),
-            ("lengthen lunch during lunch", layer(windows: [EverydayWindow(kind: .lunch, start: 12 * 60, end: 13 * 60 + 30)]), s1, clock(12, 30)),
-            ("remove an app", layer(), ["site1"], t0),
-            ("move the range start past now during lunch", layer(13 * 60, 18 * 60, windows: []), s1, clock(12, 30)),
+        let looser: [(String, EverydaySchedule, Set<String>, Date, EverydayLockReason)] = [
+            ("turn off", layer(enabled: false), s1, t0, .turnsOff),
+            ("lengthen lunch", layer(windows: [EverydayWindow(kind: .lunch, start: 12 * 60, end: 13 * 60 + 30)]), s1, t0, .unblocksTime),
+            ("add a window at 15:00", layer(windows: [lunch, EverydayWindow(kind: .custom, start: 15 * 60, end: 15 * 60 + 30)]), s1, t0, .unblocksTime),
+            ("move the range end earlier", layer(8 * 60, 17 * 60), s1, t0, .rangeEndsEarlier),
+            ("lengthen lunch during lunch", layer(windows: [EverydayWindow(kind: .lunch, start: 12 * 60, end: 13 * 60 + 30)]), s1, clock(12, 30), .unblocksTime),
+            ("remove an app", layer(), ["site1"], t0, .removesSelection),
+            ("move the range start past now during lunch", layer(13 * 60, 18 * 60, windows: []), s1, clock(12, 30), .rangeExcludesNow),
         ]
-        for (name, schedule, selection, now) in looser {
+        for (name, schedule, selection, now, reason) in looser {
             let world = EverydayWorld()
             let (engine, stored) = try onLayer(world)
             world.log = []
-            XCTAssertThrowsError(try save(engine, world, schedule, selection, at: now)) { XCTAssertEqual($0 as? ControlIssue, .everydayLocked, name) }
+            XCTAssertThrowsError(try save(engine, world, schedule, selection, at: now)) { XCTAssertEqual($0 as? EverydayLockReason, reason, name) }
             XCTAssertFalse(world.log.contains("everyday.register"), name); XCTAssertFalse(world.log.contains("file.write"), name)
             XCTAssertEqual(world.state.file?.schedule, stored, name)
         }
@@ -357,7 +357,7 @@ final class EverydayControlTests: XCTestCase {
         try save(engine, world, layer(windows: [lunch, late]), s1, at: clock(7, 0))
         let stored = world.state.file?.schedule
         // The blocked times are the same, but the lock would end at 17:00 instead of the stored 18:00.
-        XCTAssertThrowsError(try save(engine, world, layer(8 * 60, 17 * 60), s1, at: t0)) { XCTAssertEqual($0 as? ControlIssue, .everydayLocked) }
+        XCTAssertThrowsError(try save(engine, world, layer(8 * 60, 17 * 60), s1, at: t0)) { XCTAssertEqual($0 as? EverydayLockReason, .rangeEndsEarlier) }
         XCTAssertEqual(world.state.file?.schedule, stored)
     }
     func testAcceptedEditsKeepTheLockUntilTheStoredRangeEnd() throws {
@@ -376,12 +376,12 @@ final class EverydayControlTests: XCTestCase {
             let before = world.state.file?.schedule
             XCTAssertEqual((try? save(engine, world, schedule, s1, at: now)) != nil, accepted, name)
             XCTAssertEqual(world.state.file?.schedule, accepted ? schedule : before, name)
-            XCTAssertThrowsError(try save(engine, world, layer(enabled: false), s1, at: now)) { XCTAssertEqual($0 as? ControlIssue, .everydayLocked, "turn off after: \(name)") }
+            XCTAssertThrowsError(try save(engine, world, layer(enabled: false), s1, at: now)) { XCTAssertEqual($0 as? EverydayLockReason, .turnsOff, "turn off after: \(name)") }
         }
         let stored = world.state.file?.schedule
         for now in [clock(12, 34), clock(17, 59, 59), clock(18, 0), clock(18, 59, 59)] {
-            XCTAssertThrowsError(try save(engine, world, layer(enabled: false), s1, at: now)) { XCTAssertEqual($0 as? ControlIssue, .everydayLocked, "\(now)") }
-            XCTAssertThrowsError(try save(engine, world, layer(windows: []), [], at: now)) { XCTAssertEqual($0 as? ControlIssue, .everydayLocked, "\(now)") }
+            XCTAssertThrowsError(try save(engine, world, layer(enabled: false), s1, at: now)) { XCTAssertEqual($0 as? EverydayLockReason, .turnsOff, "\(now)") }
+            XCTAssertThrowsError(try save(engine, world, layer(windows: []), [], at: now)) { XCTAssertNotNil($0 as? EverydayLockReason, "\(now)") }
             XCTAssertEqual(world.state.file?.schedule, stored, "\(now)")
         }
         try save(engine, world, layer(enabled: false), s1, at: clock(19, 0))
@@ -675,6 +675,9 @@ final class EverydayControlTests: XCTestCase {
             Scenario(name: "re-block", setup: onBreak, run: { engine, _, _ in try engine.reconcile(now: self.at(295), authorized: true) }, now: at(295)),
             Scenario(name: "end", setup: session, run: { engine, _, id in try engine.finish(id: id!, reason: .earlyExit, now: self.at(200)) }, now: at(200)),
             Scenario(name: "end during a break", setup: onBreak, run: { engine, _, id in try engine.finish(id: id!, reason: .earlyExit, now: self.at(200)) }, now: at(200)),
+            Scenario(name: "off for today", setup: layered, run: { engine, world, _ in try self.turnOff(engine, world, at: self.t0) }, now: t0),
+            Scenario(name: "save while off for today", setup: { world in let result = try layered(world); try self.turnOff(result.0, world, at: self.t0); return result },
+                     run: { engine, world, _ in try self.save(engine, world, self.layer(windows: []), self.s2, at: self.at(60)) }, now: at(60)),
         ]
         for scenario in scenarios {
             // Exit pass: a new process starts from each recorded state.
@@ -702,5 +705,252 @@ final class EverydayControlTests: XCTestCase {
                 assertEverydayTable(thrown, now: scenario.now, "\(scenario.name) throw \(offset)")
             }
         }
+    }
+    // MARK: Off for today
+
+    private func key(_ date: Date) -> String { EverydaySchedule.dayKey(of: date, calendar: calendar) }
+    private func day(_ day: Int, _ hour: Int, _ minute: Int = 0, _ second: Int = 0) -> Date {
+        calendar.date(from: DateComponents(year: 2026, month: 11, day: day, hour: hour, minute: minute, second: second))!
+    }
+    /// The off-for-today section for the stored revision, unless another is given; the write keeps the stored selection.
+    private func turnOff(_ engine: SessionControl, _ world: EverydayWorld, revision: UUID? = nil, at now: Date, access: Bool = true) throws {
+        try engine.turnEverydayOffForToday(revision: revision ?? world.state.file?.schedule.revision ?? UUID(), now: now, authorized: { access },
+                                           write: { try world.writeFile(StoredLayer(schedule: $0, selection: world.state.file?.selection ?? [])) })
+    }
+    private func refusal(_ engine: SessionControl, _ world: EverydayWorld, revision: UUID? = nil, at now: Date, access: Bool = true) -> Error? {
+        do { try turnOff(engine, world, revision: revision, at: now, access: access); return nil } catch { return error }
+    }
+
+    func testOffForTodayWritesTodaysKeyKeepsTheRevisionAndActivitiesAndClearsTheStore() throws {
+        let world = EverydayWorld()
+        let (engine, schedule) = try onLayer(world)
+        world.log = []
+        try turnOff(engine, world, at: t0)
+        var expected = schedule; expected.offDay = "2026-11-02"
+        XCTAssertEqual(world.state.file?.schedule, expected, "same revision, schedule and selection, with today's key")
+        XCTAssertEqual(world.state.file?.selection, s1)
+        XCTAssertEqual(world.state.activities, activities(schedule), "the activities stay for tomorrow's range start")
+        XCTAssertNil(world.state.store)
+        // Steps 1 and 2 register and stop nothing; the convergence finds the revision complete.
+        XCTAssertFalse(world.log.contains("everyday.register")); XCTAssertFalse(world.log.contains("everyday.stop"))
+        XCTAssertLessThan(try XCTUnwrap(world.log.firstIndex(of: "file.write")), try XCTUnwrap(world.log.firstIndex(of: "everyday.clear")))
+        let status = try engine.everydayStatus(now: at(60), authorized: true)
+        XCTAssertTrue(status.offForToday); XCTAssertFalse(status.blocksNow); XCTAssertNil(status.issue)
+        XCTAssertEqual(status.nextChange, day(3, 8))
+        // Later edges today leave the store empty; the next day's range blocks again without the app.
+        for time in [clock(12, 0), clock(13, 0), clock(17, 59, 59)] {
+            try engine.handleCallback(activityName: name(schedule.revision, "range"), kind: .didStart, now: time, authorized: true)
+            XCTAssertNil(world.state.store, "\(time)")
+        }
+        try engine.handleCallback(activityName: name(schedule.revision, "range"), kind: .didStart, now: day(3, 8), authorized: true)
+        XCTAssertEqual(world.state.store, s1)
+        let tomorrow = try engine.everydayStatus(now: day(3, 8), authorized: true)
+        XCTAssertFalse(tomorrow.offForToday); XCTAssertTrue(tomorrow.blocksNow)
+    }
+    func testOffForTodayRefusesEachConditionInOrderAndWritesNothing() throws {
+        // Each case: setup, the expected refusal; the file never changes.
+        func check(_ name: String, at now: Date = t0, access: Bool = true, revision: ((EverydaySchedule?) -> UUID)? = nil,
+                   setup: (EverydayWorld, SessionControl) throws -> Void, expect: (Error?) -> Bool) throws {
+            let world = EverydayWorld()
+            let (engine, _) = try onLayer(world)
+            try setup(world, engine)
+            let before = world.state.file
+            world.log = []
+            let error = refusal(engine, world, revision: revision?(world.state.file?.schedule), at: now, access: access)
+            XCTAssertTrue(expect(error), "\(name): \(String(describing: error))")
+            XCTAssertEqual(world.state.file, before, name); XCTAssertFalse(world.log.contains("file.write"), name)
+        }
+        let session: (EverydayWorld, SessionControl) throws -> Void = { world, engine in _ = try self.started(engine, world) }
+        try check("unauthorized", access: false, setup: { _, _ in }) { $0 as? ControlIssue == .unauthorized }
+        try check("unauthorized before busy", access: false, setup: session) { $0 as? ControlIssue == .unauthorized }
+        try check("busy", setup: session) { $0 as? ControlIssue == .busy }
+        try check("busy before unreadable", setup: { world, engine in try session(world, engine); world.state.fileCorrupt = true }) { $0 as? ControlIssue == .busy }
+        try check("unreadable", setup: { world, _ in world.state.fileCorrupt = true }) { $0 as? EverydayOffRefusal == .unreadable }
+        try check("no layer", setup: { world, _ in world.state.file = nil }) { $0 as? EverydayOffRefusal == .notOn }
+        try check("layer off before revision", revision: { _ in UUID() }, setup: { world, _ in world.state.file?.schedule.enabled = false }) {
+            $0 as? EverydayOffRefusal == .notOn
+        }
+        try check("revision", revision: { _ in UUID() }, setup: { _, _ in }) { $0 as? EverydayOffRefusal == .revisionChanged }
+        try check("revision before range", at: clock(19, 0), revision: { _ in UUID() }, setup: { _, _ in }) { $0 as? EverydayOffRefusal == .revisionChanged }
+        for time in [clock(7, 59, 59), clock(18, 0), clock(19, 0)] {
+            try check("outside the range \(time)", at: time, setup: { _, _ in }) { $0 as? EverydayOffRefusal == .outsideRange }
+        }
+        try check("already off", setup: { world, engine in try self.turnOff(engine, world, at: self.clock(9, 0)) }) { $0 as? EverydayOffRefusal == .alreadyOff }
+        try check("range before already off", at: clock(19, 0), setup: { world, engine in try self.turnOff(engine, world, at: self.clock(9, 0)) }) {
+            $0 as? EverydayOffRefusal == .outsideRange
+        }
+        XCTAssertEqual(EverydayOffRefusal.allCases, [.unreadable, .notOn, .revisionChanged, .outsideRange, .alreadyOff])
+    }
+    func testOffForTodayRefusalConvergesAsEveryAppSection() throws {
+        // A refusal for access stops every everyday activity and clears the store (M3 row "Access revoked").
+        let world = EverydayWorld()
+        let (engine, _) = try onLayer(world)
+        XCTAssertNotNil(refusal(engine, world, at: t0, access: false))
+        XCTAssertTrue(world.state.activities.isEmpty); XCTAssertNil(world.state.store)
+        // Another refusal registers a missing activity of the stored revision and keeps the store by the schedule.
+        let other = EverydayWorld()
+        let (otherEngine, schedule) = try onLayer(other)
+        other.state.activities.remove(Activity(revision: schedule.revision, part: .window(1)))
+        XCTAssertNotNil(refusal(otherEngine, other, revision: UUID(), at: t0))
+        XCTAssertEqual(other.state.activities, activities(schedule)); XCTAssertEqual(other.state.store, s1)
+        // An unreadable `control.json` clears the store and runs no convergence.
+        let unreadable = EverydayWorld()
+        let (unreadableEngine, _) = try onLayer(unreadable)
+        unreadable.failReads = true; unreadable.log = []
+        XCTAssertNotNil(refusal(unreadableEngine, unreadable, at: t0))
+        XCTAssertNil(unreadable.state.store); XCTAssertFalse(unreadable.log.contains("file.read"))
+    }
+    func testAFailedOffForTodayWriteKeepsTheLayerBlocking() throws {
+        let world = EverydayWorld()
+        let (engine, schedule) = try onLayer(world)
+        world.failWrite = true
+        XCTAssertThrowsError(try turnOff(engine, world, at: t0))
+        XCTAssertEqual(world.state.file?.schedule, schedule); XCTAssertEqual(world.state.store, s1)
+        world.failWrite = false
+        try turnOff(engine, world, at: t0.addingTimeInterval(40))
+        XCTAssertNil(world.state.store)
+    }
+    func testSaveKeepsTodaysOffDayDropsAnEarlierOneAndIgnoresAPassedOne() throws {
+        let world = EverydayWorld()
+        let (engine, _) = try onLayer(world)
+        try turnOff(engine, world, at: t0)
+        // A draft without `offDay`, saved while the layer is off for today, keeps today's key.
+        try save(engine, world, layer(windows: []), s2, at: at(300))
+        XCTAssertEqual(world.state.file?.schedule.offDay, "2026-11-02"); XCTAssertNil(world.state.store)
+        // An `offDay` that the app passes is ignored.
+        var passed = layer(windows: []); passed.offDay = "2026-12-24"
+        try save(engine, world, passed, s2, at: at(600))
+        XCTAssertEqual(world.state.file?.schedule.offDay, "2026-11-02")
+        // On the next day, the first save removes the earlier key, also outside the range.
+        try save(engine, world, layer(windows: []), s2, at: day(3, 7))
+        XCTAssertNil(world.state.file?.schedule.offDay)
+        // An app-passed key never turns a day off.
+        var today = layer(windows: []); today.offDay = key(day(3, 7))
+        try save(engine, world, today, s2, at: day(3, 7))
+        XCTAssertNil(world.state.file?.schedule.offDay)
+    }
+
+    // MARK: Guards across sequences of accepted actions
+
+    func testOffForTodayThenALooserEditIsRefusedUntilTheStoredRangeEnd() throws {
+        let world = EverydayWorld()
+        let (engine, stored) = try onLayer(world)
+        try turnOff(engine, world, at: t0)
+        let looser: [(EverydaySchedule, Set<String>, EverydayLockReason)] = [
+            (layer(), ["site1"], .removesSelection), (layer(8 * 60, 17 * 60), s1, .rangeEndsEarlier),
+            (layer(windows: [lunch, EverydayWindow(kind: .custom, start: 15 * 60, end: 15 * 60 + 30)]), s1, .unblocksTime), (layer(enabled: false), s1, .turnsOff),
+        ]
+        for (schedule, selection, reason) in looser {
+            XCTAssertThrowsError(try save(engine, world, schedule, selection, at: at(300))) { XCTAssertEqual($0 as? EverydayLockReason, reason) }
+        }
+        // The lock still ends at the stored range end.
+        for (schedule, selection, reason) in [looser[0], looser[3]] {
+            XCTAssertThrowsError(try save(engine, world, schedule, selection, at: clock(17, 59, 59))) { XCTAssertEqual($0 as? EverydayLockReason, reason) }
+        }
+        var expected = stored; expected.offDay = "2026-11-02"
+        XCTAssertEqual(world.state.file?.schedule, expected); XCTAssertEqual(world.state.file?.selection, s1)
+    }
+    func testOffForTodayThenAStricterEditBlocksFromTheNextDaysRange() throws {
+        let world = EverydayWorld()
+        let (engine, _) = try onLayer(world)
+        try turnOff(engine, world, at: t0)
+        try save(engine, world, layer(windows: []), s2, at: at(300))
+        XCTAssertNil(world.state.store, "nothing blocks until today ends")
+        try engine.reconcile(now: clock(12, 30), authorized: true)
+        XCTAssertNil(world.state.store)
+        try engine.reconcile(now: day(3, 8), authorized: true)
+        XCTAssertEqual(world.state.store, s2)
+    }
+    func testOffForTodayThenALooserEditAfterTheRangeEndAndThenTheNextDay() throws {
+        let world = EverydayWorld()
+        let (engine, _) = try onLayer(world)
+        try turnOff(engine, world, at: t0)
+        try save(engine, world, layer(9 * 60, 17 * 60, windows: []), ["site1"], at: clock(19, 0))
+        XCTAssertEqual(world.state.file?.schedule.offDay, "2026-11-02")
+        try engine.reconcile(now: day(3, 8, 30), authorized: true)
+        XCTAssertNil(world.state.store, "the new schedule starts at 09:00")
+        try engine.reconcile(now: day(3, 9), authorized: true)
+        XCTAssertEqual(world.state.store, ["site1"])
+    }
+    func testTurningTheLayerOffAndOnOutsideTheRangeKeepsItOffForToday() throws {
+        let world = EverydayWorld()
+        let (engine, _) = try onLayer(world)
+        try turnOff(engine, world, at: t0)
+        try save(engine, world, layer(enabled: false), s1, at: clock(19, 0))
+        try save(engine, world, layer(6 * 60, 23 * 60), s1, at: clock(19, 5))
+        XCTAssertEqual(world.state.file?.schedule.offDay, "2026-11-02")
+        XCTAssertNil(world.state.store, "there is no way to turn it back on for today")
+        XCTAssertTrue(try engine.everydayStatus(now: clock(19, 10), authorized: true).offForToday)
+        XCTAssertEqual(refusal(engine, world, at: clock(19, 10)) as? EverydayOffRefusal, .alreadyOff)
+    }
+    func testOffForTodayOnDayDThenTheNextDayBlocksAndOffersTheActionAgain() throws {
+        let world = EverydayWorld()
+        let (engine, _) = try onLayer(world)
+        try turnOff(engine, world, at: t0)
+        try engine.reconcile(now: day(3, 10), authorized: true)
+        XCTAssertEqual(world.state.store, s1)
+        XCTAssertFalse(try engine.everydayStatus(now: day(3, 10), authorized: true).offForToday)
+        XCTAssertThrowsError(try save(engine, world, layer(enabled: false), s1, at: day(3, 10))) { XCTAssertEqual($0 as? EverydayLockReason, .turnsOff) }
+        try turnOff(engine, world, at: day(3, 10))
+        XCTAssertEqual(world.state.file?.schedule.offDay, "2026-11-03"); XCTAssertNil(world.state.store)
+    }
+    func testASaveAfterTheFileBecameUnreadableWritesNoOffDay() throws {
+        let world = EverydayWorld()
+        let (engine, _) = try onLayer(world)
+        try turnOff(engine, world, at: t0)
+        world.state.fileCorrupt = true
+        try save(engine, world, layer(), s1, at: at(300))
+        XCTAssertNil(world.state.file?.schedule.offDay); XCTAssertEqual(world.state.store, s1, "the layer blocks again today")
+        try turnOff(engine, world, at: at(600))
+        XCTAssertNil(world.state.store, "the action can be used again today")
+    }
+    func testAStricterEditThenOffForTodayWritesTheNewRevision() throws {
+        let world = EverydayWorld()
+        let (engine, _) = try onLayer(world)
+        let next = layer(windows: [])
+        try save(engine, world, next, s2, at: t0)
+        try turnOff(engine, world, at: at(60))
+        XCTAssertEqual(world.state.file?.schedule.revision, next.revision); XCTAssertEqual(world.state.file?.selection, s2)
+        XCTAssertEqual(world.state.activities, activities(next)); XCTAssertNil(world.state.store)
+    }
+    func testASaveOrTheRangeEndDuringTheWaitRefusesTheSection() throws {
+        let world = EverydayWorld()
+        let (engine, shown) = try onLayer(world)
+        try save(engine, world, layer(windows: []), s1, at: at(10))
+        XCTAssertEqual(refusal(engine, world, revision: shown.revision, at: at(30)) as? EverydayOffRefusal, .revisionChanged)
+        XCTAssertEqual(world.state.store, s1)
+        let other = EverydayWorld()
+        let (otherEngine, _) = try onLayer(other)
+        XCTAssertEqual(refusal(otherEngine, other, at: clock(18, 0, 10)) as? EverydayOffRefusal, .outsideRange)
+    }
+    func testASessionDuringTheWaitIsBusyAndASessionAfterTheActionKeepsTheLayerOff() throws {
+        let world = EverydayWorld()
+        let (engine, _) = try onLayer(world)
+        let id = try started(engine, world)
+        XCTAssertEqual(refusal(engine, world, at: at(30)) as? ControlIssue, .busy)
+        try engine.finish(id: id, reason: .earlyExit, now: at(40))
+        try engine.acknowledgeTerminal(id: id)
+        try turnOff(engine, world, at: at(50))
+        let later = EverydayWorld(world.state)
+        let laterEngine = self.engine(later)
+        // A session that starts after the action: its break, the re-block and the end all read the off day.
+        let next = try laterEngine.start(now: t0, authorized: { true }, apply: { later.state.focusShield = true }, matches: { later.state.focusShield }).id
+        try takeBreak(laterEngine, later, next)
+        XCTAssertNil(later.state.store)
+        try laterEngine.reconcile(now: at(295), authorized: true)
+        XCTAssertEqual(phase(later), .breakOver); XCTAssertTrue(later.state.focusShield); XCTAssertNil(later.state.store)
+        try laterEngine.finish(id: next, reason: .earlyExit, now: at(400))
+        XCTAssertFalse(later.state.focusShield); XCTAssertNil(later.state.store)
+    }
+    func testAClockSetBackToTheOffDayTurnsTheLayerOffAgainUntilASave() throws {
+        let world = EverydayWorld()
+        let (engine, _) = try onLayer(world)
+        try turnOff(engine, world, at: t0)
+        try engine.reconcile(now: day(3, 10), authorized: true)
+        XCTAssertEqual(world.state.store, s1)
+        try engine.reconcile(now: clock(11, 0), authorized: true, clockChanged: true)
+        XCTAssertNil(world.state.store, "off again for that local date")
+        try save(engine, world, layer(), s1, at: day(3, 19))
+        XCTAssertNil(world.state.file?.schedule.offDay)
     }
 }
