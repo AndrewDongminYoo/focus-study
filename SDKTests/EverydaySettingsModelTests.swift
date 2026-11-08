@@ -343,4 +343,24 @@ import ManagedSettings
         settings.save()
         XCTAssertNil(settings.refusalMessage); XCTAssertEqual(layer.writes, 1)
     }
+    func testTimerLineShowsOnlyABlockingLayerOrAnIssue() {
+        let on = EverydaySchedule(revision: UUID(), enabled: true, rangeStart: 480, rangeEnd: 1080, windows: [])
+        var off = on; off.enabled = false
+        let noon = calendar.date(from: DateComponents(year: 2026, month: 11, day: 2, hour: 12, minute: 5))!
+        func line(_ schedule: EverydaySchedule?, blocks: Bool, next: Date? = nil, issue: EverydayIssue? = nil) -> String? {
+            EverydaySettingsModel.timerLine(EverydayStatus(schedule: schedule, blocksNow: blocks, nextChange: next, issue: issue), calendar: calendar)
+        }
+        XCTAssertNil(EverydaySettingsModel.timerLine(nil, calendar: calendar))
+        // `blocksNow` stays true, so only the schedule hides these rows.
+        XCTAssertNil(line(nil, blocks: true, next: noon))
+        XCTAssertNil(line(off, blocks: true, next: noon))
+        XCTAssertNil(line(on, blocks: false, next: noon), "the idle screen shows no line about the next start")
+        XCTAssertEqual(line(on, blocks: true, next: noon), "매일 제한 중 · 12:05까지")
+        XCTAssertEqual(line(on, blocks: true), "매일 제한 중")
+        // A status the app could not confirm never reads as released, whatever the schedule says.
+        for issue in [EverydayIssue.unreadable, .registrationFailed, .notApplied, .notCleared, .unchecked] {
+            XCTAssertEqual(line(nil, blocks: false, issue: issue), "매일 제한을 확인해 주세요", "\(issue)")
+            XCTAssertEqual(line(off, blocks: false, next: noon, issue: issue), "매일 제한을 확인해 주세요", "\(issue)")
+        }
+    }
 }

@@ -79,11 +79,13 @@ final class FixtureEverydayLayer: EverydayLayerStore {
         layer.selection = sampleSelection()
         return layer
     }
-    /// A fixed-offset calendar in which launch falls between 12:00 and 13:00, so that a fixture range never reaches 23:55 or midnight, whatever the wall clock.
+    /// A fixed-offset calendar in which launch falls between 12:00 and 12:30, so that a fixture range never reaches 23:55 or midnight, whatever the wall clock.
+    /// The 30-minute margin keeps a test that starts in the `preview` lunch window inside it until 13:00.
     static func noonCalendar(now: Date) -> Calendar {
-        let utcHour = Int(now.timeIntervalSince1970) % 86_400 / 3600
+        let seconds = Int(now.timeIntervalSince1970) % 86_400
+        let utcHour = seconds / 3600, lateHalf = seconds % 3600 >= 1800
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: (12 - utcHour) * 3600) ?? .gmt
+        calendar.timeZone = TimeZone(secondsFromGMT: (12 - utcHour) * 3600 - (lateHalf ? 1800 : 0)) ?? .gmt
         return calendar
     }
 }
@@ -119,8 +121,9 @@ extension FocusServices {
         if let index = arguments.firstIndex(of: "--everyday-fixture"), index + 1 < arguments.count, arguments[index + 1] == "blocking" {
             everyday = .blocking(now: now, calendar: calendar)
         }
-        if let index = arguments.firstIndex(of: "--everyday-fixture"), index + 1 < arguments.count, arguments[index + 1] == "preview" {
-            everyday.schedule = EverydaySchedule(revision: UUID(), enabled: true, rangeStart: 480, rangeEnd: 1080, windows: [EverydaySchedule.template(.lunch)!])
+        // `off` stores the `preview` schedule with the layer turned off.
+        if let index = arguments.firstIndex(of: "--everyday-fixture"), index + 1 < arguments.count, ["preview", "off"].contains(arguments[index + 1]) {
+            everyday.schedule = EverydaySchedule(revision: UUID(), enabled: arguments[index + 1] == "preview", rangeStart: 480, rangeEnd: 1080, windows: [EverydaySchedule.template(.lunch)!])
             everyday.selection = FixtureEverydayLayer.sampleSelection()
         }
         let store = SharedControlStore(directory: directory)

@@ -43,12 +43,18 @@ struct FocusView: View {
             switch item {
             case .selection: selectionEditor
             case .settings: SettingsView(model: model)
+            case .everydaySettings: SettingsView(model: model, opensEveryday: true)
             case .history: TodayHistoryView(model: model)
             case .endConfirmation: FocusEndConfirmation(model: model)
             }
         }
         .sensoryFeedback(.success, trigger: model.completedSessionID) { _, new in new != nil }
         .task { refreshIfIdle() }
+        // While the idle screen or the completion card shows, a range or window boundary changes the everyday row with no lock section of the app, and `tick()` does not read it.
+        .task(id: model.isInSession ? nil : model.everydayStatus) {
+            guard !model.isInSession else { return }
+            await EverydaySettingsModel.followStatus({ model.everydayStatus }, now: Date.init) { model.refreshEveryday() }
+        }
         .onDisappear { cancelPendingStart() }
         .onChange(of: scenePhase) { _, value in
             // Only the background cancels a wait (spec: background or close); `.inactive` overlays such as Control Center do not.
@@ -91,6 +97,7 @@ struct FocusView: View {
                 Label("\(completedMinutes)분 집중을 마쳤어요", systemImage: "checkmark.circle.fill").font(.title2.weight(.semibold)).foregroundStyle(FocusTheme.Palette.accent).accessibilityIdentifier("completion")
                 Text("오늘의 세션에 기록했어요. 잠시 쉬었다가 다음 집중을 시작해 보세요.").multilineTextAlignment(.center).foregroundStyle(FocusTheme.Palette.secondaryText)
                 Text("제한이 풀리기까지 조금 걸릴 수 있어요.").font(.footnote).multilineTextAlignment(.center).foregroundStyle(FocusTheme.Palette.secondaryText).accessibilityIdentifier("releaseDelayNote")
+                everydayStatusRow
                 Button("닫기") { model.dismissCompletion() }.modifier(FocusSecondaryAction()).accessibilityIdentifier("completionDismiss")
             } else {
                 clock(model.remaining)
@@ -106,6 +113,7 @@ struct FocusView: View {
                     }
                     Text("앱 \(model.counts.apps)개 · 웹사이트 \(model.counts.websites)개 제한").font(.footnote).foregroundStyle(FocusTheme.Palette.secondaryText)
                         .monospacedDigit().accessibilityIdentifier("restrictionSummary")
+                    everydayStatusRow
                     if let blocker = model.startBlocker {
                         Text(blockerText(blocker)).font(.footnote).foregroundStyle(FocusTheme.Palette.secondaryText).multilineTextAlignment(.center).accessibilityIdentifier("startBlocker")
                     }
@@ -115,6 +123,18 @@ struct FocusView: View {
                     Button("다시 확인하기") { model.refresh() }.accessibilityIdentifier("retry")
                 }
             }
+        }
+    }
+    /// Only the idle screen and the completion card place it; the in-progress screen and the break screen never show it.
+    @ViewBuilder private var everydayStatusRow: some View {
+        if let line = EverydaySettingsModel.timerLine(model.everydayStatus, calendar: model.services.engine.calendar) {
+            Button { sheet = .everydaySettings } label: {
+                HStack(spacing: FocusTheme.Layout.detailSpacing) {
+                    Text(line).multilineTextAlignment(.center).monospacedDigit()
+                    Image(systemName: "chevron.right").font(.caption)
+                }.frame(minWidth: FocusTheme.Layout.minimumTapTarget, minHeight: FocusTheme.Layout.minimumTapTarget).contentShape(Rectangle())
+            }.buttonStyle(.plain).font(.footnote).foregroundStyle(FocusTheme.Palette.secondaryText)
+                .disabled(model.isStarting).accessibilityLabel(line).accessibilityIdentifier("everydayStatusRow")
         }
     }
     private func clock(_ seconds: Int) -> some View {
@@ -167,7 +187,7 @@ struct FocusView: View {
         #endif
     }
 }
-private enum FocusSheet: String, Identifiable { case selection, settings, history, endConfirmation; var id: String { rawValue } }
+private enum FocusSheet: String, Identifiable { case selection, settings, everydaySettings, history, endConfirmation; var id: String { rawValue } }
 
 /// A mounted native feedback view provides a frame opportunity before the synchronous start work.
 private struct StartFeedback: UIViewRepresentable {

@@ -46,7 +46,7 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
     private(set) var completedSessionID: UUID?
     /// That session's own length; today's records can miss it (a session that crossed midnight, a history failure).
     private(set) var completedLength: TimeInterval?
-    /// The everyday layer for the settings row. The timer screen does not show it.
+    /// The everyday layer for the settings row and for the timer screen's everyday status row, which the idle screen and the completion card show.
     private(set) var everydayStatus: EverydayStatus?
     var access: AccessStatus { services.authorization.status }
     var isActive: Bool { current?.phase == .active }

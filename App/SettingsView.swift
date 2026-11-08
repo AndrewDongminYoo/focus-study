@@ -1,13 +1,18 @@
 import SwiftUI
 
-/// Personal settings opened from the timer screen's top-right button.
+/// Personal settings opened from the timer screen's top-right button, or with the everyday screen pushed from the timer screen's everyday status row.
 struct SettingsView: View {
     let model: FocusModel
     @Environment(\.dismiss) private var dismiss
     @State private var everydayHasChanges = false
     @State private var confirmingDiscard = false
+    @State private var path: [SettingsRoute]
+    init(model: FocusModel, opensEveryday: Bool = false) {
+        self.model = model
+        _path = State(initialValue: opensEveryday ? [.everyday] : [])
+    }
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             Form {
                 Section {
                     Picker("집중 시간", selection: Binding(get: { model.services.settings.lengthMinutes }, set: { model.services.settings.lengthMinutes = $0 })) {
@@ -16,7 +21,7 @@ struct SettingsView: View {
                 } header: { Text("집중 시간") } footer: { Text("바꾼 시간은 다음 집중부터 적용돼요.") }
                 Section {
                     NavigationLink {
-                        EverydaySettingsView(model: model, onUnsavedChanges: { everydayHasChanges = $0 }, onFinish: finish)
+                        everydayScreen
                     } label: {
                         VStack(alignment: .leading, spacing: FocusTheme.Layout.detailSpacing) {
                             Text("시간과 앱 정하기")
@@ -35,6 +40,7 @@ struct SettingsView: View {
             }
             .contentMargins(.horizontal, FocusTheme.Layout.screenInset, for: .scrollContent)
             .navigationTitle("설정").navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(for: SettingsRoute.self) { _ in everydayScreen }
             .onAppear { model.refreshEveryday() }
             // The row's status changes at a range or window boundary while the sheet stays open, also with no focus tick.
             .task(id: model.everydayStatus) {
@@ -53,9 +59,15 @@ struct SettingsView: View {
             Button("계속 편집", role: .cancel) {}
         } message: { Text("저장하지 않은 변경은 사라져요.") }
     }
+    /// One builder for the settings row and the timer's status row, so both keep the same unsaved-changes and finish handling.
+    private var everydayScreen: some View {
+        EverydaySettingsView(model: model, onUnsavedChanges: { everydayHasChanges = $0 }, onFinish: finish)
+    }
     private func finish(_ hasChanges: Bool) {
         everydayHasChanges = hasChanges
         if hasChanges { confirmingDiscard = true }
         else { dismiss() }
     }
 }
+/// The one screen that the timer can open already pushed.
+private enum SettingsRoute: Hashable { case everyday }
