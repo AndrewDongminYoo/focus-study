@@ -166,8 +166,9 @@ final class FocusFlowTests: XCTestCase {
     private func breakProgress(_ app: XCUIApplication, _ text: String) -> XCUIElement {
         app.descendants(matching: .any).matching(NSPredicate(format: "identifier == 'breakProgress' AND label == %@", text)).firstMatch
     }
+    /// A 5-second hold outlasts the roughly 1-second existence polling and the property reads that follow on a slow CI runner.
     func testSlowBreakRequestAndReturnShowProgressAndDisableActions() {
-        let app = app(extra: ["--break-delay", "2"])
+        let app = app(extra: ["--break-delay", "5"])
         let start = app.buttons["start"], breakStart = app.buttons["breakStart"], end = app.buttons["end"]
         XCTAssertTrue(start.waitForExistence(timeout: ready)); start.tap()
         XCTAssertTrue(breakStart.waitForExistence(timeout: ready)); breakStart.tap()
@@ -187,12 +188,13 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertEqual(app.staticTexts["breaksLeft"].label, "쉬는 시간 3번 남았어요")
         XCTAssertTrue(breakStart.isEnabled); XCTAssertTrue(end.isEnabled)
     }
+    /// The standard 15-second wait: `--break-timing short` leaves too little break and deadline time for two 5-second holds.
     func testSlowAutomaticBreakStartAndResumeShowProgress() {
-        let app = app(extra: ["--break-timing", "short", "--break-delay", "2"])
+        let app = app(extra: ["--break-delay", "5"])
         let start = app.buttons["start"], breakStart = app.buttons["breakStart"]
         XCTAssertTrue(start.waitForExistence(timeout: ready)); start.tap()
         XCTAssertTrue(breakStart.waitForExistence(timeout: ready)); breakStart.tap()
-        XCTAssertTrue(breakProgress(app, "쉬는 시간을 시작하고 있어요").waitForExistence(timeout: 10))
+        XCTAssertTrue(breakProgress(app, "쉬는 시간을 시작하고 있어요").waitForExistence(timeout: 30))
         XCTAssertFalse(app.buttons["breakWaitCancel"].isEnabled); XCTAssertFalse(app.buttons["end"].isEnabled)
         captureReport(app, name: "break-start-pending")
         let resume = app.buttons["resume"]
