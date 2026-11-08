@@ -407,6 +407,127 @@ import ManagedSettings
         model.requestBreak()
         XCTAssertEqual(model.current, before); XCTAssertNil(model.errorMessage)
     }
+    /// A break fixture whose model reports every accepted break transition.
+    private func measuredBreakFixture(store: ModelTestStore = ModelTestStore()) -> (FocusModel, ModelTestBreakSelection, () -> [BreakAction]) {
+        let (original, history, copies) = makeModel(store: store, monitoring: ModelTestMonitoring(), shield: ModelTestShield(), defaults: UserDefaults(suiteName: UUID().uuidString)!,
+                                                    timing: BreakTiming(waits: [0, 0, 0], breakLength: 0.05, slack: 600, staleWaitGrace: 5))
+        var services = original.services
+        var measured: [BreakAction] = []
+        services.didMeasureBreak = { action, duration in measured.append(action); XCTAssertGreaterThan(duration, 0) }
+        let model = FocusModel(services: services, history: history)
+        model.completeOnboarding(); model.start()
+        XCTAssertTrue(model.isActive)
+        return (model, copies, { measured })
+    }
+    func testPendingBreakRequestIsReservedBeforeTheEngineRuns() throws {
+        let store = ModelTestStore()
+        let (model, _, _) = measuredBreakFixture(store: store)
+        let request = try XCTUnwrap(model.requestBreakAction(.request))
+        XCTAssertEqual(model.pendingBreak?.action, .request)
+        XCTAssertEqual(store.envelope.session?.phase, .active); XCTAssertEqual(model.current?.phase, .active)
+        model.performPendingBreak(request)
+        XCTAssertEqual(store.envelope.session?.phase, .waiting); XCTAssertNil(model.pendingBreak)
+        // The view's teardown cancels the request it already performed; that late call changes nothing.
+        model.cancelPendingBreak(request); model.performPendingBreak(request)
+        XCTAssertEqual(model.current?.phase, .waiting); XCTAssertNil(model.pendingBreak)
+    }
+    func testSecondBreakTapWhilePendingIsIgnored() throws {
+        let (model, _, measured) = measuredBreakFixture()
+        let request = try XCTUnwrap(model.requestBreakAction(.request))
+        XCTAssertNil(model.requestBreakAction(.request))
+        model.requestBreak()
+        XCTAssertEqual(model.current?.phase, .active); XCTAssertTrue(measured().isEmpty)
+        model.performPendingBreak(request)
+        XCTAssertEqual(model.current?.phase, .waiting); XCTAssertEqual(measured(), [.request])
+        let cancel = try XCTUnwrap(model.requestBreakAction(.cancelWait))
+        model.cancelWait(); XCTAssertNil(model.requestBreakAction(.cancelWait))
+        XCTAssertEqual(model.current?.phase, .waiting)
+        model.performPendingBreak(cancel)
+        XCTAssertEqual(model.current?.phase, .active); XCTAssertEqual(model.breaksLeft, 3)
+        XCTAssertEqual(measured(), [.request, .cancelWait])
+    }
+    func testPendingBreakClearsOnFailureWithTheSameMessage() throws {
+        let store = ModelTestStore()
+        let (model, _, measured) = measuredBreakFixture(store: store)
+        store.failSavePhase = .waiting
+        let request = try XCTUnwrap(model.requestBreakAction(.request))
+        model.performPendingBreak(request)
+        XCTAssertNil(model.pendingBreak); XCTAssertEqual(model.current?.phase, .active)
+        XCTAssertEqual(model.errorMessage, "쉬는 시간을 요청하지 못했어요. 다시 시도해 주세요.")
+        XCTAssertEqual(measured(), [.request])
+    }
+    func testLeavingForegroundCancelsAPendingBreakRequest() throws {
+        let (model, copies, measured) = measuredBreakFixture()
+        let request = try XCTUnwrap(model.requestBreakAction(.request))
+        model.sceneDidLeaveForeground()
+        XCTAssertNil(model.pendingBreak)
+        model.performPendingBreak(request)
+        XCTAssertEqual(model.current?.phase, .active); XCTAssertEqual(model.breaksLeft, 3)
+        XCTAssertTrue(measured().isEmpty); XCTAssertTrue(copies.saved.isEmpty)
+    }
+    func testDeferredTickReservesTheAutomaticBreakStartOnce() throws {
+        let (model, copies, measured) = measuredBreakFixture()
+        model.requestBreak(); XCTAssertEqual(model.current?.phase, .waiting)
+        model.tick(defersBreakStart: true)
+        let pending = try XCTUnwrap(model.pendingBreak)
+        XCTAssertEqual(pending.action, .startBreak); XCTAssertEqual(model.current?.phase, .waiting)
+        model.tick(defersBreakStart: true); model.tick()
+        XCTAssertEqual(model.pendingBreak, pending); XCTAssertEqual(model.current?.phase, .waiting)
+        XCTAssertTrue(copies.saved.isEmpty)
+        model.performPendingBreak(pending.id)
+        XCTAssertEqual(model.current?.phase, .onBreak); XCTAssertNil(model.pendingBreak)
+        let resume = try XCTUnwrap(model.requestBreakAction(.resume))
+        model.performPendingBreak(resume)
+        XCTAssertEqual(model.current?.phase, .active)
+        XCTAssertEqual(measured(), [.request, .startBreak, .resume])
+    }
+    func testLeavingForegroundDuringAPendingBreakStartCancelsTheWait() throws {
+        let (model, copies, measured) = measuredBreakFixture()
+        model.requestBreak(); model.tick(defersBreakStart: true)
+        let pending = try XCTUnwrap(model.pendingBreak)
+        model.sceneDidLeaveForeground()
+        model.performPendingBreak(pending.id)
+        XCTAssertEqual(model.current?.phase, .active); XCTAssertEqual(model.breaksLeft, 3)
+        XCTAssertTrue(copies.saved.isEmpty); XCTAssertNil(model.pendingBreak)
+        XCTAssertEqual(measured(), [.request, .cancelWait])
+    }
+    func testInactiveSceneDropsAPendingBreakStartAndKeepsTheWait() throws {
+        let (model, copies, measured) = measuredBreakFixture()
+        model.requestBreak(); model.tick(defersBreakStart: true)
+        let stale = try XCTUnwrap(model.pendingBreak)
+        // An overlay such as Control Center keeps the wait, but a reservation made before it must not start the break at its old tick time.
+        model.sceneDidBecomeInactive()
+        XCTAssertNil(model.pendingBreak); XCTAssertEqual(model.current?.phase, .waiting)
+        model.performPendingBreak(stale.id)
+        XCTAssertEqual(model.current?.phase, .waiting); XCTAssertTrue(copies.saved.isEmpty)
+        // Back in the foreground, the next tick reserves the start again with its own time.
+        model.tick(defersBreakStart: true)
+        let fresh = try XCTUnwrap(model.pendingBreak)
+        XCTAssertNotEqual(fresh.id, stale.id); XCTAssertGreaterThan(fresh.requestedAt, stale.requestedAt)
+        model.performPendingBreak(fresh.id)
+        XCTAssertEqual(model.current?.phase, .onBreak)
+        XCTAssertEqual(measured(), [.request, .startBreak])
+    }
+    func testInactiveSceneKeepsAPendingTappedAction() throws {
+        let (model, _, measured) = measuredBreakFixture()
+        let request = try XCTUnwrap(model.requestBreakAction(.request))
+        model.sceneDidBecomeInactive()
+        XCTAssertEqual(model.pendingBreak?.id, request)
+        model.performPendingBreak(request)
+        XCTAssertEqual(model.current?.phase, .waiting); XCTAssertEqual(measured(), [.request])
+    }
+    func testBreakMeasurementSkipsRejectedTaps() throws {
+        let (model, _, measured) = measuredBreakFixture()
+        model.cancelWait(); model.resume()
+        XCTAssertNil(model.requestBreakAction(.cancelWait)); XCTAssertNil(model.requestBreakAction(.resume))
+        XCTAssertNil(model.requestBreakAction(.startBreak))
+        XCTAssertTrue(measured().isEmpty)
+        let cancelled = try XCTUnwrap(model.requestBreakAction(.request))
+        model.cancelPendingBreak(cancelled)
+        model.requestBreak(); XCTAssertEqual(model.current?.phase, .waiting)
+        model.performPendingBreak(cancelled); model.requestBreak()
+        XCTAssertEqual(measured(), [.request])
+    }
 }
 final class ModelTestBreakSelection: BreakSelectionStore {
     var copies = Set<UUID>(), saved: [(FamilyActivitySelection, UUID)] = []

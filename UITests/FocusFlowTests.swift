@@ -162,6 +162,48 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertFalse(app.buttons["start"].exists)
         captureReport(app, name: "slow-start-active")
     }
+    /// The break feedback with the given text; `--break-delay` keeps it on screen without blocking the app.
+    private func breakProgress(_ app: XCUIApplication, _ text: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(NSPredicate(format: "identifier == 'breakProgress' AND label == %@", text)).firstMatch
+    }
+    func testSlowBreakRequestAndReturnShowProgressAndDisableActions() {
+        let app = app(extra: ["--break-delay", "2"])
+        let start = app.buttons["start"], breakStart = app.buttons["breakStart"], end = app.buttons["end"]
+        XCTAssertTrue(start.waitForExistence(timeout: ready)); start.tap()
+        XCTAssertTrue(breakStart.waitForExistence(timeout: ready)); breakStart.tap()
+        XCTAssertTrue(breakProgress(app, "쉬는 시간을 준비하고 있어요").waitForExistence(timeout: 5))
+        XCTAssertFalse(breakStart.isEnabled); XCTAssertFalse(end.isEnabled)
+        captureReport(app, name: "break-request-pending")
+        // A second tap on the disabled action does not request a second break.
+        breakStart.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["breakWait"].waitForExistence(timeout: 8))
+        XCTAssertEqual(app.staticTexts["breaksLeft"].label, "다른 앱으로 나가면 집중으로 돌아가요. 이번 쉬는 시간을 쓰면 2번 남아요.")
+        let cancel = app.buttons["breakWaitCancel"]
+        XCTAssertTrue(cancel.isEnabled); cancel.tap()
+        XCTAssertTrue(breakProgress(app, "집중으로 돌아가고 있어요").waitForExistence(timeout: 5))
+        XCTAssertFalse(cancel.isEnabled); XCTAssertFalse(end.isEnabled)
+        captureReport(app, name: "break-wait-return-pending")
+        XCTAssertTrue(breakStart.waitForExistence(timeout: 8))
+        XCTAssertEqual(app.staticTexts["breaksLeft"].label, "쉬는 시간 3번 남았어요")
+        XCTAssertTrue(breakStart.isEnabled); XCTAssertTrue(end.isEnabled)
+    }
+    func testSlowAutomaticBreakStartAndResumeShowProgress() {
+        let app = app(extra: ["--break-timing", "short", "--break-delay", "2"])
+        let start = app.buttons["start"], breakStart = app.buttons["breakStart"]
+        XCTAssertTrue(start.waitForExistence(timeout: ready)); start.tap()
+        XCTAssertTrue(breakStart.waitForExistence(timeout: ready)); breakStart.tap()
+        XCTAssertTrue(breakProgress(app, "쉬는 시간을 시작하고 있어요").waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["breakWaitCancel"].isEnabled); XCTAssertFalse(app.buttons["end"].isEnabled)
+        captureReport(app, name: "break-start-pending")
+        let resume = app.buttons["resume"]
+        XCTAssertTrue(resume.waitForExistence(timeout: 8)); XCTAssertTrue(resume.isEnabled)
+        resume.tap()
+        XCTAssertTrue(breakProgress(app, "집중으로 돌아가고 있어요").waitForExistence(timeout: 5))
+        XCTAssertFalse(resume.isEnabled); XCTAssertFalse(app.buttons["end"].isEnabled)
+        captureReport(app, name: "break-resume-pending")
+        XCTAssertTrue(breakStart.waitForExistence(timeout: 8))
+        XCTAssertEqual(app.staticTexts["breaksLeft"].label, "쉬는 시간 2번 남았어요")
+    }
     func testDiscardAlertAtLargestTextKeepsBothActionsReachable() {
         let app = app(extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
         _ = openEveryday(app)

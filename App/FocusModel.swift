@@ -25,11 +25,20 @@ import Observation
     var diagnostics: DeviceDiagnostics?
     /// Opt-in timing of the complete synchronous start call; never carries selection or usage data.
     var didMeasureStart: ((TimeInterval) -> Void)?
+    /// Opt-in timing of each accepted synchronous break transition call; never carries selection or usage data.
+    var didMeasureBreak: ((BreakAction, TimeInterval) -> Void)?
     /// `--ui-testing ending-soon`: the focus seconds left when `start()` begins a session; the start time moves into the past.
     var fixtureFocusLeft: TimeInterval?
+    /// `--break-delay`: seconds that the break feedback stays on screen before the transition runs; the main thread is not blocked.
+    var fixtureBreakHold: TimeInterval = 0
     #endif
 
 }
+/// The four break transitions; the raw value names the action in the `BREAK_LATENCY` log.
+enum BreakAction: String { case request, cancelWait, startBreak, resume }
+/// A break transition reserved by the screen before its feedback has had a chance to appear.
+/// `requestedAt` is the tick time of an automatic break start, which the engine checks against the wait end and its grace.
+struct PendingBreak: Equatable { let id: UUID; let action: BreakAction; let requestedAt: Date }
 enum StartBlocker: Equatable { case access, error, selection }
 enum OnboardingStep: Int, CaseIterable { case intro, permission, selection, length }
 enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
@@ -41,6 +50,8 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
     private(set) var errorMessage: String?
     private(set) var isStarting = false
     private(set) var startRequestID: UUID?
+    /// A break transition that waits for its feedback frame; while it is set, every break action is refused.
+    private(set) var pendingBreak: PendingBreak?
     private(set) var now = Date()
     /// The most recent session that reached its full length, until the person dismisses it.
     private(set) var completedSessionID: UUID?
@@ -202,13 +213,17 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
     }
     func dismissCompletion() { completedSessionID = nil; completedLength = nil }
     func completeOnboarding() { services.settings.hasCompletedOnboarding = true }
-    func tick() {
+    /// `defersBreakStart`: the timer screen reserves the automatic break start, so its feedback can appear before the engine call.
+    func tick(defersBreakStart: Bool = false) {
         now = Date()
         guard let current else { return }
         switch current.phase {
         case .waiting:
             // A wait past its grace throws `breakUnavailable`, and the refresh then cancels it.
-            if let waitEndsAt = current.waitEndsAt, now >= waitEndsAt { startBreak(current) }
+            if let waitEndsAt = current.waitEndsAt, now >= waitEndsAt {
+                if defersBreakStart { requestBreakAction(.startBreak) }
+                else if pendingBreak == nil { perform(.startBreak, at: now) }
+            }
         case .onBreak:
             if now >= (current.breakEndsAt ?? now) || current.timedEnd(at: now, timing: timing) != nil { refresh() }
         case .active, .breakOver:
@@ -217,27 +232,68 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
             if now >= current.expiresAt { refresh() }
         }
     }
-    func requestBreak() {
-        guard let id = current?.id, isActive, breaksLeft > 0 else { return }
-        run({ _ = try services.engine.requestBreak(id: id, now: Date()) }, failure: "쉬는 시간을 요청하지 못했어요. 다시 시도해 주세요.")
+    func requestBreak() { if pendingBreak == nil { perform(.request, at: Date()) } }
+    func cancelWait() { if pendingBreak == nil { perform(.cancelWait, at: Date()) } }
+    func resume() { if pendingBreak == nil { perform(.resume, at: Date()) } }
+    /// Reserves a break action before its feedback has had a chance to appear. No control operation runs here.
+    @discardableResult func requestBreakAction(_ action: BreakAction) -> UUID? {
+        guard pendingBreak == nil, startRequestID == nil, admits(action) else { return nil }
+        let request = UUID()
+        pendingBreak = PendingBreak(id: request, action: action, requestedAt: now)
+        return request
     }
-    func cancelWait() {
-        guard let id = current?.id, current?.phase == .waiting else { return }
-        run({ try services.engine.cancelWait(id: id, now: Date()) }, failure: "집중으로 돌아가지 못했어요. 다시 시도해 주세요.")
+    /// Called after the feedback view's frame boundary. Every control section remains synchronous.
+    func performPendingBreak(_ request: UUID) {
+        guard let pending = pendingBreak, pending.id == request else { return }
+        defer { pendingBreak = nil }
+        perform(pending.action, at: pending.action == .startBreak ? pending.requestedAt : Date())
     }
-    func resume() {
-        guard let id = current?.id, current?.phase == .onBreak || current?.phase == .breakOver else { return }
-        run({ try services.engine.resume(id: id, now: Date()) }, failure: "집중을 다시 시작하지 못했어요. 다시 시도해 주세요.")
+    func cancelPendingBreak(_ request: UUID) {
+        guard pendingBreak?.id == request else { return }
+        pendingBreak = nil
     }
     /// The waiting screen is a step that the person must watch, so leaving the app cancels the wait.
+    /// A pending break action is dropped first; a pending automatic break start then gives way to that cancel.
     func sceneDidLeaveForeground() {
         if let request = startRequestID { cancelPendingStart(request) }
+        if let pending = pendingBreak { cancelPendingBreak(pending.id) }
         if current?.phase == .waiting { cancelWait() }
     }
-    private func startBreak(_ session: ControlSession) {
-        let frozen = services.selection.selection, id = session.id
-        run({ try services.engine.startBreak(id: id, now: now, saveSelection: { try self.services.saveBreakSelection(frozen, id) }) },
-            failure: "쉬는 시간을 시작하지 못했어요. 제한은 그대로예요. 다시 시도해 주세요.")
+    /// An `.inactive` overlay such as Control Center keeps the wait, but drops a reserved automatic break start.
+    /// The start would otherwise run at its old tick time when the app returns, and the break would lose the time spent away.
+    /// The next active tick reserves it again with its own time; past the grace, the stale-wait rule cancels the wait.
+    func sceneDidBecomeInactive() {
+        if let pending = pendingBreak, pending.action == .startBreak { cancelPendingBreak(pending.id) }
+    }
+    private func admits(_ action: BreakAction) -> Bool {
+        guard let phase = current?.phase else { return false }
+        switch action {
+        case .request: return phase == .active && breaksLeft > 0
+        case .cancelWait, .startBreak: return phase == .waiting
+        case .resume: return phase == .onBreak || phase == .breakOver
+        }
+    }
+    /// The unchanged synchronous break transition; `moment` is the engine time of an automatic break start.
+    private func perform(_ action: BreakAction, at moment: Date) {
+        guard let id = current?.id, admits(action) else { return }
+        #if DEBUG
+        let measurementStarted = services.didMeasureBreak == nil ? nil : ProcessInfo.processInfo.systemUptime
+        defer {
+            if let measurementStarted { services.didMeasureBreak?(action, ProcessInfo.processInfo.systemUptime - measurementStarted) }
+        }
+        #endif
+        switch action {
+        case .request:
+            run({ _ = try services.engine.requestBreak(id: id, now: moment) }, failure: "쉬는 시간을 요청하지 못했어요. 다시 시도해 주세요.")
+        case .cancelWait:
+            run({ try services.engine.cancelWait(id: id, now: moment) }, failure: "집중으로 돌아가지 못했어요. 다시 시도해 주세요.")
+        case .startBreak:
+            let frozen = services.selection.selection
+            run({ try services.engine.startBreak(id: id, now: moment, saveSelection: { try self.services.saveBreakSelection(frozen, id) }) },
+                failure: "쉬는 시간을 시작하지 못했어요. 제한은 그대로예요. 다시 시도해 주세요.")
+        case .resume:
+            run({ try services.engine.resume(id: id, now: moment) }, failure: "집중을 다시 시작하지 못했어요. 다시 시도해 주세요.")
+        }
     }
     /// A break action, then a refresh. A phase that changed in the meantime is not an error.
     private func run(_ action: () throws -> Void, failure: String) {
