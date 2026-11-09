@@ -170,6 +170,8 @@ struct EverydaySettingsView: View {
             if !schedule.enabled {
                 Text("매일 제한이 꺼져 있어요.").accessibilityIdentifier("\(prefix)Off")
             } else {
+                // A sibling row of the text rows, so that no container identifier masks the row identifiers below.
+                EverydayDayClock(segments: segments, identifier: "\(prefix)Clock")
                 ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
                     let start = EverydaySettingsModel.time(segment.start), end = EverydaySettingsModel.time(segment.end)
                     let state = segment.blocked ? "제한" : "해제"
@@ -241,6 +243,94 @@ struct EverydaySettingsView: View {
     private func windowBinding(_ index: Int, _ key: WritableKeyPath<EverydayWindow, Int>) -> Binding<Int> {
         Binding(get: { settings.draft.windows.indices.contains(index) ? settings.draft.windows[index][keyPath: key] : 0 },
                 set: { if settings.draft.windows.indices.contains(index) { settings.draft.windows[index][keyPath: key] = $0 } })
+    }
+}
+/// The schedule preview as a clock: 24 hours as one turn, midnight at the top, clockwise.
+/// A restricted interval is a thick solid arc, an unblocked interval a dashed arc of the same width, and the time outside the range a thin track.
+/// The text rows below it stay the accessible alternative, so the clock is one element with a short label.
+private struct EverydayDayClock: View {
+    let segments: [EverydaySettingsModel.PreviewSegment]
+    let identifier: String
+    private static let band: CGFloat = 14
+    private static let track: CGFloat = 3
+    private static let maximumSide: CGFloat = 240
+    /// The hour ticks run from 2 to 8 points inside the band.
+    private static let tickStart: CGFloat = 2
+    private static let tickEnd: CGFloat = 8
+    /// From the inner edge of the band to the center of an hour label: the tick, half of "18시" at the capped size (about 19 points), and a gap.
+    private static let labelInset: CGFloat = tickEnd + 19 + 5
+    private static let hours = [0, 6, 12, 18]
+    var body: some View {
+        VStack(spacing: FocusTheme.Layout.relatedSpacing) {
+            dial.aspectRatio(1, contentMode: .fit).frame(maxWidth: Self.maximumSide).frame(maxWidth: .infinity)
+            legend
+        }
+        .padding(.vertical, FocusTheme.Layout.inlineSpacing)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("하루 일정표")
+        .accessibilityAddTraits(.isImage)
+        .accessibilityIdentifier(identifier)
+    }
+    private var dial: some View {
+        GeometryReader { proxy in
+            let side = min(proxy.size.width, proxy.size.height)
+            let center = CGPoint(x: proxy.size.width / 2, y: proxy.size.height / 2)
+            let inner = side / 2 - Self.band
+            ZStack {
+                Circle().stroke(FocusTheme.Palette.secondaryText.opacity(0.35), lineWidth: Self.track)
+                    .frame(width: side - Self.band, height: side - Self.band)
+                ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
+                    Circle()
+                        .trim(from: EverydaySettingsModel.dayClockFraction(segment.start), to: EverydaySettingsModel.dayClockFraction(segment.end))
+                        .stroke(Self.color(blocked: segment.blocked), style: Self.stroke(blocked: segment.blocked, width: Self.band))
+                        .rotationEffect(.degrees(-90))
+                        .frame(width: side - Self.band, height: side - Self.band)
+                }
+                Path { path in
+                    for hour in Self.hours {
+                        path.move(to: Self.point(hour: hour, radius: inner - Self.tickStart, center: center))
+                        path.addLine(to: Self.point(hour: hour, radius: inner - Self.tickEnd, center: center))
+                    }
+                }
+                .stroke(FocusTheme.Palette.secondaryText, lineWidth: 1.5)
+                ForEach(Self.hours, id: \.self) { hour in
+                    Text("\(hour)시").font(.caption2).monospacedDigit().foregroundStyle(FocusTheme.Palette.secondaryText)
+                        // The labels only orient the eye; the text rows carry the times at every size.
+                        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                        .fixedSize()
+                        .position(Self.point(hour: hour, radius: inner - Self.labelInset, center: center))
+                }
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+        }
+    }
+    private var legend: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: FocusTheme.Layout.controlSpacing) { legendItems }
+            VStack(alignment: .leading, spacing: FocusTheme.Layout.inlineSpacing) { legendItems }
+        }
+        .font(.footnote).foregroundStyle(FocusTheme.Palette.secondaryText)
+    }
+    @ViewBuilder private var legendItems: some View {
+        legendItem("실선 · 제한", blocked: true)
+        legendItem("점선 · 해제", blocked: false)
+    }
+    private func legendItem(_ title: String, blocked: Bool) -> some View {
+        HStack(spacing: FocusTheme.Layout.inlineSpacing) {
+            Path { path in path.move(to: CGPoint(x: 0, y: 4)); path.addLine(to: CGPoint(x: 24, y: 4)) }
+                .stroke(Self.color(blocked: blocked), style: Self.stroke(blocked: blocked, width: 8))
+                .frame(width: 24, height: 8)
+            Text(title).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+    private static func color(blocked: Bool) -> Color { blocked ? FocusTheme.Palette.accent : FocusTheme.Palette.secondaryText }
+    private static func stroke(blocked: Bool, width: CGFloat) -> StrokeStyle {
+        StrokeStyle(lineWidth: width, lineCap: .butt, dash: blocked ? [] : [4, 3])
+    }
+    /// Clockwise from the top: an hour's point on a circle around the center.
+    private static func point(hour: Int, radius: CGFloat, center: CGPoint) -> CGPoint {
+        let angle = EverydaySettingsModel.dayClockFraction(hour * 60) * 2 * .pi
+        return CGPoint(x: center.x + radius * sin(angle), y: center.y - radius * cos(angle))
     }
 }
 /// A wall-clock time on the 5-minute grid, stored as minutes after midnight.

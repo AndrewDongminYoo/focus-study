@@ -346,6 +346,10 @@ final class FocusFlowTests: XCTestCase {
     func testEverydayPreviewShowsDraftSeparatelyFromStoredSchedule() {
         let app = app(extra: ["--everyday-fixture", "preview"])
         _ = openEveryday(app)
+        let draftClock = app.descendants(matching: .any)["everydayDraftClock"]
+        scrollEveryday(app, to: draftClock)
+        XCTAssertEqual(draftClock.label, "하루 일정표")
+        captureReport(app, name: "everyday-preview-clock")
         let draft = app.staticTexts["everydayDraftSegment.1"]
         scrollEveryday(app, to: draft)
         XCTAssertEqual(draft.label, "08:00부터 12:00까지, 제한")
@@ -354,14 +358,19 @@ final class FocusFlowTests: XCTestCase {
         captureReport(app, name: "everyday-preview")
         let stored = app.buttons["저장된 일정"]
         scrollEveryday(app, to: stored); stored.tap()
+        let storedClock = app.descendants(matching: .any)["everydayStoredClock"]
+        scrollEveryday(app, to: storedClock)
+        XCTAssertEqual(storedClock.label, "하루 일정표")
         let storedFirst = app.staticTexts["everydayStoredSegment.1"]
         scrollEveryday(app, to: storedFirst)
         XCTAssertEqual(storedFirst.label, "08:00부터 12:00까지, 제한")
         captureReport(app, name: "everyday-preview-stored")
         let hierarchy = XCTAttachment(string: app.debugDescription)
         hierarchy.name = "everyday-preview-accessibility"; hierarchy.lifetime = .keepAlways; add(hierarchy)
-        for _ in 0..<4 where !app.buttons["삭제"].firstMatch.isHittable { app.swipeDown() }
-        app.buttons["삭제"].firstMatch.tap()
+        // The two clock rows sit between the stored rows and the windows section; a button under the navigation bar is hittable but takes no tap.
+        let delete = app.buttons["삭제"].firstMatch, belowBar = app.navigationBars["매일 제한"].frame.maxY + 12
+        for _ in 0..<8 where !(delete.isHittable && delete.frame.minY > belowBar) { app.swipeDown() }
+        delete.tap()
         scrollEveryday(app, to: draft)
         XCTAssertEqual(draft.label, "08:00부터 18:00까지, 제한")
         scrollEveryday(app, to: storedFirst)
@@ -388,9 +397,11 @@ final class FocusFlowTests: XCTestCase {
         scrollEveryday(app, to: invalid)
         XCTAssertTrue(invalid.isHittable)
         XCTAssertFalse(app.staticTexts["everydayDraftSegment.1"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["everydayDraftClock"].exists, "an invalid draft shows no clock")
         XCTAssertFalse(app.buttons["everydaySave"].isEnabled)
         let stored = app.buttons["저장된 일정"]
         scrollEveryday(app, to: stored); stored.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["everydayStoredClock"].waitForExistence(timeout: 5))
         let storedFirst = app.staticTexts["everydayStoredSegment.1"]
         scrollEveryday(app, to: storedFirst)
         XCTAssertEqual(storedFirst.label, "08:00부터 12:00까지, 제한")
@@ -400,6 +411,16 @@ final class FocusFlowTests: XCTestCase {
         let app = app(extra: ["--everyday-fixture", "preview", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
         _ = openEveryday(app)
         let first = app.staticTexts["everydayDraftSegment.1"], second = app.staticTexts["everydayDraftSegment.2"], third = app.staticTexts["everydayDraftSegment.3"]
+        let clock = app.descendants(matching: .any)["everydayDraftClock"]
+        scrollEveryday(app, to: clock)
+        XCTAssertGreaterThanOrEqual(clock.frame.minX, app.frame.minX)
+        XCTAssertLessThanOrEqual(clock.frame.maxX, app.frame.maxX)
+        // scrollEveryday stops once the center clears the bar, so compare the height with the visible area, not the edges with the bars.
+        let visible = app.buttons["everydaySave"].frame.minY - app.navigationBars["매일 제한"].frame.maxY
+        XCTAssertLessThanOrEqual(clock.frame.height, visible, "the whole clock fits between the navigation bar and the save button")
+        captureReport(app, name: "everyday-preview-clock-largest-text")
+        XCTAssertTrue(first.waitForExistence(timeout: 5))
+        XCTAssertLessThan(clock.frame.midY, first.frame.minY, "the clock sits above the text rows")
         scrollEveryday(app, to: first)
         XCTAssertEqual(first.label, "08:00부터 12:00까지, 제한")
         captureReport(app, name: "everyday-preview-largest-text")
