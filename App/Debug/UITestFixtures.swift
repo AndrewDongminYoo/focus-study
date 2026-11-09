@@ -94,6 +94,14 @@ final class FixtureEverydayLayer: EverydayLayerStore {
         return calendar
     }
 }
+/// `history-failure`: every read of today's records fails, so the history error state survives each refresh.
+/// A terminal session is still imported and acknowledged, so an ended session never stays in the control file.
+@MainActor private final class FixtureFailingHistory: SessionHistoryProviding {
+    private let base: any SessionHistoryProviding
+    init(base: any SessionHistoryProviding) { self.base = base }
+    func importTerminal(_ session: ControlSession) throws { try base.importTerminal(session) }
+    func records(on date: Date, calendar: Calendar) throws -> [SessionRecord] { throw ControlIssue.io }
+}
 /// In-memory selection copies; a restore never touches real restrictions.
 private final class FixtureBreakSelection: BreakSelectionStore {
     var copies = Set<UUID>()
@@ -165,6 +173,7 @@ extension FocusServices {
         }
         // `ending-soon`: the start button begins a session with 10 seconds of focus left, so the test's own tap, not launch, starts the clock.
         if arguments.contains("ending-soon") { services.fixtureFocusLeft = 10 }
+        if arguments.contains("history-failure") { services.fixtureHistory = { FixtureFailingHistory(base: $0) } }
         // In-memory settings: `onboarding` starts a new person; every other mode is a person who finished onboarding.
         let settings = FocusSettings(defaults: UserDefaults(suiteName: "FocusFixture-\(UUID().uuidString)")!)
         if let index = arguments.firstIndex(of: "--length"), index + 1 < arguments.count, let minutes = Int(arguments[index + 1]) { settings.lengthMinutes = minutes }

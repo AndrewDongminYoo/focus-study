@@ -286,21 +286,24 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["아직 기록이 없어요."].exists)
         captureReport(app, name: "history-empty")
     }
+    /// `history-failure` keeps every history read failing, so no refresh between the queries can replace the error state.
+    /// The recovery after a successful read is `FocusModelTests.testHistoryRetryClearsTheErrorAndLoadsRecordsAfterAFailedRead`.
     func testHistoryErrorDoesNotShowSuccessfulSummaryOrEmptyState() {
-        let app = app("registration-failure")
-        XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: ready)); app.buttons["start"].tap()
-        XCTAssertTrue(app.staticTexts["startError"].waitForExistence(timeout: 5))
-        let error = app.staticTexts["startError"].label
-        XCTAssertEqual(app.buttons["todaySummary"].label, "오늘의 기록")
+        let app = app("history-failure")
+        let error = "기록을 불러오지 못했어요. 다시 확인해 주세요. 진행 중인 세션은 종료할 수 있어요."
         openToday(app)
-        XCTAssertTrue(app.staticTexts["historyError"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.staticTexts["historyError"].label, error)
+        let message = app.staticTexts["historyError"]
+        XCTAssertTrue(message.waitForExistence(timeout: ready))
+        XCTAssertEqual(message.label, error)
         XCTAssertFalse(app.staticTexts["historySummary"].exists)
         XCTAssertFalse(app.staticTexts["아직 기록이 없어요."].exists)
+        XCTAssertTrue(app.buttons["historyRetry"].exists)
         captureReport(app, name: "history-error")
         app.buttons["historyRetry"].tap()
-        XCTAssertTrue(app.staticTexts["historySummary"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.staticTexts["historyError"].exists)
+        XCTAssertFalse(app.staticTexts["historySummary"].waitForExistence(timeout: 3))
+        XCTAssertTrue(message.exists)
+        XCTAssertEqual(message.label, error)
+        XCTAssertFalse(app.staticTexts["아직 기록이 없어요."].exists)
     }
     func testKoreanSystemTimePicker() {
         let app = app(extra: ["-AppleLanguages", "(ko)", "-AppleLocale", "ko_KR"])

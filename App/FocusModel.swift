@@ -33,6 +33,8 @@ import Observation
     var fixtureFocusLeft: TimeInterval?
     /// `--break-delay`: seconds that the break feedback stays on screen before the transition runs; the main thread is not blocked.
     var fixtureBreakHold: TimeInterval = 0
+    /// `--ui-testing history-failure`: wraps the app's history, so that every read of today's records fails.
+    var fixtureHistory: ((any SessionHistoryProviding) -> any SessionHistoryProviding)?
     #endif
 
 }
@@ -111,7 +113,11 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
         return hasSelection ? .timer : .onboarding(.selection)
     }
     convenience init(services: FocusServices, context: ModelContext) {
-        self.init(services: services, history: SessionHistory(context: context, acknowledge: services.engine.acknowledgeTerminal))
+        let history: any SessionHistoryProviding = SessionHistory(context: context, acknowledge: services.engine.acknowledgeTerminal)
+        #if DEBUG
+        if let wrap = services.fixtureHistory { self.init(services: services, history: wrap(history)); return }
+        #endif
+        self.init(services: services, history: history)
     }
     init(services: FocusServices, history: any SessionHistoryProviding) {
         self.services = services; self.history = history
