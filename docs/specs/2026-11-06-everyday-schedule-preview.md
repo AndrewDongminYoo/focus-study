@@ -16,6 +16,7 @@ Primary sources are the issue, [M3 design](2026-11-01-m3-schedule-layer-design.m
 - State that times outside the daily range have no everyday restriction; focus-session restrictions remain separate.
 - Preserve save and failure semantics, reentry behavior, existing accessibility identifiers, storage, engine validation, and maximum window count.
 - Use text rather than color to distinguish intervals, one accessibility label per row in chronological order, natural wrapping, and semantic theme colors.
+- Reconciliation (2026-11-09, #85): a 24-hour clock now shows above the text rows of each preview, as the [everyday day clock](2026-11-09-everyday-day-clock.md) spec says; the text rows and their labels stay.
 
 ## Verification and boundaries
 

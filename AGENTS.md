@@ -28,6 +28,7 @@ Use these current documentation paths:
 - [M4 Focus filter design](docs/specs/2026-11-01-m4-focus-filter-design.md)
 - [Everyday status on the timer screen](docs/specs/2026-11-08-everyday-status-on-timer.md), which amends the M3 design for the timer screen
 - [Turning the everyday layer off for today](docs/specs/2026-11-08-everyday-off-today.md), which amends the M3 design for in-range editing
+- [Everyday schedule preview as a day clock](docs/specs/2026-11-09-everyday-day-clock.md), which amends the [schedule preview spec](docs/specs/2026-11-06-everyday-schedule-preview.md) with a 24-hour clock above the text rows
 - [Implementation plan](docs/plans/2026-10-26-focus-study.md)
 - [M1 implementation plan](docs/plans/2026-10-31-m1-launch-flow.md)
 - [M2 implementation plan](docs/plans/2026-11-01-m2-break-pass.md)

@@ -77,6 +77,23 @@ import ManagedSettings
         schedule.rangeEnd = 1080; schedule.enabled = false
         XCTAssertEqual(EverydaySettingsModel.previewSegments(for: schedule), [])
     }
+    func testDayClockFractionPlacesMidnightAtZeroAndKeepsTheLatestRangeEndBeforeOneTurn() {
+        XCTAssertEqual(EverydaySettingsModel.dayClockFraction(0), 0)
+        XCTAssertEqual(EverydaySettingsModel.dayClockFraction(360), 0.25)
+        XCTAssertEqual(EverydaySettingsModel.dayClockFraction(720), 0.5)
+        XCTAssertEqual(EverydaySettingsModel.dayClockFraction(1080), 0.75)
+        XCTAssertEqual(EverydaySettingsModel.dayClockFraction(EverydaySchedule.latestRangeEnd), 1435.0 / 1440.0)
+        XCTAssertLessThan(EverydaySettingsModel.dayClockFraction(EverydaySchedule.latestRangeEnd), 1)
+        let schedule = EverydaySchedule(revision: UUID(), enabled: true, rangeStart: 0, rangeEnd: EverydaySchedule.latestRangeEnd, windows: [
+            EverydayWindow(kind: .custom, start: 1315, end: EverydaySchedule.latestRangeEnd)
+        ])
+        let segments = EverydaySettingsModel.previewSegments(for: schedule) ?? []
+        XCTAssertEqual(segments.count, 2)
+        let fractions = segments.map { (EverydaySettingsModel.dayClockFraction($0.start), EverydaySettingsModel.dayClockFraction($0.end)) }
+        XCTAssertEqual(fractions.first?.0, 0, "a range that starts at midnight starts at the top")
+        XCTAssertEqual(fractions.last?.1, 1435.0 / 1440.0, "a range that ends at the latest end stops before midnight")
+        for (start, end) in fractions { XCTAssertLessThan(start, end, "no arc wraps past midnight") }
+    }
     func testPreviewKeepsStoredScheduleThroughRefusalFailureSaveAndReentry() {
         var fail = false
         let (settings, layer, _, _) = fixture(writeFailure: { fail })

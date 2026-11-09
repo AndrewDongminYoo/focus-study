@@ -103,6 +103,9 @@ import Observation
         if cursor < schedule.rangeEnd { result.append(PreviewSegment(start: cursor, end: schedule.rangeEnd, blocked: true)) }
         return result
     }
+    /// The position of a time on the day clock, as a fraction of one turn: midnight is 0 and each hour is 1/24.
+    /// `EverydaySchedule.issue` keeps every previewed time between 00:00 and `latestRangeEnd`, so no arc passes midnight.
+    nonisolated static func dayClockFraction(_ minutes: Int) -> Double { Double(minutes) / Double(24 * 60) }
     /// The stored range locks edits even during an unblocked window; the engine rechecks at save time.
     var strictOnlyMessage: String? {
         guard let schedule = status?.schedule, schedule.enabled,
