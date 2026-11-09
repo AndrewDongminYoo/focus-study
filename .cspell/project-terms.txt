@@ -36,6 +36,7 @@ Mirae
 Onone
 parallelizable
 parallelizeBuildables
+person.crop.circle.badge.exclamationmark
 readback
 SDKROOT
 showsdks

@@ -669,6 +669,34 @@ final class FocusFlowTests: XCTestCase {
         for identifier in ["start", "settingsButton", "todaySummary"] { XCTAssertTrue(app.buttons[identifier].exists, identifier) }
         for identifier in ["focusGuideRow", "focusGuide", "focusFilterRefusal"] { XCTAssertFalse(app.descendants(matching: .any)[identifier].exists, identifier) }
     }
+    func testFocusGuideAtLargestTextScrollsToTheEnd() {
+        let app = app(extra: ["--focus-filter-refusal", "busy", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        XCTAssertTrue(app.buttons["settingsButton"].waitForExistence(timeout: ready)); app.buttons["settingsButton"].tap()
+        // At the largest text the guide row sits below the fold of the settings sheet.
+        let row = app.buttons["focusGuideRow"]
+        for _ in 0..<12 where !(row.exists && row.isHittable) { dragUp(app) }
+        waitHittable(row); row.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["focusGuide"].waitForExistence(timeout: ready))
+        captureReport(app, name: "focus-guide-largest-text-1")
+        let refusal = app.staticTexts["focusFilterRefusal"]
+        let last = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "긴급 알림은 iOS 설정을 따라요")).firstMatch
+        var sawRefusal = refusal.exists, page = 1
+        while !(last.exists && last.isHittable), page < 40 {
+            dragUp(app); page += 1
+            sawRefusal = sawRefusal || refusal.exists
+            captureReport(app, name: "focus-guide-largest-text-\(page)")
+        }
+        XCTAssertTrue(sawRefusal, "the stored refusal shows while scrolling the guide")
+        XCTAssertTrue(last.isHittable, "the last guide row comes into view")
+        // The row is hittable while its detail is still below the fold; one more drag shows the end of the list.
+        dragUp(app)
+        captureReport(app, name: "focus-guide-largest-text-end")
+    }
+    /// One slow drag that scrolls the visible list up by about half of the screen, so consecutive captures overlap.
+    private func dragUp(_ app: XCUIApplication) {
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75))
+        start.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)), withVelocity: .slow, thenHoldForDuration: 0.1)
+    }
     func testCompletionCopyUsesSessionLength() {
         let app = app("expiring", extra: ["--length", "40"])
         // The Label exposes its icon and text under the same identifier, in a runtime-dependent order (iOS 26.5 lists the icon, labelled "Selected", first).
