@@ -1,6 +1,7 @@
 import XCTest
 import FamilyControls
 import ManagedSettings
+import SwiftData
 
 @MainActor final class FocusModelTests: XCTestCase {
     private func fixture(defaults: UserDefaults = UserDefaults(suiteName: UUID().uuidString)!) -> (FocusModel, ModelTestHistory, ModelTestStore, ModelTestShield, SessionControl) {
@@ -215,6 +216,22 @@ import ManagedSettings
         model.end()
         XCTAssertFalse(shield.applied)
         XCTAssertNil(try engine.snapshot().session)
+    }
+    /// The history sheet's "다시 확인하기" calls `refresh()`: a read that succeeds after a failed one clears the history error and loads today's records.
+    func testHistoryRetryClearsTheErrorAndLoadsRecordsAfterAFailedRead() throws {
+        let (base, _, _, _, _) = fixture()
+        let container = try ModelContainer(for: SessionRecord.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none))
+        let stored = SessionHistory(context: ModelContext(container), acknowledge: { _ in })
+        var ended = ControlSession(startedAt: Date())
+        ended.phase = .terminal; ended.reason = .earlyExit; ended.observedAt = ended.startedAt
+        try stored.importTerminal(ended)
+        let model = FocusModel(services: base.services, history: FirstReadFailingHistory(base: stored))
+        model.refresh()
+        XCTAssertEqual(model.errorMessage, "기록을 불러오지 못했어요. 다시 확인해 주세요. 진행 중인 세션은 종료할 수 있어요.")
+        XCTAssertTrue(model.records.isEmpty)
+        model.refresh()
+        XCTAssertNil(model.errorMessage)
+        XCTAssertEqual(model.records.map(\.id), [ended.id])
     }
     func testControlReadFailureStillInvalidatesPreviouslyConfirmedSession() throws {
         let (model, _, store, shield, engine) = fixture()
@@ -604,6 +621,17 @@ final class ModelTestShield: ShieldClient {
     init(acknowledge: @escaping (UUID) throws -> Void) { self.acknowledge = acknowledge }
     func importTerminal(_ session: ControlSession) throws { try acknowledge(session.id) }
     func records(on date: Date, calendar: Calendar) throws -> [SessionRecord] { if failFetch { throw ModelTestError.storage }; return [] }
+}
+/// Fails the first read of today's records, then reads the wrapped history.
+@MainActor final class FirstReadFailingHistory: SessionHistoryProviding {
+    private let base: any SessionHistoryProviding
+    private var failed = false
+    init(base: any SessionHistoryProviding) { self.base = base }
+    func importTerminal(_ session: ControlSession) throws { try base.importTerminal(session) }
+    func records(on date: Date, calendar: Calendar) throws -> [SessionRecord] {
+        if !failed { failed = true; throw ModelTestError.storage }
+        return try base.records(on: date, calendar: calendar)
+    }
 }
 @MainActor final class ModelTestAuthorization: AuthorizationProviding {
     var status: AccessStatus = .approved
