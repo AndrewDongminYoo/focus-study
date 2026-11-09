@@ -413,9 +413,14 @@ final class FocusFlowTests: XCTestCase {
         let first = app.staticTexts["everydayDraftSegment.1"], second = app.staticTexts["everydayDraftSegment.2"], third = app.staticTexts["everydayDraftSegment.3"]
         let clock = app.descendants(matching: .any)["everydayDraftClock"]
         scrollEveryday(app, to: clock)
+        // The large save-status area covers more than scrollEveryday's bottom margin; bring the whole clock above it for the capture.
+        let clockTop = app.navigationBars["매일 제한"].frame.maxY + 12
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45))
+        let end = start.withOffset(CGVector(dx: 0, dy: clockTop - clock.frame.minY))
+        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.1)
         XCTAssertGreaterThanOrEqual(clock.frame.minX, app.frame.minX)
         XCTAssertLessThanOrEqual(clock.frame.maxX, app.frame.maxX)
-        // scrollEveryday stops once the center clears the bar, so compare the height with the visible area, not the edges with the bars.
+        XCTAssertGreaterThanOrEqual(clock.frame.minY, app.navigationBars["매일 제한"].frame.maxY)
         let visible = app.buttons["everydaySave"].frame.minY - app.navigationBars["매일 제한"].frame.maxY
         XCTAssertLessThanOrEqual(clock.frame.height, visible, "the whole clock fits between the navigation bar and the save button")
         captureReport(app, name: "everyday-preview-clock-largest-text")

@@ -172,6 +172,7 @@ struct EverydaySettingsView: View {
             } else {
                 // A sibling row of the text rows, so that no container identifier masks the row identifiers below.
                 EverydayDayClock(segments: segments, identifier: "\(prefix)Clock")
+                    .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
                 ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
                     let start = EverydaySettingsModel.time(segment.start), end = EverydaySettingsModel.time(segment.end)
                     let state = segment.blocked ? "제한" : "해제"
@@ -246,19 +247,16 @@ struct EverydaySettingsView: View {
     }
 }
 /// The schedule preview as a clock: 24 hours as one turn, midnight at the top, clockwise.
-/// A restricted interval is a thick solid arc, an unblocked interval a dashed arc of the same width, and the time outside the range a thin track.
+/// Restricted and unblocked intervals share the track's width, using the accent and its tint respectively.
 /// The text rows below it stay the accessible alternative, so the clock is one element with a short label.
 private struct EverydayDayClock: View {
     let segments: [EverydaySettingsModel.PreviewSegment]
     let identifier: String
+    @Environment(\.colorSchemeContrast) private var contrast
     private static let band: CGFloat = 14
-    private static let track: CGFloat = 3
-    private static let maximumSide: CGFloat = 240
-    /// The hour ticks run from 2 to 8 points inside the band.
-    private static let tickStart: CGFloat = 2
-    private static let tickEnd: CGFloat = 8
-    /// From the inner edge of the band to the center of an hour label: the tick, half of "18시" at the capped size (about 19 points), and a gap.
-    private static let labelInset: CGFloat = tickEnd + 19 + 5
+    private static let maximumSide: CGFloat = 200
+    /// Keep the quarter labels just inside the band, leaving room for the range in the center.
+    private static let labelInset: CGFloat = 16
     private static let hours = [0, 6, 12, 18]
     var body: some View {
         VStack(spacing: FocusTheme.Layout.relatedSpacing) {
@@ -277,28 +275,33 @@ private struct EverydayDayClock: View {
             let center = CGPoint(x: proxy.size.width / 2, y: proxy.size.height / 2)
             let inner = side / 2 - Self.band
             ZStack {
-                Circle().stroke(FocusTheme.Palette.secondaryText.opacity(0.35), lineWidth: Self.track)
+                Circle().stroke(FocusTheme.Palette.progressTrack, lineWidth: Self.band)
                     .frame(width: side - Self.band, height: side - Self.band)
                 ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
                     Circle()
                         .trim(from: EverydaySettingsModel.dayClockFraction(segment.start), to: EverydaySettingsModel.dayClockFraction(segment.end))
-                        .stroke(Self.color(blocked: segment.blocked), style: Self.stroke(blocked: segment.blocked, width: Self.band))
+                        .stroke(color(blocked: segment.blocked), style: StrokeStyle(lineWidth: Self.band, lineCap: .butt))
                         .rotationEffect(.degrees(-90))
                         .frame(width: side - Self.band, height: side - Self.band)
                 }
-                Path { path in
-                    for hour in Self.hours {
-                        path.move(to: Self.point(hour: hour, radius: inner - Self.tickStart, center: center))
-                        path.addLine(to: Self.point(hour: hour, radius: inner - Self.tickEnd, center: center))
-                    }
-                }
-                .stroke(FocusTheme.Palette.secondaryText, lineWidth: 1.5)
                 ForEach(Self.hours, id: \.self) { hour in
                     Text("\(hour)시").font(.caption2).monospacedDigit().foregroundStyle(FocusTheme.Palette.secondaryText)
                         // The labels only orient the eye; the text rows carry the times at every size.
-                        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                        .dynamicTypeSize(...DynamicTypeSize.large)
                         .fixedSize()
                         .position(Self.point(hour: hour, radius: inner - Self.labelInset, center: center))
+                }
+                if let first = segments.first, let last = segments.last {
+                    VStack(spacing: FocusTheme.Layout.detailSpacing) {
+                        Text("설정 시간").font(.caption).foregroundStyle(FocusTheme.Palette.secondaryText)
+                        Text("\(EverydaySettingsModel.time(first.start))–\(EverydaySettingsModel.time(last.end))")
+                            .font(.subheadline.weight(.semibold)).monospacedDigit()
+                            .foregroundStyle(FocusTheme.Palette.primaryText)
+                    }
+                    // This duplicates the scalable text rows below, so keep it clear of the quarter labels.
+                    .dynamicTypeSize(...DynamicTypeSize.large)
+                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .frame(width: side * 0.56)
                 }
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
@@ -312,20 +315,18 @@ private struct EverydayDayClock: View {
         .font(.footnote).foregroundStyle(FocusTheme.Palette.secondaryText)
     }
     @ViewBuilder private var legendItems: some View {
-        legendItem("실선 · 제한", blocked: true)
-        legendItem("점선 · 해제", blocked: false)
+        legendItem("제한", blocked: true)
+        legendItem("해제", blocked: false)
     }
     private func legendItem(_ title: String, blocked: Bool) -> some View {
         HStack(spacing: FocusTheme.Layout.inlineSpacing) {
-            Path { path in path.move(to: CGPoint(x: 0, y: 4)); path.addLine(to: CGPoint(x: 24, y: 4)) }
-                .stroke(Self.color(blocked: blocked), style: Self.stroke(blocked: blocked, width: 8))
+            Rectangle().fill(color(blocked: blocked))
                 .frame(width: 24, height: 8)
             Text(title).fixedSize(horizontal: false, vertical: true)
         }
     }
-    private static func color(blocked: Bool) -> Color { blocked ? FocusTheme.Palette.accent : FocusTheme.Palette.secondaryText }
-    private static func stroke(blocked: Bool, width: CGFloat) -> StrokeStyle {
-        StrokeStyle(lineWidth: width, lineCap: .butt, dash: blocked ? [] : [4, 3])
+    private func color(blocked: Bool) -> Color {
+        blocked ? FocusTheme.Palette.accent : FocusTheme.Palette.accent.opacity(contrast == .increased ? 0.5 : 0.3)
     }
     /// Clockwise from the top: an hour's point on a circle around the center.
     private static func point(hour: Int, radius: CGFloat, center: CGPoint) -> CGPoint {
