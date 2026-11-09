@@ -455,6 +455,9 @@ Forbidden promises:
 - That nothing else comes through. Item 1 names what else can come through.
 - A button or link that implies it opens the Focus settings.
 
+Reconciliation (2026-11-09, issue #84): the guide screen now shows this content as icon rows: numbered rows with a bold short title for the setup steps, one short row for each notification that can still come through, and one icon row for each fact under "알아 둘 점".
+Every content item above and every forbidden promise still applies; `App/FocusGuideView.swift` is the authority for the shipped copy.
+
 ## Superseded lines
 
 The implementation PR adds dated reconciliation sections (it does not rewrite the original lines) for these:
