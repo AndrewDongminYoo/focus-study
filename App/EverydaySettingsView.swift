@@ -102,8 +102,16 @@ struct EverydaySettingsView: View {
                             Spacer()
                             Button("삭제", role: .destructive) { settings.removeWindow(at: index) }.buttonStyle(.borderless)
                         }
-                        TimeField(title: "시작", minutes: windowBinding(index, \.start))
-                        TimeField(title: "끝", minutes: windowBinding(index, \.end))
+                        // One line reads as a range, "오후 12:00 – 오후 1:00"; the pickers keep "시작" and "끝" as accessibility labels.
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: FocusTheme.Layout.inlineSpacing) {
+                                TimeField(title: "시작", minutes: windowBinding(index, \.start)).labelsHidden()
+                                Text("–").foregroundStyle(FocusTheme.Palette.secondaryText).accessibilityHidden(true)
+                                TimeField(title: "끝", minutes: windowBinding(index, \.end)).labelsHidden()
+                                Spacer(minLength: 0)
+                            }
+                            VStack(alignment: .leading, spacing: FocusTheme.Layout.inlineSpacing) { windowTimes(index) }
+                        }
                     }.accessibilityElement(children: .contain).accessibilityIdentifier("everydayWindow.\(index + 1)")
                 }
                 Button("시간 추가하기") { choosingWindow = true }.disabled(!settings.canAddWindow).accessibilityIdentifier("everydayAddWindow")
@@ -240,6 +248,11 @@ struct EverydaySettingsView: View {
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("완료") { picker = false }.accessibilityIdentifier("pickerSave") } }
         }
         .modifier(FocusEditorSheet())
+    }
+    /// A window's labelled start and end, stacked when the one-line range does not fit.
+    @ViewBuilder private func windowTimes(_ index: Int) -> some View {
+        TimeField(title: "시작", minutes: windowBinding(index, \.start))
+        TimeField(title: "끝", minutes: windowBinding(index, \.end))
     }
     private func windowBinding(_ index: Int, _ key: WritableKeyPath<EverydayWindow, Int>) -> Binding<Int> {
         Binding(get: { settings.draft.windows.indices.contains(index) ? settings.draft.windows[index][keyPath: key] : 0 },
