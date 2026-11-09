@@ -38,8 +38,9 @@ import SwiftData
         #if DEBUG
         let monitoring: any MonitoringClient
         let diagnosticMonitoring: DiagnosticMonitoring?
+        let logTiming: (ScreenTimeOperation, TimeInterval) -> Void = { operation, duration in NSLog("SCREEN_TIME_TIMING op=%@ ms=%.3f", operation.rawValue, duration * 1000) }
         if ProcessInfo.processInfo.arguments.contains("--screen-time-diagnostics") {
-            let wrapped = DiagnosticMonitoring(base: systemMonitoring)
+            let wrapped = DiagnosticMonitoring(base: systemMonitoring, didMeasure: logTiming)
             diagnosticMonitoring = wrapped; monitoring = wrapped
         } else { diagnosticMonitoring = nil; monitoring = systemMonitoring }
         #else
@@ -60,7 +61,12 @@ import SwiftData
         let settings = FocusSettings()
         return FocusRuntime(recovery: StartupRecovery(engine: engine), hasAccess: authorization.hasAccessNow, holder: FocusRuntimeHolder(engine: engine, authorization: authorization, settings: settings, activityDidChange: activityDidChange) {
             let directory = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent("PrivateSelection")
-            var services = FocusServices(authorization: authorization, selection: try SelectionRepository(directory: directory), engine: engine, applySelection: shield.apply, matchesSelection: shield.matches)
+            #if DEBUG
+            let applySelection: (FamilyActivitySelection) -> Void = diagnostics == nil ? shield.apply : { selection in measureScreenTime(.applyShield, report: logTiming) { shield.apply(selection) } }
+            #else
+            let applySelection: (FamilyActivitySelection) -> Void = shield.apply
+            #endif
+            var services = FocusServices(authorization: authorization, selection: try SelectionRepository(directory: directory), engine: engine, applySelection: applySelection, matchesSelection: shield.matches)
             services.settings = settings
             services.activityDidChange = activityDidChange
             services.saveBreakSelection = { try breakSelection.save($0, id: $1) }
