@@ -435,6 +435,35 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["everydaySave"].isHittable)
         captureReport(app, name: "everyday-preview-largest-text-end")
     }
+    func testEverydayWindowTimesShareOneLine() {
+        let app = app(extra: ["--everyday-fixture", "preview"])
+        _ = openEveryday(app)
+        let (start, end) = windowTimes(app, row: 1)
+        XCTAssertLessThanOrEqual(abs(start.frame.midY - end.frame.midY), 4, "start \(start.frame), end \(end.frame)")
+        XCTAssertLessThanOrEqual(start.frame.maxX, end.frame.minX)
+        captureReport(app, name: "everyday-window-one-line")
+    }
+    func testEverydayWindowTimesWrapAtLargestText() {
+        let app = app(extra: ["--everyday-fixture", "preview", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        _ = openEveryday(app)
+        let (start, end) = windowTimes(app, row: 1)
+        XCTAssertFalse(start.frame.intersects(end.frame), "start \(start.frame), end \(end.frame)")
+        let window = app.windows.firstMatch.frame
+        for picker in [start, end] {
+            XCTAssertGreaterThanOrEqual(picker.frame.minX, window.minX)
+            XCTAssertLessThanOrEqual(picker.frame.maxX, window.maxX)
+        }
+        captureReport(app, name: "everyday-window-largest-text")
+    }
+    /// The start and end pickers of one window row; the pickers carry no label of their own, the row's text does.
+    private func windowTimes(_ app: XCUIApplication, row: Int) -> (start: XCUIElement, end: XCUIElement) {
+        let window = app.otherElements["everydayWindow.\(row)"]
+        let start = window.datePickers.element(boundBy: 0), end = window.datePickers.element(boundBy: 1)
+        scrollEveryday(app, to: end)
+        XCTAssertEqual(window.datePickers.count, 2)
+        XCTAssertTrue(start.exists, app.debugDescription)
+        return (start, end)
+    }
     private func scrollEveryday(_ app: XCUIApplication, to element: XCUIElement) {
         let top = app.navigationBars["매일 제한"].frame.maxY + 12
         let bottom = app.buttons["everydaySave"].frame.minY - 80
@@ -547,6 +576,8 @@ final class FocusFlowTests: XCTestCase {
         _ = openEveryday(app)
         let add = app.buttons["everydayAddWindow"]
         for template in ["점심", "등교", "하교"] {
+            // One-line window rows can leave the button under the save area, which takes the tap.
+            scrollEveryday(app, to: add)
             XCTAssertTrue(add.isEnabled, template); add.tap()
             XCTAssertTrue(app.buttons[template].waitForExistence(timeout: 5), template); app.buttons[template].tap()
         }
