@@ -236,6 +236,13 @@ This is one successful real-path sample, not a percentile, tap-to-render duratio
 See the [measurement record](2026-11-05-start-latency.md) for build identity and boundaries.
 The new early-return operation and dedicated break screen remain unverified on a physical device.
 
+## Start latency phases: 2026-11-10
+
+On the same iPhone 16 Pro and iOS 27.0.1 (`24A446`), a signed Debug build from `fdf5b57` launched with `--screen-time-diagnostics` measured six accepted starts.
+The focus activity registration took 2,313.355 to 2,323.773 ms and the focus shield write 41.537 to 42.445 ms; the start totals were 2,389.948 to 2,403.707 ms, with the first and repeated starts alike.
+Every start reached a running session and was ended before the next one.
+See the [measurement record](2026-11-05-start-latency.md#physical-device-phases-measured-on-2026-11-10) for the per-start table, the everyday registrations at launch, and the limits.
+
 ## 쉬는 시간 전환 지연 제보: 2026-11-08
 
 iPhone 16 Pro, iOS 27.0.1 (`24A446`)에 `e3e9116`에서 만든 서명된 Debug 빌드를 설치해 직접 사용한 결과다.

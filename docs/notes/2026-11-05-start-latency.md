@@ -85,3 +85,35 @@ A `SCREEN_TIME_TIMING` line therefore does not name the operation that caused it
 Default runs, synthetic UI fixtures and Release builds emit nothing new; the timing code exists only in DEBUG.
 SDK tests prove the callback shape with a fake monitoring client; they do not measure real Screen Time.
 No device measurement with these lines exists yet, so the slow operation in the 2,522.737 ms sample is still unidentified and #33 stays open.
+
+## Physical-device phases measured on 2026-11-10
+
+Six accepted starts in one diagnostic launch split the device total into Screen Time operations.
+Each start was followed by ending the session before the next one; no break, callback or other start ran between a start and its `START_LATENCY` line, so each `register` and `apply_shield` line belongs to that start.
+
+| Start | `register` (ms) | `apply_shield` (ms) | `START_LATENCY` total (ms) | Rest (ms) |
+| ----- | --------------- | ------------------- | -------------------------- | --------- |
+| 1     | 2,313.355       | 41.537              | 2,389.948                  | 35.056    |
+| 2     | 2,319.803       | 42.445              | 2,398.127                  | 35.879    |
+| 3     | 2,323.773       | 42.049              | 2,403.707                  | 37.885    |
+| 4     | 2,313.959       | 41.885              | 2,391.926                  | 36.082    |
+| 5     | 2,318.188       | 41.932              | 2,396.890                  | 36.770    |
+| 6     | 2,321.938       | 42.411              | 2,399.960                  | 35.611    |
+
+Nearest-rank p50 of the total is 2,396.890 ms and the maximum is 2,403.707 ms.
+"Rest" is the total minus the two timed operations: the lock sections, refreshes, history and logging, about 36 ms.
+The focus activity registration (`DeviceActivityCenter.startMonitoring` through `ScreenTimeMonitoring.register`) takes about 2.32 s, 96.7% of the median start, in the first start and in every repeated start alike.
+The focus shield write takes about 42 ms.
+The 2,522.737 ms sample of 2026-11-05 is consistent with this split.
+
+At launch, before any tap, the everyday convergence registered four everyday activities: the first took 2,375.712 ms and the next three 4.981, 2.612 and 2.666 ms.
+So the cost is not a one-time cost per process; why one everyday registration was slow and the others were fast was not established, because the active state of each everyday part at launch was not recorded.
+
+Environment: iPhone 16 Pro (`iPhone17,1`), iOS 27.0.1 (`24A446`), signed Debug version 0.1, build 1, built from `fdf5b57` and installed over the existing app, launched with `--screen-time-diagnostics` and console forwarding; samples logged between 08:53:22 and 08:55:30 +09:00.
+The values measure main-actor occupation by the synchronous start body, not tap-to-visible feedback, the SwiftUI render, or when the system shield became visible.
+
+### Outcome for #33
+
+The visible start feedback from the [interface polish design](../specs/2026-11-05-interface-polish-design.md) is the response to this delay: the timer screen shows the pending start before the synchronous body runs.
+With repeated device totals and the registration interval now recorded, the measurement work of #33 is complete.
+Shortening the registration itself would change where `startMonitoring` runs relative to the process lock, which the session design keeps synchronous; that is a separate decision, not part of #33.
