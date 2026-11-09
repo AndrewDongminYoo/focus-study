@@ -77,6 +77,49 @@ import XCTest
         monitor.stopEveryday(revision: revision, part: .window(2))
         XCTAssertTrue(base.everyday.isEmpty)
     }
+    func testEachRegistrationReportsOneTimingWithItsOperation() throws {
+        let base = DiagnosticMonitoringSpy()
+        var measured: [(ScreenTimeOperation, TimeInterval)] = []
+        let monitor = DiagnosticMonitoring(base: base) { measured.append(($0, $1)) }
+        try monitor.register(id: UUID(), start: Date(), end: Date().addingTimeInterval(1500))
+        XCTAssertEqual(measured.map(\.0), [.register])
+        try monitor.registerBreak(id: UUID(), index: 0, start: Date(), end: Date().addingTimeInterval(180), warning: 120)
+        XCTAssertEqual(measured.map(\.0), [.register, .registerBreak])
+        try monitor.registerEveryday(revision: UUID(), part: .window(0), start: 600, end: 660)
+        XCTAssertEqual(measured.map(\.0), [.register, .registerBreak, .registerEveryday])
+        XCTAssertTrue(measured.allSatisfy { $0.1 >= 0 })
+        XCTAssertEqual(measured.map(\.0.rawValue), ["register", "register_break", "register_everyday"])
+    }
+    func testArmedFailureRegistersThenThrowsAndStillReportsTiming() throws {
+        let base = DiagnosticMonitoringSpy()
+        var measured: [ScreenTimeOperation] = []
+        let monitor = DiagnosticMonitoring(base: base) { operation, _ in measured.append(operation) }
+        monitor.armFailure()
+        XCTAssertThrowsError(try monitor.register(id: UUID(), start: Date(), end: Date().addingTimeInterval(1500))) { error in
+            XCTAssertEqual(error as? ControlIssue, .io)
+        }
+        XCTAssertEqual(base.registered.count, 1)
+        XCTAssertEqual(measured, [.register])
+    }
+    func testBaseRegistrationErrorPropagatesAndReportsTiming() {
+        let base = DiagnosticMonitoringSpy()
+        base.shouldThrow = true
+        var measured: [ScreenTimeOperation] = []
+        let monitor = DiagnosticMonitoring(base: base) { operation, _ in measured.append(operation) }
+        XCTAssertThrowsError(try monitor.register(id: UUID(), start: Date(), end: Date().addingTimeInterval(1500))) { error in
+            XCTAssertTrue(error is DiagnosticFailure)
+        }
+        XCTAssertTrue(base.registered.isEmpty)
+        XCTAssertEqual(measured, [.register])
+    }
+    func testMeasuredShieldApplyRunsOnceAndReportsApplyShield() {
+        var applied = 0
+        var measured: [ScreenTimeOperation] = []
+        measureScreenTime(.applyShield, report: { operation, _ in measured.append(operation) }) { applied += 1 }
+        XCTAssertEqual(applied, 1)
+        XCTAssertEqual(measured, [.applyShield])
+        XCTAssertEqual(ScreenTimeOperation.applyShield.rawValue, "apply_shield")
+    }
 }
 private enum DiagnosticFailure: Error { case registration }
 private final class DiagnosticMonitoringSpy: MonitoringClient {

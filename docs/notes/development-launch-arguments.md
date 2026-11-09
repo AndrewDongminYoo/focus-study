@@ -70,6 +70,15 @@ Live Activity는 마지막으로 확인한 집중·휴식·복귀 계획을 보�
 `request`는 `쉬는 시간 갖기`, `cancelWait`는 `집중으로 돌아가기`나 앱을 떠날 때의 대기 취소, `startBreak`는 대기가 끝난 뒤의 자동 시작, `resume`은 `다시 집중하기`입니다.
 진행 표시를 그리기 위한 프레임 대기와 거절된 탭은 이 시간에 포함되지 않습니다.
 
+같은 실행에서 Screen Time 작업은 하나마다 `SCREEN_TIME_TIMING op=<register|register_break|register_everyday|apply_shield> ms=...` 로그를 남깁니다.
+`register`는 집중 세션, `register_break`는 쉬는 시간, `register_everyday`는 매일 제한의 `DeviceActivityCenter` 등록이고, `apply_shield`는 시작할 때의 집중 제한 적용입니다.
+`apply_shield`는 시작에서만 남지만, 등록 줄은 시작 밖에서도 남습니다.
+쉬는 시간 전환은 `register_break`와 함께 집중 세션을 다시 `register`하고, 콜백 처리, 상태 맞추기(reconcile)와 정리(cleanup)도 집중 세션을 다시 `register`할 수 있으며, 매일 제한 수렴은 잠금 구간마다 `register_everyday`를 남길 수 있습니다.
+그래서 줄 이름만으로는 어느 작업에서 나온 줄인지 알 수 없습니다.
+가장 가까운 `START_LATENCY` 줄에 바로 묶지 말고, 그 시작과 그 줄 사이에 쉬는 시간 전환이나 상태 맞추기 같은 다른 작업이 없었는지 함께 확인합니다.
+등록 실패를 주입한 시작에서도 실제 등록 시간이 먼저 기록됩니다.
+시작이나 쉬는 시간 전환 중에 남은 이 로그는 그 `START_LATENCY`나 `BREAK_LATENCY` 구간 안에 있으므로, total에는 로그를 남기는 시간도 포함됩니다.
+
 진단 절차는 다음과 같습니다.
 
 1. 동의받은 선택과 정상 권한을 준비한 뒤 `다음 등록 후 실패 주입`을 누르고 세션을 시작합니다.
