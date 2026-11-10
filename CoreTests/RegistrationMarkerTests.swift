@@ -13,7 +13,7 @@ private final class MemoryMarkers: RegistrationMarkerStore {
 }
 /// A control store in memory that logs the timeout of each lock attempt and throws the queued lock failures, one per attempt.
 private final class MarkerControlStore: ControlStore, LockedControl {
-    var envelope = ControlEnvelope(), lockFailures: [Error] = []
+    var envelope = ControlEnvelope(), lockFailures: [Error] = [], failRead = false
     let markers = MemoryMarkers()
     var registrationMarkers: (any RegistrationMarkerStore)? { markers }
     private(set) var timeouts: [TimeInterval?] = []
@@ -24,34 +24,43 @@ private final class MarkerControlStore: ControlStore, LockedControl {
         if !lockFailures.isEmpty { beforeFailure?(timeouts.count - 1); throw lockFailures.removeFirst() }
         return try body(self)
     }
-    func load() throws -> ControlEnvelope { envelope }
+    func load() throws -> ControlEnvelope { if failRead { throw FixtureFailure.injected }; return envelope }
     func save(_ envelope: ControlEnvelope) throws { self.envelope = envelope }
 }
-/// Records the marker that it can read during each registration call.
+/// Records the marker that it can read during each registration and stop call.
 private final class MarkerSpyMonitoring: MonitoringClient {
     let base = FakeMonitoring(), markers: any RegistrationMarkerStore
     var failRegistration = false
-    private(set) var seen: [(call: String, marker: RegistrationMarker?)] = []
+    /// Runs inside each everyday stop call, while the engine's marker for that call exists.
+    var onStopEveryday: ((UUID, EverydayPart) -> Void)?
+    /// Every registration and stop call, in order.
+    private(set) var calls: [(call: String, marker: RegistrationMarker?)] = []
+    /// The registration calls only.
+    var seen: [(call: String, marker: RegistrationMarker?)] { calls.filter { $0.call.hasPrefix("register") } }
+    /// The stop calls only.
+    var stops: [(call: String, marker: RegistrationMarker?)] { calls.filter { $0.call.hasPrefix("stop") } }
     init(markers: any RegistrationMarkerStore) { self.markers = markers }
     func register(id: UUID, start: Date, end: Date) throws {
-        seen.append(("register", markers.read()))
+        calls.append(("register", markers.read()))
         if failRegistration { throw FixtureFailure.injected }
         try base.register(id: id, start: start, end: end)
     }
     func registerBreak(id: UUID, index: Int, start: Date, end: Date, warning: TimeInterval) throws {
-        seen.append(("registerBreak", markers.read())); try base.registerBreak(id: id, index: index, start: start, end: end, warning: warning)
+        calls.append(("registerBreak", markers.read())); try base.registerBreak(id: id, index: index, start: start, end: end, warning: warning)
     }
     func registerEveryday(revision: UUID, part: EverydayPart, start: Int, end: Int) throws {
-        seen.append(("registerEveryday", markers.read())); try base.registerEveryday(revision: revision, part: part, start: start, end: end)
+        calls.append(("registerEveryday", markers.read())); try base.registerEveryday(revision: revision, part: part, start: start, end: end)
     }
     var registeredSessionIDs: [UUID] { base.registeredSessionIDs }
     func isRegistered(id: UUID) -> Bool { base.isRegistered(id: id) }
-    func stop(id: UUID) { base.stop(id: id) }
+    func stop(id: UUID) { calls.append(("stop", markers.read())); base.stop(id: id) }
     func isBreakRegistered(id: UUID, index: Int) -> Bool { base.isBreakRegistered(id: id, index: index) }
     var registeredBreaks: [(id: UUID, index: Int)] { base.registeredBreaks }
-    func stopBreak(id: UUID, index: Int) { base.stopBreak(id: id, index: index) }
+    func stopBreak(id: UUID, index: Int) { calls.append(("stopBreak", markers.read())); base.stopBreak(id: id, index: index) }
     var registeredEveryday: [(revision: UUID, part: EverydayPart)] { base.registeredEveryday }
-    func stopEveryday(revision: UUID, part: EverydayPart) { base.stopEveryday(revision: revision, part: part) }
+    func stopEveryday(revision: UUID, part: EverydayPart) {
+        calls.append(("stopEveryday", markers.read())); onStopEveryday?(revision, part); base.stopEveryday(revision: revision, part: part)
+    }
 }
 
 final class RegistrationMarkerTests: XCTestCase {
@@ -84,7 +93,13 @@ final class RegistrationMarkerTests: XCTestCase {
         let marker = RegistrationMarker(activityName: "focus.\(UUID().uuidString)", uptime: 1234.5, validUntil: at(1500))
         try file.write(marker)
         XCTAssertEqual(file.read(), marker)
-        XCTAssertEqual(file.read()?.schemaVersion, 1)
+        XCTAssertEqual(file.read()?.schemaVersion, 2); XCTAssertEqual(file.read()?.call, .register)
+        let stop = RegistrationMarker.stop(["focus.\(UUID().uuidString)", "everyday.\(UUID().uuidString).range"], uptime: 1234.5)
+        try file.write(stop)
+        XCTAssertEqual(file.read(), stop)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: markerURL)) as? [String: Any])
+        XCTAssertEqual(object["call"] as? String, "stop"); XCTAssertEqual(object["activityNames"] as? [String], stop.activityNames)
+        XCTAssertNil(object["validUntil"], "a stop marker has no time bound")
         try file.delete()
         XCTAssertFalse(FileManager.default.fileExists(atPath: markerURL.path))
         // Deleting a missing file succeeds.
@@ -95,11 +110,26 @@ final class RegistrationMarkerTests: XCTestCase {
         XCTAssertNil(file.read(), "missing")
         try Data("not json".utf8).write(to: markerURL)
         XCTAssertNil(file.read(), "undecodable")
+        // The version 1 shape of the registration marker design.
+        try Data(#"{"schemaVersion":1,"activityName":"focus.x","uptime":1,"validUntil":0}"#.utf8).write(to: markerURL)
+        XCTAssertNil(file.read(), "version 1")
         let encoded = try JSONEncoder().encode(RegistrationMarker(activityName: "focus.x", uptime: 1, validUntil: t0))
-        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
-        object["schemaVersion"] = 2
-        try JSONSerialization.data(withJSONObject: object).write(to: markerURL)
-        XCTAssertNil(file.read(), "unknown schemaVersion")
+        let valid = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        try JSONSerialization.data(withJSONObject: valid).write(to: markerURL)
+        XCTAssertNotNil(file.read(), "the control case decodes")
+        let changes: [(String, (inout [String: Any]) -> Void)] = [
+            ("version 1 with the version 2 fields", { $0["schemaVersion"] = 1 }),
+            ("unknown schemaVersion", { $0["schemaVersion"] = 3 }),
+            ("a register marker without validUntil", { $0.removeValue(forKey: "validUntil") }),
+            ("unknown call", { $0["call"] = "pause" }),
+            ("empty activityNames", { $0["activityNames"] = [String]() }),
+            ("empty activityNames of a stop", { $0["call"] = "stop"; $0.removeValue(forKey: "validUntil"); $0["activityNames"] = [String]() })
+        ]
+        for (label, change) in changes {
+            var object = valid; change(&object)
+            try JSONSerialization.data(withJSONObject: object).write(to: markerURL)
+            XCTAssertNil(file.read(), label)
+        }
         try FileManager.default.removeItem(at: markerURL)
         try FileManager.default.createDirectory(at: markerURL, withIntermediateDirectories: true)
         XCTAssertNil(file.read(), "unreadable")
@@ -128,6 +158,18 @@ final class RegistrationMarkerTests: XCTestCase {
         let everyday = "everyday.\(UUID().uuidString).range"
         let nextMinute = RegistrationMarker(activityName: everyday, uptime: 1000, validUntil: at(60))
         XCTAssertFalse(nextMinute.decides(activityName: everyday, kind: .didStart, now: at(60)), "an everyday edge at the next minute")
+        let withoutBound = RegistrationMarker(call: .register, activityNames: [name], uptime: 1000, validUntil: nil)
+        XCTAssertFalse(withoutBound.decides(activityName: name, kind: .didEnd, now: at(1)), "a register marker without validUntil is no marker")
+    }
+    func testStopMarkerSkipsOnlyTheDidEndOfAListedNameWithNoTimeBound() {
+        let focus = "focus.\(UUID().uuidString)", breakTwo = focus + ".break.2"
+        let marker = RegistrationMarker.stop([focus, breakTwo], uptime: 1000)
+        XCTAssertTrue(marker.decides(activityName: focus, kind: .didEnd, now: at(1)))
+        XCTAssertTrue(marker.decides(activityName: breakTwo, kind: .didEnd, now: .distantFuture), "no time condition")
+        XCTAssertFalse(marker.decides(activityName: focus, kind: .didStart, now: at(1)), "a stop causes no didStart")
+        XCTAssertFalse(marker.decides(activityName: breakTwo, kind: .willEndWarning, now: at(1)), "a warning never skips")
+        XCTAssertFalse(marker.decides(activityName: focus + ".break.3", kind: .didEnd, now: at(1)), "a name that is not listed")
+        XCTAssertFalse(RegistrationMarker.stop([], uptime: 1000).decides(activityName: focus, kind: .didEnd, now: at(1)))
     }
 
     // MARK: The retry
@@ -198,10 +240,10 @@ final class RegistrationMarkerTests: XCTestCase {
     func testBreakStartMarksTheBreakUntilItsWarningAndTheOverwriteUntilTheDeadline() throws {
         let (engine, store, monitor, session) = try started()
         _ = try engine.requestBreak(id: session.id, now: at(100))
-        XCTAssertEqual(monitor.seen.last?.marker?.activityName, session.activityName)
+        XCTAssertEqual(monitor.seen.last?.marker?.activityNames, [session.activityName])
         try engine.startBreak(id: session.id, now: at(115), saveSelection: {})
         let breakMarker = try XCTUnwrap(monitor.seen.first { $0.call == "registerBreak" }?.marker)
-        XCTAssertEqual(breakMarker.activityName, session.breakActivityName(index: 1))
+        XCTAssertEqual(breakMarker.activityNames, [session.breakActivityName(index: 1)])
         XCTAssertEqual(breakMarker.validUntil, at(115 + BreakTiming.standard.breakLength))
         let stored = try XCTUnwrap(store.envelope.session)
         XCTAssertEqual(stored.phase, .onBreak)
@@ -215,7 +257,7 @@ final class RegistrationMarkerTests: XCTestCase {
         let schedule = EverydaySchedule(revision: UUID(), enabled: true, rangeStart: 0, rangeEnd: 23 * 60 + 55, windows: [EverydayWindow(kind: .lunch, start: 13 * 60, end: 14 * 60)])
         try engine.saveEveryday(schedule, now: now, authorized: { true }, containsStoredSelection: { true }, write: { everyday.schedule = $0 })
         let markers = monitor.seen.filter { $0.call == "registerEveryday" }.map(\.marker)
-        XCTAssertEqual(markers.map { $0?.activityName }, ["everyday.\(schedule.revision.uuidString).range", "everyday.\(schedule.revision.uuidString).window.1"])
+        XCTAssertEqual(markers.map { $0?.activityNames.first }, ["everyday.\(schedule.revision.uuidString).range", "everyday.\(schedule.revision.uuidString).window.1"])
         let nextMinute = utc.date(from: DateComponents(year: 2026, month: 11, day: 10, hour: 10, minute: 31))!
         XCTAssertEqual(markers.map { $0?.validUntil }, [nextMinute, nextMinute])
         XCTAssertNil(store.markers.marker)
@@ -237,7 +279,7 @@ final class RegistrationMarkerTests: XCTestCase {
             everyday.schedule = schedule
             try run(engine, schedule)
             let calls = monitor.seen.filter { $0.call == "registerEveryday" }
-            XCTAssertEqual(calls.map { $0.marker?.activityName }, ["everyday.\(schedule.revision.uuidString).range", "everyday.\(schedule.revision.uuidString).window.1"], label)
+            XCTAssertEqual(calls.map { $0.marker?.activityNames.first }, ["everyday.\(schedule.revision.uuidString).range", "everyday.\(schedule.revision.uuidString).window.1"], label)
             XCTAssertEqual(calls.map { $0.marker?.validUntil }, [nextMinute, nextMinute], label)
             XCTAssertNil(store.markers.marker, label)
         }
@@ -261,13 +303,133 @@ final class RegistrationMarkerTests: XCTestCase {
         store.markers.failDelete = true
         let session = try engine.start(now: t0, authorized: { true }, apply: {}, matches: { true })
         XCTAssertEqual(store.envelope.session?.id, session.id); XCTAssertEqual(store.envelope.session?.phase, .active)
-        XCTAssertEqual(store.markers.marker?.activityName, session.activityName, "a leftover for the next lock holder")
+        XCTAssertEqual(store.markers.marker?.activityNames, [session.activityName], "a leftover for the next lock holder")
     }
-    func testStopsWriteNoMarker() throws {
-        let (engine, store, _, session) = try started()
-        let writes = store.markers.writes
+
+    // MARK: Writing and deleting around each stop
+
+    /// A session on break 1, with the selection copy that a re-block restores.
+    private func onBreak() throws -> (SessionControl, MarkerControlStore, MarkerSpyMonitoring, FakeEverydayStore, ControlSession) {
+        let store = MarkerControlStore(), monitor = MarkerSpyMonitoring(markers: store.markers), everyday = FakeEverydayStore(), copies = FakeBreakSelection()
+        let engine = SessionControl(store: store, monitoring: monitor, shield: FakeShield(), breakSelection: copies, everyday: everyday, calendar: utc)
+        let session = try engine.start(now: t0, authorized: { true }, apply: {}, matches: { true })
+        _ = try engine.requestBreak(id: session.id, now: at(100))
+        try engine.startBreak(id: session.id, now: at(115), saveSelection: { copies.copies.insert(session.id) })
+        XCTAssertEqual(store.envelope.session?.phase, .onBreak)
+        return (engine, store, monitor, everyday, session)
+    }
+    func testSessionEndStopsUnderAMarkerWithEveryNameOfTheSession() throws {
+        let (engine, store, monitor, _, session) = try onBreak()
+        try engine.finish(id: session.id, reason: .earlyExit, now: at(200))
+        let stop = try XCTUnwrap(monitor.stops.last { $0.call == "stop" })
+        XCTAssertEqual(stop.marker?.call, .stop); XCTAssertNil(stop.marker?.validUntil)
+        XCTAssertEqual(stop.marker?.activityNames, [session.activityName] + (1...BreakTiming.maxBreaks).map(session.breakActivityName))
+        XCTAssertNil(store.markers.marker); XCTAssertEqual(store.envelope.session?.phase, .terminal)
+    }
+    func testStopNamesListRegisteredBreaksOfTheSessionOnce() {
+        let id = UUID(), other = UUID()
+        let names = MarkedMonitoring.stopActivityNames(id: id, registeredBreaks: [(id, 2), (other, 1), (id, 5)])
+        XCTAssertEqual(names, [MarkedMonitoring.focusActivityName(id: id)] + [2, 5, 1, 3].map { MarkedMonitoring.breakActivityName(id: id, index: $0) })
+    }
+    func testResumeWithAnEarlyReturnMarksTheOverwriteTheStopAndTheOverwrite() throws {
+        let (engine, store, monitor, _, session) = try onBreak()
+        let before = monitor.calls.count
+        try engine.resume(id: session.id, now: at(200))
+        let calls = Array(monitor.calls.dropFirst(before))
+        XCTAssertEqual(calls.map(\.call), ["register", "stopBreak", "register"])
+        XCTAssertEqual(calls.map { $0.marker?.call }, [.register, .stop, .register])
+        XCTAssertEqual(calls.map { $0.marker?.activityNames }, [[session.activityName], [session.breakActivityName(index: 1)], [session.activityName]])
+        XCTAssertNil(store.markers.marker); XCTAssertEqual(store.envelope.session?.phase, .active)
+    }
+    func testEverydayStopsMarkTheStoppedPart() throws {
+        let (engine, store, monitor, everyday) = world()
+        let first = EverydaySchedule(revision: UUID(), enabled: true, rangeStart: 0, rangeEnd: 23 * 60 + 55, windows: [EverydayWindow(kind: .lunch, start: 13 * 60, end: 14 * 60)])
+        try engine.saveEveryday(first, now: t0, authorized: { true }, containsStoredSelection: { true }, write: { everyday.schedule = $0 })
+        var second = first; second.revision = UUID()
+        try engine.saveEveryday(second, now: t0, authorized: { true }, containsStoredSelection: { true }, write: { everyday.schedule = $0 })
+        XCTAssertEqual(monitor.stops.map(\.call), ["stopEveryday", "stopEveryday"])
+        XCTAssertEqual(monitor.stops.map { $0.marker?.call }, [.stop, .stop])
+        XCTAssertEqual(Set(monitor.stops.compactMap { $0.marker?.activityNames }), [[MarkedMonitoring.everydayActivityName(revision: first.revision, part: .range)],
+                                                                                [MarkedMonitoring.everydayActivityName(revision: first.revision, part: .window(1))]])
+        XCTAssertNil(store.markers.marker)
+    }
+    func testStopMarkerWriteThatThrowsDoesNotStopTheStop() throws {
+        let (engine, store, monitor, session) = try started()
+        store.markers.failWrite = true
         try engine.finish(id: session.id, reason: .earlyExit, now: at(10))
-        XCTAssertEqual(store.markers.writes, writes)
+        XCTAssertEqual(monitor.stops.map(\.call), ["stop"]); XCTAssertNil(monitor.stops.first?.marker)
+        XCTAssertFalse(monitor.isRegistered(id: session.id)); XCTAssertEqual(store.envelope.session?.phase, .terminal)
+    }
+    /// `snapshot()` and `everydayStatus` hold the lock without `section`; their read-failure stops are marked too.
+    func testReadFailureStopsOfLockHoldersOutsideSectionsAreMarked() throws {
+        let holders: [(String, (SessionControl) throws -> Void)] = [
+            ("snapshot", { _ = try $0.snapshot() }),
+            ("everydayStatus", { _ = try $0.everydayStatus(now: self.at(200), authorized: true) })
+        ]
+        for (label, holder) in holders {
+            let (engine, store, monitor, _, session) = try onBreak()
+            // A stop of a session also stops its breaks, so only an orphaned break of another session is left for `stopBreak`.
+            let orphan = UUID()
+            try monitor.base.registerBreak(id: orphan, index: 2, start: t0, end: at(900), warning: 720)
+            store.failRead = true
+            XCTAssertThrowsError(try holder(engine), label)
+            XCTAssertEqual(monitor.stops.map(\.call), ["stop", "stopBreak"], label)
+            XCTAssertEqual(monitor.stops.map { $0.marker?.call }, [.stop, .stop], label)
+            XCTAssertEqual(monitor.stops.first?.marker?.activityNames, [session.activityName] + (1...BreakTiming.maxBreaks).map(session.breakActivityName), label)
+            XCTAssertEqual(monitor.stops.last?.marker?.activityNames, [MarkedMonitoring.breakActivityName(id: orphan, index: 2)], label)
+            XCTAssertFalse(monitor.isRegistered(id: session.id), label); XCTAssertNil(store.markers.marker, label)
+        }
+    }
+
+    // MARK: Work that becomes due during a stop
+
+    /// A section in break 1 stops an earlier everyday revision; the break ends during that stop.
+    /// Returns the result of the everyday `didEnd` that arrived during the stop and whether it paused.
+    private func breakEndsDuringAnEverydayStop() throws -> (SessionControl, MarkerControlStore, ControlSession, skipped: Bool) {
+        let (engine, store, monitor, everyday, session) = try onBreak()
+        let earlier = UUID(), stored = EverydaySchedule(revision: UUID(), enabled: true, rangeStart: 0, rangeEnd: 23 * 60 + 55, windows: [])
+        everyday.schedule = stored
+        try monitor.base.registerEveryday(revision: earlier, part: .range, start: 0, end: 23 * 60 + 55)
+        try monitor.base.registerEveryday(revision: stored.revision, part: .range, start: 0, end: 23 * 60 + 55)
+        let breakEnd = try XCTUnwrap(store.envelope.session?.breakEndsAt)
+        var skipped = false
+        monitor.onStopEveryday = { revision, _ in
+            guard revision == earlier else { return }
+            // The earlier range's didEnd, after the break end: the lock is busy, and the holder's stop marker lists that name.
+            // Every attempt finds the lock busy, as while a real holder runs.
+            store.lockFailures = Array(repeating: ControlIssue.lockTimeout, count: 6)
+            var pauses: [TimeInterval] = []
+            skipped = (try? engine.handleCallbackRetryingLock(activityName: "everyday.\(earlier.uuidString).range", kind: .didEnd, now: { breakEnd.addingTimeInterval(1) },
+                                                              authorized: { true }, sleep: { pauses.append($0) })) != nil && pauses.isEmpty && store.lockFailures.count == 5
+            store.lockFailures = []
+        }
+        try engine.reconcile(now: breakEnd.addingTimeInterval(-1), authorized: true)
+        XCTAssertEqual(monitor.registeredEveryday.map(\.revision), [stored.revision])
+        XCTAssertEqual(store.envelope.session?.phase, .onBreak, "the skipped didEnd did not re-block")
+        XCTAssertNil(store.markers.marker)
+        return (engine, store, session, skipped)
+    }
+    func testBreakEndDuringAnEverydayStopSkipsTheEverydayEndAndTheWarningReBlocks() throws {
+        let (engine, store, session, skipped) = try breakEndsDuringAnEverydayStop()
+        XCTAssertTrue(skipped)
+        let breakEnd = try XCTUnwrap(store.envelope.session?.breakEndsAt)
+        // The warning is not listed, so it took the bounded retry and gets the lock after the section.
+        try engine.handleCallbackRetryingLock(activityName: session.breakActivityName(index: 1), kind: .willEndWarning, now: { breakEnd.addingTimeInterval(1) }, authorized: { true }, sleep: { _ in })
+        XCTAssertEqual(store.envelope.session?.phase, .breakOver)
+    }
+    func testWarningThatGivesUpAfterAnEverydayStopLeavesTheReBlockToTheBreakEnd() throws {
+        let (engine, store, session, skipped) = try breakEndsDuringAnEverydayStop()
+        XCTAssertTrue(skipped)
+        let breakEnd = try XCTUnwrap(store.envelope.session?.breakEndsAt)
+        store.lockFailures = Array(repeating: ControlIssue.lockTimeout, count: 6)
+        XCTAssertThrowsError(try engine.handleCallbackRetryingLock(activityName: session.breakActivityName(index: 1), kind: .willEndWarning, now: { breakEnd.addingTimeInterval(1) },
+                                                                   authorized: { true }, sleep: { _ in })) { XCTAssertEqual($0 as? ControlIssue, .lockTimeout) }
+        XCTAssertEqual(store.envelope.session?.phase, .onBreak)
+        // No app reconcile: the break activity's didEnd at +15 min is the last backstop.
+        let breakStart = breakEnd.addingTimeInterval(-BreakTiming.standard.breakLength)
+        try engine.handleCallbackRetryingLock(activityName: session.breakActivityName(index: 1), kind: .didEnd, now: { breakStart.addingTimeInterval(BreakTiming.breakActivityLength) },
+                                              authorized: { true }, sleep: { _ in })
+        XCTAssertEqual(store.envelope.session?.phase, .breakOver)
     }
 
     // MARK: Delete on lock take

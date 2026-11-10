@@ -103,6 +103,23 @@ import XCTest
         XCTAssertTrue(measured.allSatisfy { $0 >= 0 })
         XCTAssertEqual([ScreenTimeOperation.stop, .stopBreak, .stopEveryday].map(\.rawValue), ["stop", "stop_break", "stop_everyday"])
     }
+    /// The engine's marker wrapper sits outside the timing wrapper, so every stop under a marker still reports one timing and the marker write is not timed.
+    func testEachMarkedStopStillReportsOneTiming() {
+        let base = DiagnosticMonitoringSpy(), id = UUID(), revision = UUID()
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let markers = RegistrationMarkerFile(directory: directory)
+        var measured: [ScreenTimeOperation] = [], markedDuringCall: [RegistrationMarker.Call?] = []
+        let timed = DiagnosticMonitoring(base: base) { operation, _ in measured.append(operation); markedDuringCall.append(markers.read()?.call) }
+        let monitor = MarkedMonitoring(base: timed, markers: markers)
+        monitor.stop(id: id)
+        monitor.stopBreak(id: id, index: 2)
+        monitor.stopEveryday(revision: revision, part: .window(1))
+        XCTAssertEqual(measured, [.stop, .stopBreak, .stopEveryday])
+        XCTAssertEqual(markedDuringCall, [.stop, .stop, .stop])
+        XCTAssertNil(markers.read())
+    }
     func testArmedFailureRegistersThenThrowsAndStillReportsTiming() throws {
         let base = DiagnosticMonitoringSpy()
         var measured: [ScreenTimeOperation] = []

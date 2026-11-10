@@ -182,6 +182,21 @@ final class RegistrationMarkerAdapterTests: XCTestCase {
             XCTAssertEqual(MarkedMonitoring.everydayActivityName(revision: revision, part: part), ScreenTimeMonitoring.everydayActivityName(revision: revision, part: part).rawValue)
         }
     }
+    /// `center.activities` is empty on the simulator, so both sides get the same activity list.
+    func testStopMarkerNamesAreTheNamesThatScreenTimeMonitoringStops() {
+        let monitoring = ScreenTimeMonitoring(), id = UUID(), other = UUID()
+        let lists: [(String, [DeviceActivityName])] = [
+            ("without a registered break", [monitoring.name(id), monitoring.name(other), monitoring.breakName(other, 1)]),
+            ("with a registered break", [monitoring.name(id), monitoring.breakName(id, 2), monitoring.name(other), monitoring.breakName(other, 1),
+                                         ScreenTimeMonitoring.everydayActivityName(revision: UUID(), part: .range)])
+        ]
+        for (label, activities) in lists {
+            let registeredBreaks = activities.compactMap { activity in
+                ScreenTimeMonitoring.sessionID(activity).flatMap { session in ScreenTimeMonitoring.breakIndex(activity).map { (id: session, index: $0) } }
+            }
+            XCTAssertEqual(Set(MarkedMonitoring.stopActivityNames(id: id, registeredBreaks: registeredBreaks)), Set(monitoring.stopNames(id: id, activities: activities).map(\.rawValue)), label)
+        }
+    }
     /// The simulator reports no `.protectionKey` for any file, so the test records the write options instead of reading the file attributes.
     func testRegistrationMarkerFileHasTheProtectionOfTheControlState() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

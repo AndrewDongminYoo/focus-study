@@ -53,9 +53,11 @@ final class ScreenTimeMonitoring: MonitoringClient {
     }
     private static let fields: Set<Calendar.Component> = [.era, .year, .month, .day, .hour, .minute, .second, .timeZone]
     func isRegistered(id: UUID) -> Bool { center.activities.contains(name(id)) }
-    func stop(id: UUID) {
-        let breaks = center.activities.filter { Self.sessionID($0) == id && Self.breakIndex($0) != nil }
-        center.stopMonitoring([name(id)] + breaks + (1...BreakTiming.maxBreaks).map { breakName(id, $0) })
+    func stop(id: UUID) { center.stopMonitoring(stopNames(id: id, activities: center.activities)) }
+    /// The names that `stop(id:)` passes; the stop marker lists the same set.
+    func stopNames(id: UUID, activities: [DeviceActivityName]) -> [DeviceActivityName] {
+        let breaks = activities.filter { Self.sessionID($0) == id && Self.breakIndex($0) != nil }
+        return [name(id)] + breaks + (1...BreakTiming.maxBreaks).map { breakName(id, $0) }
     }
     func registerBreak(id: UUID, index: Int, start: Date, end: Date, warning: TimeInterval) throws {
         try center.startMonitoring(breakName(id, index), during: Self.breakSchedule(start: start, end: end, warning: warning, calendar: .current))
