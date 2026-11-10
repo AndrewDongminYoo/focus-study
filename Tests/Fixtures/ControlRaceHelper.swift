@@ -11,7 +11,9 @@ private final class LocalMonitor: MonitoringClient {
         set { try! Data(newValue.map(\.uuidString).joined(separator: "\n").utf8).write(to: focusFile) }
     }
     var breaks: [(id: UUID, index: Int)] = []
-    func register(id: UUID, start: Date, end: Date) throws { ids.insert(id) }
+    /// Runs inside the focus registration call, while the engine's marker for that call exists.
+    var onRegister: ((UUID) -> Void)?
+    func register(id: UUID, start: Date, end: Date) throws { onRegister?(id); ids.insert(id) }
     func isRegistered(id: UUID) -> Bool { ids.contains(id) }
     func stop(id: UUID) { ids.remove(id); breaks.removeAll { $0.id == id } }
     func registerBreak(id: UUID, index: Int, start: Date, end: Date, warning: TimeInterval) throws { breaks.append((id, index)) }
@@ -62,6 +64,10 @@ private final class FileLayer: EverydayLayerStore {
 private let utc: Calendar = { var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: "UTC")!; return calendar }()
 /// 12:00 UTC: inside the range 00:00-23:55 of the everyday race.
 private let everydayNow = Date(timeIntervalSince1970: 12 * 3600)
+/// The start of the marker races; its focus end, the marker's `validUntil`, is 1500 s later.
+private let markerStart = Date(timeIntervalSince1970: 2000)
+/// The time of the marker races' callbacks: before the holder's `validUntil`.
+private let markerCallbackNow = Date(timeIntervalSince1970: 3000)
 private func everydayLayer() -> EverydaySchedule {
     EverydaySchedule(revision: UUID(), enabled: true, rangeStart: 0, rangeEnd: 23 * 60 + 55, windows: [EverydayWindow(kind: .lunch, start: 13 * 60, end: 14 * 60)])
 }
@@ -100,9 +106,38 @@ private func waitForReady(_ root: URL) {
         let args = CommandLine.arguments
         if args.count > 2 {
             let root = URL(fileURLWithPath: args[2]), shield = FileShield(URL(fileURLWithPath: args[2])), copies = FileCopies(root, shield: shield)
-            let layer = FileLayer(root)
-            let engine = SessionControl(store: SharedControlStore(directory: root), monitoring: LocalMonitor(root), shield: shield, breakSelection: copies, everyday: layer, calendar: utc)
+            let layer = FileLayer(root), monitor = LocalMonitor(root)
+            let engine = SessionControl(store: SharedControlStore(directory: root), monitoring: monitor, shield: shield, breakSelection: copies, everyday: layer, calendar: utc)
             switch args[1] {
+            case "marker-hold":
+                // Holds the lock inside the registration call of a start, while the engine's marker names the new focus activity.
+                monitor.onRegister = { id in
+                    try! Data("focus.\(id.uuidString)".utf8).write(to: root.appendingPathComponent("ready"), options: .atomic)
+                    usleep(UInt32(args[3])!)
+                }
+                _ = try engine.start(now: markerStart, authorized: { true }, apply: {}, matches: { true })
+            case "marker-exit":
+                // Exits inside the registration call, so the marker stays behind.
+                monitor.onRegister = { _ in exit(0) }
+                _ = try engine.start(now: markerStart, authorized: { true }, apply: {}, matches: { true })
+            case "marker-skip":
+                waitForReady(root)
+                let name = try String(contentsOf: root.appendingPathComponent("ready"), encoding: .utf8)
+                try engine.handleCallbackRetryingLock(activityName: name, kind: .didEnd, now: { markerCallbackNow }, authorized: { true })
+                // The callback returned while the holder still held the lock, so its section did not run.
+                do { try SharedControlStore(directory: root).withExclusiveAccess(timeout: 0) { _ in }; exit(1) } catch ControlIssue.lockTimeout {}
+            case "marker-wait":
+                waitForReady(root)
+                let begin = ProcessInfo.processInfo.systemUptime
+                do {
+                    try engine.handleCallbackRetryingLock(activityName: "focus.\(UUID().uuidString)", kind: .didEnd, now: { markerCallbackNow }, authorized: { true })
+                    exit(1)
+                } catch ControlIssue.lockTimeout {
+                    // 5 lock waits of 0.25 s and 4 pauses of 0.25 s.
+                    if ProcessInfo.processInfo.systemUptime - begin < 2 { exit(1) }
+                }
+            case "marker-run":
+                try engine.handleCallbackRetryingLock(activityName: args[3], kind: .didEnd, now: { markerCallbackNow }, authorized: { true })
             case "new":
                 _ = try engine.start(now: Date(timeIntervalSince1970: 2000), authorized: { true }, apply: {
                     try! Data("B".utf8).write(to: shield.file)
@@ -142,6 +177,9 @@ private func waitForReady(_ root: URL) {
         try verifyStaleBreak(executable: args[0])
         try verifyStaleEveryday(executable: args[0])
         try verifyFilterEnd(executable: args[0])
+        try verifyMarkerSkip(executable: args[0])
+        try verifyMarkerOtherName(executable: args[0])
+        try verifyMarkerLeftover(executable: args[0])
     }
     private static func run(_ executable: String, _ stale: [String], _ next: [String]) throws -> Bool {
         let staleProcess = Process(), nextProcess = Process()
@@ -149,6 +187,50 @@ private func waitForReady(_ root: URL) {
         staleProcess.arguments = stale; nextProcess.arguments = next
         try staleProcess.run(); try nextProcess.run(); staleProcess.waitUntilExit(); nextProcess.waitUntilExit()
         return staleProcess.terminationStatus == 0 && nextProcess.terminationStatus == 0
+    }
+    private static func runOne(_ executable: String, _ arguments: [String]) throws -> Bool {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable); process.arguments = arguments
+        try process.run(); process.waitUntilExit()
+        return process.terminationStatus == 0
+    }
+    /// A process holds the lock inside a start's registration call; a second process's callback for that focus activity returns at once.
+    private static func verifyMarkerSkip(executable: String) throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let exited = try run(executable, ["marker-skip", root.path], ["marker-hold", root.path, "1000000"])
+        // Checked before this process takes the lock, which would delete a leftover: the holder deleted its own marker.
+        let markerDeleted = RegistrationMarkerFile(directory: root).read() == nil
+        let current = try markerEngine(root).snapshot().session
+        guard exited, markerDeleted, current?.phase == .active, current?.startedAt == markerStart else { exit(1) }
+        print("PASS: a callback for the holder's registration returns at once")
+    }
+    /// A callback for another name waits for the whole bounded retry while the holder's registration call runs.
+    private static func verifyMarkerOtherName(executable: String) throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let exited = try run(executable, ["marker-wait", root.path], ["marker-hold", root.path, "3500000"])
+        guard exited, try markerEngine(root).snapshot().session?.phase == .active else { exit(1) }
+        print("PASS: a callback for another name keeps the bounded retry")
+    }
+    /// A holder exits inside its registration call; the next process takes the lock, runs its section and deletes the leftover marker.
+    private static func verifyMarkerLeftover(executable: String) throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let markerFile = RegistrationMarkerFile(directory: root)
+        guard try runOne(executable, ["marker-exit", root.path]), let leftover = markerFile.read(), leftover.isFresh(atUptime: ProcessInfo.processInfo.systemUptime),
+              leftover.decides(activityName: leftover.activityName, kind: .didEnd, now: markerCallbackNow) else { exit(1) }
+        // The callback names the leftover's activity, before its validUntil, but the lock is free, so it runs: the stored `preparing` ends.
+        let exited = try runOne(executable, ["marker-run", root.path, leftover.activityName])
+        // Checked before this process takes the lock, which would delete the leftover too.
+        let markerDeleted = markerFile.read() == nil
+        let current = try markerEngine(root).snapshot().session
+        guard exited, markerDeleted, current?.phase == .terminal, current?.reason == .recoveryInterrupted, current?.activityName == leftover.activityName else { exit(1) }
+        print("PASS: the next lock holder deletes a leftover marker")
+    }
+    private static func markerEngine(_ root: URL) -> SessionControl {
+        let shield = FileShield(root)
+        return SessionControl(store: SharedControlStore(directory: root), monitoring: LocalMonitor(root), shield: shield, breakSelection: FileCopies(root, shield: shield), everyday: FileLayer(root))
     }
     private static func verifyStaleSession(executable: String) throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

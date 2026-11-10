@@ -79,7 +79,14 @@ protocol LockedControl {
     func save(_ envelope: ControlEnvelope) throws
 }
 protocol ControlStore {
-    func withExclusiveAccess<T>(_ body: (LockedControl) throws -> T) throws -> T
+    /// `timeout` `nil` waits for the store's own lock timeout; `0` makes one lock attempt that does not wait.
+    func withExclusiveAccess<T>(timeout: TimeInterval?, _ body: (LockedControl) throws -> T) throws -> T
+    /// The registration marker next to the control state, or `nil` for a store without one.
+    var registrationMarkers: (any RegistrationMarkerStore)? { get }
+}
+extension ControlStore {
+    func withExclusiveAccess<T>(_ body: (LockedControl) throws -> T) throws -> T { try withExclusiveAccess(timeout: nil, body) }
+    var registrationMarkers: (any RegistrationMarkerStore)? { nil }
 }
 protocol MonitoringClient {
     var registeredSessionIDs: [UUID] { get }

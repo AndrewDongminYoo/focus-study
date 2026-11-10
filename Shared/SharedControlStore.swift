@@ -3,10 +3,20 @@ import Darwin
 
 /// All readers and writers use the same stable lock inode; only the JSON is replaced.
 final class SharedControlStore: ControlStore {
+    /// The options of every `control.json` write; the registration marker file uses the same options.
+    #if os(iOS)
+    static let fileWritingOptions: Data.WritingOptions = [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
+    #else
+    static let fileWritingOptions: Data.WritingOptions = .atomic
+    #endif
     private let directory: URL
     private let timeout: TimeInterval
-    init(directory: URL, timeout: TimeInterval = 0.25) { self.directory = directory; self.timeout = timeout }
-    func withExclusiveAccess<T>(_ body: (LockedControl) throws -> T) throws -> T {
+    private let markers: any RegistrationMarkerStore
+    var registrationMarkers: (any RegistrationMarkerStore)? { markers }
+    init(directory: URL, timeout: TimeInterval = 0.25, markers: (any RegistrationMarkerStore)? = nil) {
+        self.directory = directory; self.timeout = timeout; self.markers = markers ?? RegistrationMarkerFile(directory: directory)
+    }
+    func withExclusiveAccess<T>(timeout: TimeInterval?, _ body: (LockedControl) throws -> T) throws -> T {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         #if os(iOS)
         try FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: directory.path)
@@ -14,13 +24,16 @@ final class SharedControlStore: ControlStore {
         let fd = open(directory.appendingPathComponent("control.lock").path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
         guard fd >= 0 else { throw ControlIssue.io }
         defer { close(fd) }
-        let deadline = ProcessInfo.processInfo.systemUptime + timeout
+        // A timeout of 0 makes exactly one `flock` call.
+        let deadline = ProcessInfo.processInfo.systemUptime + (timeout ?? self.timeout)
         while flock(fd, LOCK_EX | LOCK_NB) != 0 {
             guard errno == EWOULDBLOCK || errno == EAGAIN else { throw ControlIssue.io }
             guard ProcessInfo.processInfo.systemUptime < deadline else { throw ControlIssue.lockTimeout }
             usleep(2_000)
         }
         defer { flock(fd, LOCK_UN) }
+        // No process can be inside a registration call now, so a marker here is a leftover of a holder that exited. A failed delete does not fail the section.
+        try? markers.delete()
         return try body(FileControl(url: directory.appendingPathComponent("control.json")))
     }
 }
@@ -55,10 +68,6 @@ private struct FileControl: LockedControl {
         var envelope = envelope
         envelope.schemaVersion = 2
         let data = try JSONEncoder().encode(envelope)
-        #if os(iOS)
-        try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
-        #else
-        try data.write(to: url, options: .atomic)
-        #endif
+        try data.write(to: url, options: SharedControlStore.fileWritingOptions)
     }
 }

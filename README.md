@@ -22,7 +22,7 @@ iOS 테스트와 Release 빌드는 CI와 같은 Xcode 26.6과 iOS 26.5 시뮬레
 
 ```sh
 swift test
-xcrun swiftc Shared/ControlTypes.swift Shared/SharedControlStore.swift Shared/SessionControl.swift Shared/FocusLength.swift Shared/BreakTiming.swift Shared/EverydaySchedule.swift Tests/Fixtures/ControlRaceHelper.swift -o /tmp/focus-control-race
+xcrun swiftc Shared/ControlTypes.swift Shared/SharedControlStore.swift Shared/SessionControl.swift Shared/FocusLength.swift Shared/BreakTiming.swift Shared/EverydaySchedule.swift Shared/RegistrationMarker.swift Tests/Fixtures/ControlRaceHelper.swift -o /tmp/focus-control-race
 /tmp/focus-control-race --verify
 ```
 
@@ -41,13 +41,16 @@ xcodebuild build -project FocusStudy.xcodeproj -scheme FocusStudy -configuration
 | `FocusUITests`  | DEBUG 합성 데이터로 실행한 화면 흐름                                                   |
 | Release 빌드    | 개발용 코드를 뺀 App, Monitor, Report, Activity의 기기용 컴파일                        |
 
-경합 검사는 다음 네 줄을 출력해야 합니다.
+경합 검사는 다음 일곱 줄을 출력해야 합니다.
 
 ```log
 PASS: stale A cannot clear B
 PASS: stale break 1 cannot touch break 2
 PASS: stale everyday revision cannot undo a newer save
 PASS: focus off cannot end a manual session
+PASS: a callback for the holder's registration returns at once
+PASS: a callback for another name keeps the bounded retry
+PASS: the next lock holder deletes a leftover marker
 ```
 
 한 묶음만 실행하려면 test 명령에 `-only-testing:FocusSDKTests` 또는 `-only-testing:FocusUITests`를 붙입니다.

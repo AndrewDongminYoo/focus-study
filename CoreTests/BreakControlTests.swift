@@ -39,7 +39,7 @@ private final class World: ControlStore, LockedControl, MonitoringClient, Shield
     }
     /// Errors that the next lock sections throw before their body runs, one per section.
     var lockFailures: [Error] = []
-    func withExclusiveAccess<T>(_ body: (LockedControl) throws -> T) throws -> T {
+    func withExclusiveAccess<T>(timeout: TimeInterval?, _ body: (LockedControl) throws -> T) throws -> T {
         if !lockFailures.isEmpty { throw lockFailures.removeFirst() }
         return try body(self)
     }
@@ -451,18 +451,19 @@ final class BreakControlTests: XCTestCase {
     func testWarningCallbackRetriesLockTimeoutAndStillReBlocks() throws {
         let world = World(); let (engine, id) = try started(world)
         try takeBreak(engine, world, id, at: 100)
-        world.lockFailures = [ControlIssue.lockTimeout]
+        // Attempt 0 and the first retry time out; attempt 0 has no pause after it.
+        world.lockFailures = [ControlIssue.lockTimeout, ControlIssue.lockTimeout]
         let clock = clock([at(290), at(291)]); var pauses: [TimeInterval] = []
         try engine.handleCallbackRetryingLock(activityName: breakName(id, 1), kind: .willEndWarning, now: clock.now, authorized: { true }, sleep: { pauses.append($0) })
-        XCTAssertEqual(pauses, [0.25]); XCTAssertEqual(clock.calls(), 2)
+        XCTAssertEqual(pauses, [0.25]); XCTAssertEqual(clock.calls(), 3)
         XCTAssertEqual(stored(world).phase, .breakOver); XCTAssertTrue(world.state.shieldOn)
         XCTAssertTrue(world.state.breaks.isEmpty); XCTAssertTrue(world.state.copies.isEmpty)
     }
     func testFocusEndCallbackRetriesLockTimeoutWithFreshTime() throws {
         let world = World(); let (engine, id) = try started(world)
-        world.lockFailures = [ControlIssue.lockTimeout]
-        // The first time is before the focus end, so only the fresh time of the retry can end the session.
-        let clock = clock([at(1499), at(1500)]); var pauses: [TimeInterval] = []
+        world.lockFailures = [ControlIssue.lockTimeout, ControlIssue.lockTimeout]
+        // The times of attempt 0 and the first retry are before the focus end, so only the fresh time of the second retry can end the session.
+        let clock = clock([at(1499), at(1499), at(1500)]); var pauses: [TimeInterval] = []
         try engine.handleCallbackRetryingLock(activityName: focusName(id), kind: .didEnd, now: clock.now, authorized: { true }, sleep: { pauses.append($0) })
         XCTAssertEqual(pauses, [0.25]); XCTAssertEqual(stored(world).reason, .expired)
         XCTAssertFalse(world.state.shieldOn); XCTAssertNil(world.state.focus[id])
@@ -470,7 +471,8 @@ final class BreakControlTests: XCTestCase {
     func testCallbackRetryStopsAfterFourLockTimeouts() throws {
         let world = World(); let (engine, id) = try started(world)
         try takeBreak(engine, world, id, at: 100)
-        world.lockFailures = Array(repeating: ControlIssue.lockTimeout, count: 5)
+        // Attempt 0 and the 5 attempts of the bounded retry.
+        world.lockFailures = Array(repeating: ControlIssue.lockTimeout, count: 6)
         let before = world.state; var pauses: [TimeInterval] = []
         XCTAssertThrowsError(try engine.handleCallbackRetryingLock(activityName: breakName(id, 1), kind: .willEndWarning, now: { self.at(290) }, authorized: { true }, sleep: { pauses.append($0) })) {
             XCTAssertEqual($0 as? ControlIssue, .lockTimeout)

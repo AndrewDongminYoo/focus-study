@@ -171,3 +171,24 @@ final class ScreenTimeAdapterTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: file, encoding: .utf8), "corrupt")
     }
 }
+final class RegistrationMarkerAdapterTests: XCTestCase {
+    func testRegistrationMarkerNamesAreTheNamesThatScreenTimeMonitoringRegisters() {
+        let monitoring = ScreenTimeMonitoring(), id = UUID(), revision = UUID()
+        XCTAssertEqual(MarkedMonitoring.focusActivityName(id: id), monitoring.name(id).rawValue)
+        for index in 1...BreakTiming.maxBreaks {
+            XCTAssertEqual(MarkedMonitoring.breakActivityName(id: id, index: index), monitoring.breakName(id, index).rawValue)
+        }
+        for part in [EverydayPart.range] + (1...EverydaySchedule.maxWindows).map(EverydayPart.window) {
+            XCTAssertEqual(MarkedMonitoring.everydayActivityName(revision: revision, part: part), ScreenTimeMonitoring.everydayActivityName(revision: revision, part: part).rawValue)
+        }
+    }
+    /// The simulator reports no `.protectionKey` for any file, so the test records the write options instead of reading the file attributes.
+    func testRegistrationMarkerFileHasTheProtectionOfTheControlState() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        var recorded: [Data.WritingOptions] = []
+        let marker = RegistrationMarkerFile(directory: dir, writeData: { _, _, options in recorded.append(options) })
+        try marker.write(RegistrationMarker(activityName: "focus.\(UUID().uuidString)", uptime: ProcessInfo.processInfo.systemUptime, validUntil: Date()))
+        XCTAssertEqual(recorded, [SharedControlStore.fileWritingOptions], "the options of every control.json write")
+        XCTAssertEqual(SharedControlStore.fileWritingOptions, Data.WritingOptions([.atomic, .completeFileProtectionUntilFirstUserAuthentication]))
+    }
+}

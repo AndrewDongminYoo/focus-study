@@ -68,8 +68,8 @@ final class ScreenTimeMonitoring: MonitoringClient {
         }
     }
     func stopBreak(id: UUID, index: Int) { center.stopMonitoring([breakName(id, index)]) }
-    private func name(_ id: UUID) -> DeviceActivityName { DeviceActivityName("focus.\(id.uuidString)") }
-    private func breakName(_ id: UUID, _ index: Int) -> DeviceActivityName { DeviceActivityName("focus.\(id.uuidString).break.\(index)") }
+    func name(_ id: UUID) -> DeviceActivityName { DeviceActivityName("focus.\(id.uuidString)") }
+    func breakName(_ id: UUID, _ index: Int) -> DeviceActivityName { DeviceActivityName("focus.\(id.uuidString).break.\(index)") }
 
     // MARK: Everyday layer
 

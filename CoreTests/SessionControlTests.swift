@@ -155,7 +155,7 @@ final class SessionControlTests: XCTestCase {
 enum FixtureFailure: Error { case injected }
 final class MemoryControlStore: ControlStore, LockedControl {
     var envelope = ControlEnvelope(), failPhase: SessionPhase?, failRead = false, failAllWrites = false
-    func withExclusiveAccess<T>(_ body: (LockedControl) throws -> T) throws -> T { try body(self) }
+    func withExclusiveAccess<T>(timeout: TimeInterval?, _ body: (LockedControl) throws -> T) throws -> T { try body(self) }
     func load() throws -> ControlEnvelope { if failRead { throw FixtureFailure.injected }; return envelope }
     func save(_ envelope: ControlEnvelope) throws {
         if failAllWrites { throw FixtureFailure.injected }
