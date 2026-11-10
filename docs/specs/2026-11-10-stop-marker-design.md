@@ -142,6 +142,10 @@ So these callbacks take the bounded retry while the holder runs, as today.
 With the marker, the holder's stops no longer wait for their own callbacks, so a holder section is expected to take far less than the 2.25 s budget, and such a callback gets the lock after the holder.
 `[UNCERTAIN]` That bound holds only if the working explanation holds; the [physical-device verification](#physical-device-verification) measures it.
 
+If the warning still gives up, because the holder's section holds the lock for longer than its budget, the M2 re-block triggers for a lost warning apply unchanged ([Transitions](2026-11-01-m2-break-pass-design.md#transitions), transition 4): any reconcile when `now >= breakEndsAt` (the app's foreground and timer tick, any later Monitor callback of this session, and an everyday edge in `onBreak` after `breakEndsAt`), and the break activity's `intervalDidEnd(for:)` at +15 min as the last backstop.
+With the app in the background and no other callback, that backstop is the bound, which M2 already accepts for a lost warning.
+The stop marker does not add this case: before it, the holder's stop alone took about 2.28 s, which is longer than the warning's budget, so a warning that arrived during such a stop gave up already.
+
 #### The extension as the holder
 
 Monitor sections stop too: the warning section re-blocks (`stopBreak`), every callback section can run the M2 cleanup and the convergence, and a callback section can end the session (`stop(id:)`).
@@ -259,6 +263,7 @@ Acceptance:
 - No `stop`, `stop_break` or `stop_everyday` line inside a lock section is at or above 2,000 ms.
 - `END_LATENCY` and `BREAK_LATENCY action=resume` are below 1,000 ms, except a sample that contains the first registration of a run.
 - Registrations stay inside the acceptance of the marker design.
+- `END_LATENCY` and `BREAK_LATENCY` bound the lock-hold time of the app sections that they time; record them as that bound. Monitor sections have no timing line, so their lock-hold time stays unverified.
 - Regression checks without the app in the foreground: a session end lifts the focus restrictions, the break re-blocks about 3 minutes after it starts, a session ends at its focus end, and an everyday window end applies the everyday shield again.
 - If the samples still show the unit of about 2.3 s, the working explanation is wrong for stops. Record that, keep #107 open, and decide in a new spec whether to keep the stop marker.
 
@@ -273,6 +278,7 @@ Follow `AGENTS.md` and [README verification](../../README.md#실행과-검증).
   - The write and delete around every stop: a fake monitoring client reads a `stop` marker during `stop(id:)`, `stopBreak` and `stopEveryday`, with the names that the call passes; the marker is gone after the call; a write that throws does not stop the stop; the read-failure path of `snapshot()` and `everydayStatus(now:authorized:)` writes the marker.
   - The resume with an early return writes a `register`, a `stop` and a `register` marker in that order.
   - A break end that passes during a `stopEveryday` of an earlier revision: the everyday `didEnd` skips, and the warning callback for the break that comes after the section re-blocks.
+  - The same sequence with a warning that exhausts its retries: the break activity's `didEnd` at +15 min re-blocks (or ends the session by its timed end), with the app's reconcile absent.
 - The separate-process race check: new cases where a process holds the lock with a `stop` marker for name N, a second process's `didEnd` for N returns at once with `control.json` unchanged, and a `didStart` or a warning for N waits for the full bounded retry. The README lists the new `PASS` lines.
 - `Integration/` changes, SDK tests: the names of a `stop(id:)` marker equal the set that `ScreenTimeMonitoring.stop(id:)` passes, with and without a registered break; `DiagnosticMonitoring` still reports one `stop` timing for each stop.
 - `App/` changes: an SDK test that `END_LATENCY` is reported once for each `end()` when the measuring closure is set, and not at all when it is not.
