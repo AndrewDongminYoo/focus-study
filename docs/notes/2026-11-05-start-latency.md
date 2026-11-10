@@ -75,12 +75,13 @@ The result was no matching precedent, rather than evidence for either UI directi
 
 ## Per-operation timing lines added on 2026-11-10
 
-To split a slow total into Screen Time operations, the `--screen-time-diagnostics` runtime now also logs one line per operation: `SCREEN_TIME_TIMING op=<register|register_break|register_everyday|apply_shield> ms=...`.
-Each value is measured with `ProcessInfo.processInfo.systemUptime` around one real `DeviceActivityCenter` registration through `DiagnosticMonitoring`, or around one focus shield apply through `FocusServices.applySelection`.
+To split a slow total into Screen Time operations, the `--screen-time-diagnostics` runtime now also logs one line per operation: `SCREEN_TIME_TIMING op=<register|register_break|register_everyday|stop|stop_break|stop_everyday|apply_shield> ms=...`.
+Each value is measured with `ProcessInfo.processInfo.systemUptime` around one real `DeviceActivityCenter` registration or stop through `DiagnosticMonitoring`, or around one focus shield apply through `FocusServices.applySelection`.
 The `START_LATENCY` and `BREAK_LATENCY` lines did not change.
 A start or break transition now emits these lines inside its measured interval, so the earlier statement that the interval excludes the timing log no longer covers them: the total includes the cost of the per-operation lines.
 Only `apply_shield` is limited to a start.
 Registration lines also appear outside a start: a break transition emits `register_break` and re-registers the focus activity as `register`, callback handling, reconcile and cleanup can re-register the focus activity as `register`, and the everyday convergence at the end of a lock section can emit `register_everyday`.
+Stop lines also appear outside a start: `stop` stops the focus activity together with its break activities, `stop_break` stops one break activity, and `stop_everyday` stops one everyday activity.
 A `SCREEN_TIME_TIMING` line therefore does not name the operation that caused it; attribute it to a start only when no other operation ran between that start and its `START_LATENCY` line.
 Default runs, synthetic UI fixtures and Release builds emit nothing new; the timing code exists only in DEBUG.
 SDK tests prove the callback shape with a fake monitoring client; they do not measure real Screen Time.
