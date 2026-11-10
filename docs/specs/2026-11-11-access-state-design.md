@@ -89,10 +89,25 @@ The only steps that `unknown` skips are the two that lift restrictions because o
 
 ### The app's access value
 
-`AuthorizationService.status` keeps its three UI values (`notRequested`, `approved`, `denied`) for the onboarding and the settings screens.
-The engine calls stop deriving their value from it: `FocusModel`, `EverydaySettingsModel`, `FocusFilterHandler` and launch recovery pass the state from the main-queue reader.
-So `.notDetermined` after an earlier request, which `refresh()` shows as `denied`, reaches the engine as `unknown`.
+`AuthorizationService.status` gets a fourth UI value, `checking`, for `.notDetermined` after an earlier request; today `refresh()` shows that case as `denied`. `notRequested` (no earlier request), `approved` and `denied` keep their meaning.
+The engine calls stop deriving their value from it: `FocusModel`, `EverydaySettingsModel`, `FocusFilterHandler` and launch recovery pass the state from the main-queue reader, so `checking` reaches the engine as `unknown`.
 When the published status changes, the existing subscription calls `refresh()`; the app section that follows reads the new state.
+
+The screens follow the session before access, so a running session stays reachable while access is `checking`:
+
+| UI status                | Session current and not `terminal`                                       | No current session                                                                                                                          |
+| ------------------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `approved`               | timer screen, as today                                                   | timer screen or the next onboarding step, as today                                                                                          |
+| `checking`               | timer screen with its end and resume controls; no start control is shown | timer screen with the start control disabled and a short status line that access is being checked; the line's copy is left to visual review |
+| `denied`, `notRequested` | timer screen with its end and resume controls, as `checking`             | the permission step of onboarding, as today                                                                                                 |
+
+So `FocusModel.route` and `startBlocker` treat `checking` as not ready to start, and only `denied` and `notRequested` without a current session route to the permission step.
+
+Leaving `checking` after a cold launch:
+
+- Observed on 2026-11-11, against the documentation's wording: in the app process the published value settled to approved without a new request. At the 07:42:47 launch the section right after the first one registered with access, and a start that requires `approved` passed at 07:43:53. `[UNCERTAIN]` Whether that holds on every launch and in the extension.
+- If the value stays `.notDetermined`, the person's start tap is the recovery: `requestIndividual()` runs the documented request also in `checking` (today it runs only in `notRequested`), and the start proceeds only after the published value reads approved. A request is never made without a person's tap, because it can show system UI. `[UNCERTAIN]` Whether a request after an earlier approval shows any UI.
+- A revocation that happened while the app was not running is then observed when the value settles to `.denied`, or when that request fails; until then, revocation cleanup waits, which is the accepted cost in [A real revocation](#a-real-revocation).
 
 ### A real revocation
 
@@ -131,13 +146,13 @@ The only new interleaving is the main-queue read before a lock attempt:
 
 ### Guards across sequences of transitions
 
-| Sequence                                                                               | Result                                                                                                                              |
-| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Break start in the app, app in the background, warning in a cold extension (`unknown`) | The warning re-blocks and saves `breakOver`; the everyday layer blocks again by schedule. The app's next section finds `breakOver`. |
-| App launch (`unknown`), then the subscription fires (`approved`)                       | The launch section keeps every everyday part and the stored session; the next section registers nothing new.                        |
-| App launch (`unknown`), then the subscription fires (`denied`)                         | The launch section changes nothing for access; the next app section ends the session and stops the everyday layer.                  |
-| A start tap while the state is `unknown` right after launch                            | Refused with the access refusal, as today; a later tap after the value settles starts.                                              |
-| Focus turns off while the app is not running (`unknown`)                               | `endFromFocusFilter` ends a filter-started session as `.earlyExit` (or its timed reason) and never as `.authorizationRevoked`.      |
+| Sequence                                                                               | Result                                                                                                                                 |
+| -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Break start in the app, app in the background, warning in a cold extension (`unknown`) | The warning re-blocks and saves `breakOver`; the everyday layer blocks again by schedule. The app's next section finds `breakOver`.    |
+| App launch (`unknown`), then the subscription fires (`approved`)                       | The launch section keeps every everyday part and the stored session; the next section registers nothing new.                           |
+| App launch (`unknown`), then the subscription fires (`denied`)                         | The launch section changes nothing for access; the next app section ends the session and stops the everyday layer.                     |
+| A start tap while the state is `unknown` right after launch                            | The UI shows `checking` and runs the request; the engine's start still requires `approved`, so it starts only after the value settles. |
+| Focus turns off while the app is not running (`unknown`)                               | `endFromFocusFilter` ends a filter-started session as `.earlyExit` (or its timed reason) and never as `.authorizationRevoked`.         |
 
 ### Live Activity break label
 
@@ -175,14 +190,16 @@ Simulator results and synthetic tests cannot establish any of these results.
 2. Start a session, start a break with the app in front, then put the app in the background with a blocked app open. At `breakEndsAt` plus a few seconds, record whether the shield returns; on return, record the session state and today's history.
 3. Repeat step 2 three times, at least once after the app was not running for several minutes.
 4. With the everyday range containing now and no session, leave the app in the background past an everyday edge, and record whether the everyday shield follows the schedule; on return, record whether the app had to register the everyday parts again (`register_everyday` with no `stop_everyday` before it).
-5. Launch the app cold, and record the first section's lines: no `stop_everyday` before the registrations.
-6. Revoke access for the app in Settings with a session running and the app in the background, wait past one Monitor callback, then open the app. Record the end reason, whether the shields stayed while access was off, and grant access again.
+5. Launch the app cold with access on, and record the first section's lines (no `stop_everyday` before the registrations), how long the screen shows `checking`, and whether a session that ran before the launch stays reachable.
+6. Revoke access in Settings with the app not running, then launch it cold: record whether the value settles to `.denied`, or whether a start tap's request is needed to observe it.
+7. Revoke access for the app in Settings with a session running and the app in the background, wait past one Monitor callback, then open the app. Record the end reason, whether the shields stayed while access was off, and grant access again.
 
 Acceptance:
 
 - Steps 2 and 3: the shield returns at the end of every break, and no session ends as `.authorizationRevoked`.
-- Steps 4 and 5: no everyday stop for access appears while access is on.
-- Step 6: the session ends as `.authorizationRevoked` at the latest when the app comes to the front, unless its timed end came first.
+- Steps 4 and 5: no everyday stop for access appears while access is on, and a running session stays reachable on every screen.
+- Step 6: the value or the start tap's request reports the revocation, and no session starts.
+- Step 7: the session ends as `.authorizationRevoked` at the latest when the app comes to the front, unless its timed end came first.
 
 ## Verification for the implementation
 
@@ -197,7 +214,7 @@ Follow `AGENTS.md` and [README verification](../../README.md#실행과-검증).
   - `endFromFocusFilter` after a caught error with `unknown`: never `.authorizationRevoked`.
   - The existing tests that pass `authorized: false` keep their meaning as `denied`.
 - The separate-process race check keeps its `PASS` lines; the race helper passes the state.
-- `Integration/` and `App/` changes, SDK tests: the reader maps each `AuthorizationStatus` value; `FocusModel`, `EverydaySettingsModel` and `FocusFilterHandler` pass `unknown` when `AuthorizationService.status` is `denied` only because of `.notDetermined` after a request.
+- `Integration/` and `App/` changes, SDK tests: the reader maps each `AuthorizationStatus` value; `FocusModel`, `EverydaySettingsModel` and `FocusFilterHandler` pass `unknown` while `AuthorizationService.status` is `checking`; `route` and `startBlocker` follow each row of the UI status table; `requestIndividual()` runs in `checking`.
 - UI tests: the Live Activity test that reads "휴식 예정" reads "휴식 끝"; captures of the compact presentation in light, dark and the largest text size.
 - Compile the App, the Monitor and the Widget, and build an unsigned device Release build.
 - The [physical-device verification](#physical-device-verification) above. Without it, the fix stays unverified.
