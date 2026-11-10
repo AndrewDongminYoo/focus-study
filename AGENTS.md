@@ -30,6 +30,7 @@ Use these current documentation paths:
 - [Turning the everyday layer off for today](docs/specs/2026-11-08-everyday-off-today.md), which amends the M3 design for in-range editing
 - [Everyday schedule preview as a day clock](docs/specs/2026-11-09-everyday-day-clock.md), which amends the [schedule preview spec](docs/specs/2026-11-06-everyday-schedule-preview.md) with a 24-hour clock above the text rows
 - [Registration marker for Monitor callbacks](docs/specs/2026-11-10-registration-marker-design.md), which amends the 2026-10-26, M2 and M3 designs with an App Group marker file, so that a Monitor callback skips the lock wait while a lock section registers the same activity
+- [Registration marker for stops](docs/specs/2026-11-10-stop-marker-design.md), which extends that marker to the `stopMonitoring` calls inside lock sections
 - [Implementation plan](docs/plans/2026-10-26-focus-study.md)
 - [M1 implementation plan](docs/plans/2026-10-31-m1-launch-flow.md)
 - [M2 implementation plan](docs/plans/2026-11-01-m2-break-pass.md)
