@@ -117,3 +117,7 @@ The values measure main-actor occupation by the synchronous start body, not tap-
 The visible start feedback from the [interface polish design](../specs/2026-11-05-interface-polish-design.md) is the response to this delay: the timer screen shows the pending start before the synchronous body runs.
 With repeated device totals and the registration interval now recorded, the measurement work of #33 is complete.
 Shortening the registration itself would change where `startMonitoring` runs relative to the process lock, which the session design keeps synchronous; that is a separate decision, not part of #33.
+
+## Registration probe added on 2026-11-10
+
+For #101, the diagnostics button `등록 시간 비교` times throwaway registrations of an interval that contains now and one that starts in 2 minutes, logged as `SCREEN_TIME_PROBE interval=<current|future> n=<1..3> ms=...`; no device results exist yet.
