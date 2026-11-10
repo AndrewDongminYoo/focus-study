@@ -21,6 +21,8 @@ Decided on 2026-11-10 (option A, "registration marker"):
 
 Out of scope: `stopMonitoring` calls (see [Stops](#stops)), the first slow call of a run outside any lock ([Evidence](#evidence)), and any change to the app's own lock wait.
 
+Reconciliation (2026-11-10, issue #107): `stopMonitoring` calls inside lock sections are no longer out of scope; the [stop marker design](2026-11-10-stop-marker-design.md) covers them, and its code is the authority.
+
 ## Evidence
 
 All values in the two tables are from the [issue #101 comment](https://github.com/AndrewDongminYoo/focus-study/issues/101#issuecomment-6757355284), with the `SCREEN_TIME_TIMING`, `START_LATENCY` and `BREAK_LATENCY` lines of `--screen-time-diagnostics`.
@@ -75,6 +77,9 @@ The marker is `registration-marker.json` in the App Group directory `SessionCont
 - A reader treats a missing file, a read failure, a file that does not decode and an unknown `schemaVersion` as "no marker". No marker never skips a callback.
 - Privacy: an activity name holds a session UUID or an everyday revision UUID and a part. The file holds no tokens, no app or website names, no Focus name and no usage data, and it never leaves the device. It is still a new App Group file, so the 2026-10-26 data boundary sentence gets a reconciliation line ([Superseded lines](#superseded-lines)).
 
+Reconciliation (2026-11-10, issue #107): the file is now schema version 2, with the fields `schemaVersion` `2`, `call` (`register` or `stop`), `activityNames` and an optional `validUntil`, which a `register` marker must have and a `stop` marker does not have ([Marker file, version 2](2026-11-10-stop-marker-design.md#marker-file-version-2)).
+A version 1 file now counts as no marker, and so do a `register` marker without `validUntil`, an unknown `call` and an empty `activityNames`.
+
 #### Freshness
 
 A marker is fresh when `0 <= systemUptime(now) - uptime <= 10` seconds.
@@ -104,6 +109,8 @@ M3 states that a stop of an activity with an ongoing interval sends `intervalDid
 The stops inside lock sections are in `end()` (`stop(id:)`), the start rollback, the re-block (`stopBreak`), the M2 cleanup, the read-failure path, the everyday save and the convergence (`stopEveryday`).
 If a later measurement shows the same unit for a session end, a separate spec extends the marker to stops.
 
+Reconciliation (2026-11-10, issue #107): the device measurement showed that unit for stops, and `stopMonitoring` calls inside lock sections now write a `stop` marker with every name that the call passes ([stop marker design](2026-11-10-stop-marker-design.md), [Writing and deleting](2026-11-10-stop-marker-design.md#writing-and-deleting)).
+
 ### Which callbacks skip
 
 A Monitor callback returns without running its section only when all of these hold:
@@ -113,6 +120,8 @@ A Monitor callback returns without running its section only when all of these ho
 3. The marker's `activityName` is equal to the activity name of the callback.
 4. The callback kind is `didStart` or `didEnd`. An `intervalWillEndWarning(for:)` never skips.
 5. The `now` of the callback attempt is before the marker's `validUntil`.
+
+Reconciliation (2026-11-10, issue #107): condition 3 is now "the callback's activity name is in the marker's `activityNames`", and conditions 4 and 5 apply to a `register` marker. A `stop` marker skips only a `didEnd`, with no time condition ([Which callbacks skip](2026-11-10-stop-marker-design.md#which-callbacks-skip)).
 
 | Registration       | Activity name                                                   | `validUntil`                                                                                                                                                   | Callbacks that the call can cause                                                                         |
 | ------------------ | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -200,6 +209,8 @@ Every registration through `MonitoringClient` writes the marker, and every such 
 | `snapshot()`, `activitySnapshot()`, `everydayStatus(now:authorized:)`, DEBUG fixture read                               | none                                                                                                                                                                                          | no; they delete a leftover on lock take                 |
 | DEBUG registration probe (`--screen-time-diagnostics`)                                                                  | `probe.<interval>.<n>` outside any lock section                                                                                                                                               | no; its callbacks find the lock free and change nothing |
 
+Reconciliation (2026-11-10, issue #107): the row of `end()`, the start rollback and the read-failure path, and the row of `snapshot()` and `everydayStatus(now:authorized:)`, are superseded for stops: these lock holders now write a `stop` marker for each of their stops ([stop marker design](2026-11-10-stop-marker-design.md), [Stops inside lock sections](2026-11-10-stop-marker-design.md#stops-inside-lock-sections)).
+
 ### Stored states and side artifacts
 
 The marker adds no stored phase and no field to `control.json` or `everyday-layer.json`.
@@ -254,6 +265,8 @@ A thrown error at a sub-step gives the state of a process exit after the sub-ste
 | A callback that started to retry before the holder registered its name                    | It reads the marker after each timeout, and it skips once the holder's marker names it and `now < validUntil`. The holder decides that activity in the same section.                                                                                                                              |
 | A holder exits during C; another section takes the lock; a callback for that name arrives | The second section deleted the leftover when it took the lock, so the callback takes the bounded retry and runs after that section.                                                                                                                                                               |
 | An everyday save at 09:59:59.9 whose new range starts at 10:00                            | The range part does not contain now, so its call causes no callback. The genuine `didStart` at 10:00 has `now >= validUntil` (10:00), so it takes the bounded retry and converges after the save.                                                                                                 |
+
+Reconciliation (2026-11-10, issue #107): in the row "Resume, then an immediate end", `finish` now writes a `stop` marker for its `stop(id:)`, so a focus `didEnd` of a listed name skips during `finish`, while a `didStart` still takes the bounded retry ([Guards across sequences of transitions](2026-11-10-stop-marker-design.md#guards-across-sequences-of-transitions)).
 
 The M2 [Callback identity](2026-11-01-m2-break-pass-design.md#callback-identity) check, the M3 [callback routing](2026-11-01-m3-schedule-layer-design.md#callback-routing-in-handlecallback) gate and the M3 editing rules are not affected: a skip runs no step, so it cannot make a late callback change a newer session or a newer revision.
 
