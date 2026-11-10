@@ -1,5 +1,6 @@
 #if DEBUG
 import Foundation
+import DeviceActivity
 import FamilyControls
 import Observation
 
@@ -50,17 +51,108 @@ func measureScreenTime<T>(_ operation: ScreenTimeOperation, report: (ScreenTimeO
     func stopEveryday(revision: UUID, part: EverydayPart) { base.stopEveryday(revision: revision, part: part) }
 }
 
+/// The two interval cases of the registration probe: one that contains now and one that starts later.
+enum RegistrationProbeInterval: String, CaseIterable {
+    case current, future
+}
+
+/// The probe's only access to `DeviceActivityCenter`, so that tests do not need Screen Time.
+protocol RegistrationProbeCenter {
+    func start(name: String, start: Date, end: Date) throws
+    /// Stops the named activities only.
+    func stop(names: [String])
+}
+
+final class SystemRegistrationProbeCenter: RegistrationProbeCenter {
+    private let center = DeviceActivityCenter()
+    /// The same non-repeating schedule as a focus registration.
+    func start(name: String, start: Date, end: Date) throws {
+        try center.startMonitoring(DeviceActivityName(name), during: ScreenTimeMonitoring.schedule(start: start, end: end, calendar: .current))
+    }
+    func stop(names: [String]) {
+        // `stopMonitoring([])` would stop every activity, also the focus, break and everyday activities.
+        guard !names.isEmpty else { return }
+        center.stopMonitoring(names.map { DeviceActivityName($0) })
+    }
+}
+
+/// Times throwaway `probe.<interval>.<n>` registrations, which no session, break or everyday name parser accepts.
+/// It holds no process lock and never touches the control store or a shield.
+struct RegistrationProbe {
+    struct Sample: Equatable {
+        let interval: RegistrationProbeInterval
+        let n: Int
+        let duration: TimeInterval
+        let failed: Bool
+    }
+    static let runs = 3
+    static let length: TimeInterval = 20 * 60
+    static let futureLead: TimeInterval = 2 * 60
+    let center: any RegistrationProbeCenter
+    var now: () -> Date = Date.init
+    var uptime: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
+    var log: (String) -> Void = { NSLog("%@", $0) }
+    static func activityName(_ interval: RegistrationProbeInterval, _ n: Int) -> String { "probe.\(interval.rawValue).\(n)" }
+    static var activityNames: [String] { (1...runs).flatMap { n in RegistrationProbeInterval.allCases.map { activityName($0, n) } } }
+    /// Alternates `current` and `future` three times; each activity stops right after its registration, and all stop again at the end.
+    func run() -> [Sample] {
+        defer { center.stop(names: Self.activityNames) }
+        var samples: [Sample] = []
+        for n in 1...Self.runs {
+            for interval in RegistrationProbeInterval.allCases {
+                let name = Self.activityName(interval, n)
+                let start = now().addingTimeInterval(interval == .future ? Self.futureLead : 0)
+                let began = uptime()
+                var failure: Error?
+                do { try center.start(name: name, start: start, end: start.addingTimeInterval(Self.length)) } catch { failure = error }
+                let duration = uptime() - began
+                let ms = String(format: "%.3f", duration * 1000)
+                if let failure {
+                    log("SCREEN_TIME_PROBE interval=\(interval.rawValue) n=\(n) failed ms=\(ms) error=\(String(describing: failure))")
+                } else {
+                    log("SCREEN_TIME_PROBE interval=\(interval.rawValue) n=\(n) ms=\(ms)")
+                }
+                samples.append(Sample(interval: interval, n: n, duration: duration, failed: failure != nil))
+                center.stop(names: [name])
+            }
+        }
+        return samples
+    }
+}
+
 @MainActor @Observable final class DeviceDiagnostics {
     let monitoring: DiagnosticMonitoring
     private let engine: SessionControl
     private let hasAccess: () -> Bool
     private let everydayShield: ScreenTimeEverydayShield?
+    private let probe: RegistrationProbe?
     private var savedActivity: String?
     private(set) var message: String?
-    init(monitoring: DiagnosticMonitoring, engine: SessionControl, hasAccess: @escaping () -> Bool, everydayShield: ScreenTimeEverydayShield? = nil) {
-        self.monitoring = monitoring; self.engine = engine; self.hasAccess = hasAccess; self.everydayShield = everydayShield
+    init(monitoring: DiagnosticMonitoring, engine: SessionControl, hasAccess: @escaping () -> Bool, everydayShield: ScreenTimeEverydayShield? = nil,
+         probe: RegistrationProbe? = nil) {
+        self.monitoring = monitoring; self.engine = engine; self.hasAccess = hasAccess; self.everydayShield = everydayShield; self.probe = probe
     }
     var canApplyEveryday: Bool { everydayShield != nil }
+    var canProbeRegistration: Bool { probe != nil }
+    /// Compares the registration time of a current and a future interval, only while no session is stored or registered.
+    /// The read never runs recovery, so a refusal changes nothing.
+    func runRegistrationProbe() {
+        guard let probe else { return }
+        let stored: ControlSession?
+        do { stored = try engine.activitySnapshot() } catch {
+            message = "세션 상태를 읽지 못해 비교하지 않았습니다."
+            return
+        }
+        guard stored == nil, monitoring.registeredSessionIDs.isEmpty else {
+            message = "세션이 남아 있어 비교하지 않았습니다. 세션을 끝낸 뒤 다시 눌러 주세요."
+            return
+        }
+        let samples = probe.run()
+        let values = { (interval: RegistrationProbeInterval) in
+            samples.filter { $0.interval == interval }.map { $0.failed ? "실패" : String(format: "%.1f", $0.duration * 1000) }.joined(separator: ", ")
+        }
+        message = "등록 시간(ms) current: \(values(.current)) / future: \(values(.future))"
+    }
     /// Device step 9 of the M3 spec: applies a chosen selection to `everydayLayer` without the union check.
     /// The next lock section converges the store to the stored everyday file again.
     func applyEverydayWithoutUnionCheck(_ selection: FamilyActivitySelection) {

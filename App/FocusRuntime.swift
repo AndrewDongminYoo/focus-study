@@ -55,7 +55,10 @@ import SwiftData
         let engine = SessionControl(store: SharedControlStore(directory: group), monitoring: monitoring, shield: shield, breakSelection: breakSelection, everyday: everyday)
         let activityDidChange = FocusActivityRuntime.hook(engine: engine)
         #if DEBUG
-        let diagnostics = diagnosticMonitoring.map { DeviceDiagnostics(monitoring: $0, engine: engine, hasAccess: authorization.hasAccessNow, everydayShield: everydayShield) }
+        let diagnostics = diagnosticMonitoring.map {
+            DeviceDiagnostics(monitoring: $0, engine: engine, hasAccess: authorization.hasAccessNow, everydayShield: everydayShield,
+                              probe: RegistrationProbe(center: SystemRegistrationProbeCenter()))
+        }
         #endif
         // One settings object for the screens and the filter, so that a refusal recorded by the filter updates the guide that is shown.
         let settings = FocusSettings()

@@ -28,6 +28,9 @@ struct DeviceDiagnosticsSection: View {
                 catch { replayFailed = true }
                 model.refresh()
             }.disabled(!diagnostics.canReplay(current: model.current)).accessibilityIdentifier("diagnosticReplay")
+            if diagnostics.canProbeRegistration {
+                Button("등록 시간 비교") { diagnostics.runRegistrationProbe() }.accessibilityIdentifier("diagnosticRegistrationProbe")
+            }
             if diagnostics.canApplyEveryday {
                 Button("매일 제한 store에 선택 적용(합집합 검사 없음)") { everydayPicker = true }.accessibilityIdentifier("diagnosticEverydayApply")
             }
