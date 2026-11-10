@@ -90,6 +90,19 @@ import XCTest
         XCTAssertTrue(measured.allSatisfy { $0.1 >= 0 })
         XCTAssertEqual(measured.map(\.0.rawValue), ["register", "register_break", "register_everyday"])
     }
+    func testEachStopReportsOneTimingAfterForwardingItsArguments() {
+        let base = DiagnosticMonitoringSpy(), id = UUID(), revision = UUID()
+        var measured: [TimeInterval] = []
+        let monitor = DiagnosticMonitoring(base: base) { operation, duration in base.events.append("measured \(operation.rawValue)"); measured.append(duration) }
+        monitor.stop(id: id)
+        monitor.stopBreak(id: id, index: 2)
+        monitor.stopEveryday(revision: revision, part: .window(1))
+        XCTAssertEqual(base.events, ["stop \(id)", "measured stop", "stop_break \(id) 2", "measured stop_break", "stop_everyday \(revision) window(1)", "measured stop_everyday"])
+        XCTAssertEqual(base.stopped, [id])
+        XCTAssertEqual(measured.count, 3)
+        XCTAssertTrue(measured.allSatisfy { $0 >= 0 })
+        XCTAssertEqual([ScreenTimeOperation.stop, .stopBreak, .stopEveryday].map(\.rawValue), ["stop", "stop_break", "stop_everyday"])
+    }
     func testArmedFailureRegistersThenThrowsAndStillReportsTiming() throws {
         let base = DiagnosticMonitoringSpy()
         var measured: [ScreenTimeOperation] = []
@@ -226,20 +239,21 @@ private enum DiagnosticFailure: Error { case registration }
 private final class DiagnosticMonitoringSpy: MonitoringClient {
     var shouldThrow = false
     var registered: [UUID] = [], stopped: [UUID] = []
+    var events: [String] = []
     private var current = Set<UUID>()
     var registeredSessionIDs: [UUID] { Array(current) }
     func register(id: UUID, start: Date, end: Date) throws { if shouldThrow { throw DiagnosticFailure.registration }; registered.append(id); current.insert(id) }
     func isRegistered(id: UUID) -> Bool { current.contains(id) }
-    func stop(id: UUID) { stopped.append(id); current.remove(id); breaks.removeAll { $0.id == id } }
+    func stop(id: UUID) { events.append("stop \(id)"); stopped.append(id); current.remove(id); breaks.removeAll { $0.id == id } }
     var breaks: [(id: UUID, index: Int, warning: TimeInterval)] = []
     func registerBreak(id: UUID, index: Int, start: Date, end: Date, warning: TimeInterval) throws { breaks.append((id, index, warning)) }
     func isBreakRegistered(id: UUID, index: Int) -> Bool { breaks.contains { $0.id == id && $0.index == index } }
     var registeredBreaks: [(id: UUID, index: Int)] { breaks.map { (id: $0.id, index: $0.index) } }
-    func stopBreak(id: UUID, index: Int) { breaks.removeAll { $0.id == id && $0.index == index } }
+    func stopBreak(id: UUID, index: Int) { events.append("stop_break \(id) \(index)"); breaks.removeAll { $0.id == id && $0.index == index } }
     var everyday: [(revision: UUID, part: EverydayPart, start: Int, end: Int)] = []
     func registerEveryday(revision: UUID, part: EverydayPart, start: Int, end: Int) throws { everyday.append((revision, part, start, end)) }
     var registeredEveryday: [(revision: UUID, part: EverydayPart)] { everyday.map { (revision: $0.revision, part: $0.part) } }
-    func stopEveryday(revision: UUID, part: EverydayPart) { everyday.removeAll { $0.revision == revision && $0.part == part } }
+    func stopEveryday(revision: UUID, part: EverydayPart) { events.append("stop_everyday \(revision) \(part)"); everyday.removeAll { $0.revision == revision && $0.part == part } }
 }
 private final class DiagnosticBreakSelectionSpy: BreakSelectionStore {
     func restoreShield(id: UUID) -> Bool { false }

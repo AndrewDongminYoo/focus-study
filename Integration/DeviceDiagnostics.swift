@@ -10,6 +10,9 @@ enum ScreenTimeOperation: String {
     case register
     case registerBreak = "register_break"
     case registerEveryday = "register_everyday"
+    case stop
+    case stopBreak = "stop_break"
+    case stopEveryday = "stop_everyday"
 }
 
 /// Runs `body` and reports its duration on the monotonic uptime clock, also when `body` throws.
@@ -20,7 +23,7 @@ func measureScreenTime<T>(_ operation: ScreenTimeOperation, report: (ScreenTimeO
 }
 
 /// Opt-in wrapper: the real registration happens before the injected one-shot error.
-/// Each registration reports the duration of the real `base` call only, through `didMeasure`.
+/// Each registration and stop reports the duration of the real `base` call only, through `didMeasure`.
 @Observable final class DiagnosticMonitoring: MonitoringClient {
     private let base: any MonitoringClient
     private let didMeasure: (ScreenTimeOperation, TimeInterval) -> Void
@@ -37,18 +40,18 @@ func measureScreenTime<T>(_ operation: ScreenTimeOperation, report: (ScreenTimeO
         if fail { throw ControlIssue.io }
     }
     func isRegistered(id: UUID) -> Bool { base.isRegistered(id: id) }
-    func stop(id: UUID) { base.stop(id: id) }
+    func stop(id: UUID) { measureScreenTime(.stop, report: didMeasure) { base.stop(id: id) } }
     func registerBreak(id: UUID, index: Int, start: Date, end: Date, warning: TimeInterval) throws {
         try measureScreenTime(.registerBreak, report: didMeasure) { try base.registerBreak(id: id, index: index, start: start, end: end, warning: warning) }
     }
     func isBreakRegistered(id: UUID, index: Int) -> Bool { base.isBreakRegistered(id: id, index: index) }
     var registeredBreaks: [(id: UUID, index: Int)] { base.registeredBreaks }
-    func stopBreak(id: UUID, index: Int) { base.stopBreak(id: id, index: index) }
+    func stopBreak(id: UUID, index: Int) { measureScreenTime(.stopBreak, report: didMeasure) { base.stopBreak(id: id, index: index) } }
     func registerEveryday(revision: UUID, part: EverydayPart, start: Int, end: Int) throws {
         try measureScreenTime(.registerEveryday, report: didMeasure) { try base.registerEveryday(revision: revision, part: part, start: start, end: end) }
     }
     var registeredEveryday: [(revision: UUID, part: EverydayPart)] { base.registeredEveryday }
-    func stopEveryday(revision: UUID, part: EverydayPart) { base.stopEveryday(revision: revision, part: part) }
+    func stopEveryday(revision: UUID, part: EverydayPart) { measureScreenTime(.stopEveryday, report: didMeasure) { base.stopEveryday(revision: revision, part: part) } }
 }
 
 /// The two interval cases of the registration probe: one that contains now and one that starts later.
