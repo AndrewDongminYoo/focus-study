@@ -41,7 +41,7 @@ xcodebuild build -project FocusStudy.xcodeproj -scheme FocusStudy -configuration
 | `FocusUITests`  | DEBUG 합성 데이터로 실행한 화면 흐름                                                   |
 | Release 빌드    | 개발용 코드를 뺀 App, Monitor, Report, Activity의 기기용 컴파일                        |
 
-경합 검사는 다음 일곱 줄을 출력해야 합니다.
+경합 검사는 다음 열 줄을 출력해야 합니다.
 
 ```log
 PASS: stale A cannot clear B
@@ -51,6 +51,9 @@ PASS: focus off cannot end a manual session
 PASS: a callback for the holder's registration returns at once
 PASS: a callback for another name keeps the bounded retry
 PASS: the next lock holder deletes a leftover marker
+PASS: a didEnd for the holder's stop returns at once
+PASS: a didStart for the holder's stop keeps the bounded retry
+PASS: a warning for the holder's stop keeps the bounded retry
 ```
 
 한 묶음만 실행하려면 test 명령에 `-only-testing:FocusSDKTests` 또는 `-only-testing:FocusUITests`를 붙입니다.

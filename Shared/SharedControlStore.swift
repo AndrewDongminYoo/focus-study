@@ -32,7 +32,7 @@ final class SharedControlStore: ControlStore {
             usleep(2_000)
         }
         defer { flock(fd, LOCK_UN) }
-        // No process can be inside a registration call now, so a marker here is a leftover of a holder that exited. A failed delete does not fail the section.
+        // No process can be inside a registration or stop call now, so a marker here is a leftover of a holder that exited. A failed delete does not fail the section.
         try? markers.delete()
         return try body(FileControl(url: directory.appendingPathComponent("control.json")))
     }

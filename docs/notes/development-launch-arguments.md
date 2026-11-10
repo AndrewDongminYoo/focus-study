@@ -70,6 +70,9 @@ Live Activity는 마지막으로 확인한 집중·휴식·복귀 계획을 보�
 `request`는 `쉬는 시간 갖기`, `cancelWait`는 `집중으로 돌아가기`나 앱을 떠날 때의 대기 취소, `startBreak`는 대기가 끝난 뒤의 자동 시작, `resume`은 `다시 집중하기`입니다.
 진행 표시를 그리기 위한 프레임 대기와 거절된 탭은 이 시간에 포함되지 않습니다.
 
+세션 종료 탭은 그 탭부터 종료 엔진 호출이 돌아올 때까지의 시간을 `END_LATENCY total_ms=...` 로그로 남깁니다.
+그 뒤의 화면 갱신, 프레임 대기와 화면 애니메이션은 이 시간에 포함되지 않고, 진행 중인 세션이 없는 탭은 로그를 남기지 않습니다.
+
 같은 실행에서 Screen Time 작업은 하나마다 `SCREEN_TIME_TIMING op=<register|register_break|register_everyday|stop|stop_break|stop_everyday|apply_shield> ms=...` 로그를 남깁니다.
 `register`는 집중 세션, `register_break`는 쉬는 시간, `register_everyday`는 매일 제한의 `DeviceActivityCenter` 등록이고, `apply_shield`는 시작할 때의 집중 제한 적용입니다.
 `stop`은 집중 세션과 그 쉬는 시간 활동 전체, `stop_break`는 쉬는 시간 하나, `stop_everyday`는 매일 제한 활동 하나의 `DeviceActivityCenter` 등록 해제입니다.

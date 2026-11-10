@@ -6,7 +6,7 @@ final class SessionControl {
     private let baseMonitoring: any MonitoringClient
     /// The marker wrapper of the lock section that is running, set only while the section holds the lock.
     private var sectionMonitoring: (any MonitoringClient)?
-    /// Every registration inside a lock section goes through the section's marker wrapper.
+    /// Every registration and every stop inside a lock section goes through the section's marker wrapper.
     private var monitoring: any MonitoringClient { sectionMonitoring ?? baseMonitoring }
     private let shield: any ShieldClient
     private let breakSelection: any BreakSelectionStore
@@ -87,7 +87,7 @@ final class SessionControl {
             envelope.filterActivation = nil; try locked.save(envelope)
         }
     }
-    func snapshot() throws -> ControlEnvelope { try store.withExclusiveAccess { try read($0) } }
+    func snapshot() throws -> ControlEnvelope { try holding { try read($0) } }
     /// Optional display reads never invoke recovery, even when metadata is unavailable.
     func activitySnapshot() throws -> ControlSession? { try store.withExclusiveAccess { try $0.load().session } }
     /// `now` is the wall clock of the section and of its everyday convergence; `endedAt`, when given, is the recorded end time of the session.
@@ -153,7 +153,8 @@ final class SessionControl {
     }
     /// A Monitor callback is often the only trigger of its timed change, so a lock timeout retries with a fresh time before the callback returns.
     /// The store throws `lockTimeout` before the section runs, so a failed attempt changed nothing. Worst case with the defaults: attempt 0, then 5 lock waits of 0.25 s and 4 pauses of 0.25 s, about 2.25 s.
-    /// After every `lockTimeout`, a fresh registration marker of the lock holder for this callback ends the callback: the holder's section decides that activity.
+    /// After every `lockTimeout`, a fresh marker of the lock holder that decides this callback ends the callback: the holder's section decides that activity.
+    /// A `register` marker decides `didStart` and `didEnd` before its `validUntil`; a `stop` marker decides only `didEnd`.
     func handleCallbackRetryingLock(activityName: String, kind: CallbackKind, now: () -> Date, authorized: () -> Bool, retries: Int = 4, pause: TimeInterval = 0.25,
                                     sleep: (TimeInterval) -> Void = { Thread.sleep(forTimeInterval: $0) }) throws {
         // Attempt 0: one lock call that does not wait, with no pause after it.
@@ -310,7 +311,7 @@ final class SessionControl {
     }
     /// No convergence step; unreadable control metadata still invokes the recovery reader.
     func everydayStatus(now: Date, authorized: Bool) throws -> EverydayStatus {
-        try store.withExclusiveAccess { locked in
+        try holding { locked in
             let envelope = try read(locked)
             let schedule: EverydaySchedule?
             do { schedule = try everyday.load() } catch { return EverydayStatus(schedule: nil, blocksNow: false, nextChange: nil, issue: .unreadable) }
@@ -499,6 +500,14 @@ final class SessionControl {
     /// The activities of a layer that is on: the range, then windows 1-3.
     static func everydayActivities(_ schedule: EverydaySchedule) -> [(part: EverydayPart, start: Int, end: Int)] {
         [(.range, schedule.rangeStart, schedule.rangeEnd)] + schedule.windows.enumerated().map { (.window($0.offset + 1), $0.element.start, $0.element.end) }
+    }
+    /// A lock holder that does not run through `section`: its read-failure stops go through a marker wrapper without a section time.
+    private func holding<T>(_ body: (LockedControl) throws -> T) throws -> T {
+        try store.withExclusiveAccess { locked in
+            sectionMonitoring = store.registrationMarkers.map { MarkedMonitoring(base: baseMonitoring, markers: $0) }
+            defer { sectionMonitoring = nil }
+            return try body(locked)
+        }
     }
     /// Engine mutation sections end with everyday convergence, also when their focus part threw.
     /// When the read of `control.json` threw, the section has no envelope, and no convergence step runs.

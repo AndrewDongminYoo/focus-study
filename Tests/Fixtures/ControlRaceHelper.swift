@@ -15,7 +15,9 @@ private final class LocalMonitor: MonitoringClient {
     var onRegister: ((UUID) -> Void)?
     func register(id: UUID, start: Date, end: Date) throws { onRegister?(id); ids.insert(id) }
     func isRegistered(id: UUID) -> Bool { ids.contains(id) }
-    func stop(id: UUID) { ids.remove(id); breaks.removeAll { $0.id == id } }
+    /// Runs inside the focus stop call, while the engine's stop marker for that call exists.
+    var onStop: ((UUID) -> Void)?
+    func stop(id: UUID) { onStop?(id); ids.remove(id); breaks.removeAll { $0.id == id } }
     func registerBreak(id: UUID, index: Int, start: Date, end: Date, warning: TimeInterval) throws { breaks.append((id, index)) }
     func isBreakRegistered(id: UUID, index: Int) -> Bool { breaks.contains { $0.id == id && $0.index == index } }
     var registeredBreaks: [(id: UUID, index: Int)] { breaks }
@@ -136,6 +138,36 @@ private func waitForReady(_ root: URL) {
                     // 5 lock waits of 0.25 s and 4 pauses of 0.25 s.
                     if ProcessInfo.processInfo.systemUptime - begin < 2 { exit(1) }
                 }
+            case "stop-hold":
+                // Starts a session, then holds the lock inside the stop call of its end, while the engine's stop marker lists the focus activity.
+                let session = try engine.start(now: markerStart, authorized: { true }, apply: {}, matches: { true })
+                monitor.onStop = { _ in
+                    try! Data(session.activityName.utf8).write(to: root.appendingPathComponent("ready"), options: .atomic)
+                    usleep(UInt32(args[3])!)
+                }
+                try engine.finish(id: session.id, reason: .earlyExit, now: markerCallbackNow)
+            case "stop-skip":
+                waitForReady(root)
+                let name = try String(contentsOf: root.appendingPathComponent("ready"), encoding: .utf8)
+                let control = root.appendingPathComponent("control.json"), before = try Data(contentsOf: control)
+                try engine.handleCallbackRetryingLock(activityName: name, kind: .didEnd, now: { markerCallbackNow }, authorized: { true })
+                // The callback returned while the holder still held the lock, so its section did not run and `control.json` is the holder's `ending`.
+                do { try SharedControlStore(directory: root).withExclusiveAccess(timeout: 0) { _ in }; exit(1) } catch ControlIssue.lockTimeout {}
+                if try Data(contentsOf: control) != before { exit(1) }
+            case "stop-wait":
+                // args[3] is the kind; args[4], when given, a break index of the stopped session.
+                waitForReady(root)
+                let focus = try String(contentsOf: root.appendingPathComponent("ready"), encoding: .utf8)
+                let name = args.count > 4 ? "\(focus).break.\(args[4])" : focus
+                let kind: CallbackKind = args[3] == "didStart" ? .didStart : .willEndWarning
+                let begin = ProcessInfo.processInfo.systemUptime
+                do {
+                    try engine.handleCallbackRetryingLock(activityName: name, kind: kind, now: { markerCallbackNow }, authorized: { true })
+                    exit(1)
+                } catch ControlIssue.lockTimeout {
+                    // 5 lock waits of 0.25 s and 4 pauses of 0.25 s.
+                    if ProcessInfo.processInfo.systemUptime - begin < 2 { exit(1) }
+                }
             case "marker-run":
                 try engine.handleCallbackRetryingLock(activityName: args[3], kind: .didEnd, now: { markerCallbackNow }, authorized: { true })
             case "new":
@@ -180,6 +212,28 @@ private func waitForReady(_ root: URL) {
         try verifyMarkerSkip(executable: args[0])
         try verifyMarkerOtherName(executable: args[0])
         try verifyMarkerLeftover(executable: args[0])
+        try verifyStopSkip(executable: args[0])
+        try verifyStopWait(executable: args[0], ["didStart"], "a didStart for the holder's stop keeps the bounded retry")
+        try verifyStopWait(executable: args[0], ["willEndWarning", "1"], "a warning for the holder's stop keeps the bounded retry")
+    }
+    /// A process holds the lock inside the stop call of a session end; a second process's `didEnd` for the stopped focus activity returns at once.
+    private static func verifyStopSkip(executable: String) throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let exited = try run(executable, ["stop-skip", root.path], ["stop-hold", root.path, "1000000"])
+        // Checked before this process takes the lock, which would delete a leftover: the holder deleted its own marker.
+        let markerDeleted = RegistrationMarkerFile(directory: root).read() == nil
+        let current = try markerEngine(root).snapshot().session
+        guard exited, markerDeleted, current?.phase == .terminal, current?.reason == .earlyExit else { exit(1) }
+        print("PASS: a didEnd for the holder's stop returns at once")
+    }
+    /// A `didStart` or a warning for a stopped name waits for the whole bounded retry while the holder's stop call runs.
+    private static func verifyStopWait(executable: String, _ callback: [String], _ pass: String) throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let exited = try run(executable, ["stop-wait", root.path] + callback, ["stop-hold", root.path, "3500000"])
+        guard exited, try markerEngine(root).snapshot().session?.phase == .terminal else { exit(1) }
+        print("PASS: \(pass)")
     }
     private static func run(_ executable: String, _ stale: [String], _ next: [String]) throws -> Bool {
         let staleProcess = Process(), nextProcess = Process()
@@ -219,13 +273,13 @@ private func waitForReady(_ root: URL) {
         defer { try? FileManager.default.removeItem(at: root) }
         let markerFile = RegistrationMarkerFile(directory: root)
         guard try runOne(executable, ["marker-exit", root.path]), let leftover = markerFile.read(), leftover.isFresh(atUptime: ProcessInfo.processInfo.systemUptime),
-              leftover.decides(activityName: leftover.activityName, kind: .didEnd, now: markerCallbackNow) else { exit(1) }
+              let name = leftover.activityNames.first, leftover.decides(activityName: name, kind: .didEnd, now: markerCallbackNow) else { exit(1) }
         // The callback names the leftover's activity, before its validUntil, but the lock is free, so it runs: the stored `preparing` ends.
-        let exited = try runOne(executable, ["marker-run", root.path, leftover.activityName])
+        let exited = try runOne(executable, ["marker-run", root.path, name])
         // Checked before this process takes the lock, which would delete the leftover too.
         let markerDeleted = markerFile.read() == nil
         let current = try markerEngine(root).snapshot().session
-        guard exited, markerDeleted, current?.phase == .terminal, current?.reason == .recoveryInterrupted, current?.activityName == leftover.activityName else { exit(1) }
+        guard exited, markerDeleted, current?.phase == .terminal, current?.reason == .recoveryInterrupted, current?.activityName == name else { exit(1) }
         print("PASS: the next lock holder deletes a leftover marker")
     }
     private static func markerEngine(_ root: URL) -> SessionControl {

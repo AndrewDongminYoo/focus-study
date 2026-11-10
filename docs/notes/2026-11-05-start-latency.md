@@ -87,6 +87,13 @@ Default runs, synthetic UI fixtures and Release builds emit nothing new; the tim
 SDK tests prove the callback shape with a fake monitoring client; they do not measure real Screen Time.
 No device measurement with these lines exists yet, so the slow operation in the 2,522.737 ms sample is still unidentified and #33 stays open.
 
+## Session end timing line added on 2026-11-10
+
+The [stop marker design](../specs/2026-11-10-stop-marker-design.md#session-end-timing) adds `END_LATENCY total_ms=...` next to `START_LATENCY` and `BREAK_LATENCY`, under `--screen-time-diagnostics` only.
+It times `FocusModel.end()` on the main actor from the tap to the return of the engine call; the refresh after that call, any frame wait and any UI animation are outside it, and a tap without a current session logs nothing.
+Default runs, synthetic UI fixtures and Release builds emit nothing new.
+An SDK test proves that the callback runs once for each end and not at all when it is not set; no device measurement with this line exists yet.
+
 ## Physical-device phases measured on 2026-11-10
 
 Six accepted starts in one diagnostic launch split the device total into Screen Time operations.
