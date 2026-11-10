@@ -3,7 +3,11 @@ import Foundation
 /// Synchronous critical sections span read, cleanup, identity check, system effects and durable writes.
 final class SessionControl {
     private let store: any ControlStore
-    private let monitoring: any MonitoringClient
+    private let baseMonitoring: any MonitoringClient
+    /// The marker wrapper of the lock section that is running, set only while the section holds the lock.
+    private var sectionMonitoring: (any MonitoringClient)?
+    /// Every registration inside a lock section goes through the section's marker wrapper.
+    private var monitoring: any MonitoringClient { sectionMonitoring ?? baseMonitoring }
     private let shield: any ShieldClient
     private let breakSelection: any BreakSelectionStore
     private let everyday: any EverydayLayerStore
@@ -14,7 +18,7 @@ final class SessionControl {
     private var focusRegistrations = 0
     init(store: any ControlStore, monitoring: any MonitoringClient, shield: any ShieldClient, breakSelection: any BreakSelectionStore,
          everyday: any EverydayLayerStore, timing: BreakTiming = .standard, calendar: Calendar = .autoupdatingCurrent) {
-        self.store = store; self.monitoring = monitoring; self.shield = shield; self.breakSelection = breakSelection
+        self.store = store; self.baseMonitoring = monitoring; self.shield = shield; self.breakSelection = breakSelection
         self.everyday = everyday; self.timing = timing; self.calendar = calendar
     }
     func start(now: Date, length: TimeInterval = 1500, authorized: () -> Bool, apply: () -> Void, matches: () -> Bool) throws -> ControlSession {
@@ -118,9 +122,10 @@ final class SessionControl {
             return envelope
         }
     }
-    func handleCallback(activityName: String, kind: CallbackKind, now: Date, authorized: Bool) throws {
+    /// `lockTimeout` `0` is the attempt of `handleCallbackRetryingLock` that does not wait; `nil` waits for the store's own timeout.
+    func handleCallback(activityName: String, kind: CallbackKind, now: Date, authorized: Bool, lockTimeout: TimeInterval? = nil) throws {
         // A section that `intervalDidStart(for:)` started never registers an everyday activity, so a registration cannot loop through its own callback.
-        try section(now: now, access: authorized, mayRegister: kind != .didStart) { locked in
+        try section(now: now, access: authorized, mayRegister: kind != .didStart, lockTimeout: lockTimeout) { locked in
             var envelope = try read(locked)
             let registrationsBefore = focusRegistrations
             // The cleanup depends only on the envelope and the time, and an orphaned break activity is often the only caller.
@@ -147,14 +152,28 @@ final class SessionControl {
         }
     }
     /// A Monitor callback is often the only trigger of its timed change, so a lock timeout retries with a fresh time before the callback returns.
-    /// The store throws `lockTimeout` before the section runs, so a failed attempt changed nothing. Worst case with the defaults: 5 lock waits of 0.25 s and 4 pauses of 0.25 s, about 2.25 s.
+    /// The store throws `lockTimeout` before the section runs, so a failed attempt changed nothing. Worst case with the defaults: attempt 0, then 5 lock waits of 0.25 s and 4 pauses of 0.25 s, about 2.25 s.
+    /// After every `lockTimeout`, a fresh registration marker of the lock holder for this callback ends the callback: the holder's section decides that activity.
     func handleCallbackRetryingLock(activityName: String, kind: CallbackKind, now: () -> Date, authorized: () -> Bool, retries: Int = 4, pause: TimeInterval = 0.25,
                                     sleep: (TimeInterval) -> Void = { Thread.sleep(forTimeInterval: $0) }) throws {
+        // Attempt 0: one lock call that does not wait, with no pause after it.
+        let first = now()
+        do { return try handleCallback(activityName: activityName, kind: kind, now: first, authorized: authorized(), lockTimeout: 0) }
+        catch ControlIssue.lockTimeout { if holderDecides(activityName: activityName, kind: kind, now: first) { return } }
         var attempt = 0
         while true {
-            do { return try handleCallback(activityName: activityName, kind: kind, now: now(), authorized: authorized()) }
-            catch ControlIssue.lockTimeout where attempt < retries { attempt += 1; sleep(pause) }
+            let time = now()
+            do { return try handleCallback(activityName: activityName, kind: kind, now: time, authorized: authorized()) }
+            catch ControlIssue.lockTimeout {
+                if holderDecides(activityName: activityName, kind: kind, now: time) { return }
+                guard attempt < retries else { throw ControlIssue.lockTimeout }
+                attempt += 1; sleep(pause)
+            }
         }
+    }
+    /// Read only after a `lockTimeout`: a marker without a busy lock is a leftover, and the callback must then run.
+    private func holderDecides(activityName: String, kind: CallbackKind, now: Date) -> Bool {
+        store.registrationMarkers?.freshMarker()?.decides(activityName: activityName, kind: kind, now: now) == true
     }
 
     // MARK: Break transitions
@@ -483,9 +502,12 @@ final class SessionControl {
     }
     /// Engine mutation sections end with everyday convergence, also when their focus part threw.
     /// When the read of `control.json` threw, the section has no envelope, and no convergence step runs.
-    private func section<T>(now: Date, access: Bool? = nil, mayRegister: Bool = true, _ body: (TrackedControl) throws -> T) throws -> T {
-        try store.withExclusiveAccess { base in
+    private func section<T>(now: Date, access: Bool? = nil, mayRegister: Bool = true, lockTimeout: TimeInterval? = nil, _ body: (TrackedControl) throws -> T) throws -> T {
+        try store.withExclusiveAccess(timeout: lockTimeout) { base in
             let locked = TrackedControl(base, access: access, now: now)
+            // Set after the lock is held. This reset runs after the convergence below, so the convergence registers through the wrapper too.
+            sectionMonitoring = store.registrationMarkers.map { MarkedMonitoring(base: baseMonitoring, markers: $0, now: now, calendar: calendar) }
+            defer { sectionMonitoring = nil }
             defer { if let stored = locked.stored { converge(stored, access: locked.access, mayRegister: mayRegister, now: now) } }
             return try body(locked)
         }

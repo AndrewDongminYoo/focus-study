@@ -43,7 +43,7 @@ private final class EverydayWorld: ControlStore, LockedControl, MonitoringClient
         let index = effects; effects += 1
         if throwAtEffect == index { throwAtEffect = nil; throw FixtureFailure.injected }
     }
-    func withExclusiveAccess<T>(_ body: (LockedControl) throws -> T) throws -> T { try body(self) }
+    func withExclusiveAccess<T>(timeout: TimeInterval?, _ body: (LockedControl) throws -> T) throws -> T { try body(self) }
     func load() throws -> ControlEnvelope { if failReads { throw FixtureFailure.injected }; return state.envelope }
     func save(_ envelope: ControlEnvelope) throws {
         try mayThrow()

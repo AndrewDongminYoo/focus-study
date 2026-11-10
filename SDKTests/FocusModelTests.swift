@@ -561,7 +561,7 @@ final class ModelTestStore: ControlStore, LockedControl {
     /// The numbers of the lock sections that throw `lockTimeout` before their body runs.
     var lockTimeoutCalls = Set<Int>()
     private(set) var calls = 0
-    func withExclusiveAccess<T>(_ body: (LockedControl) throws -> T) throws -> T {
+    func withExclusiveAccess<T>(timeout: TimeInterval?, _ body: (LockedControl) throws -> T) throws -> T {
         calls += 1
         if lockTimeoutCalls.contains(calls) { throw ControlIssue.lockTimeout }
         return try body(self)
