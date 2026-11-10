@@ -120,4 +120,49 @@ Shortening the registration itself would change where `startMonitoring` runs rel
 
 ## Registration probe added on 2026-11-10
 
-For #101, the diagnostics button `등록 시간 비교` times throwaway registrations of an interval that contains now and one that starts in 2 minutes, logged as `SCREEN_TIME_PROBE interval=<current|future> n=<1..3> ms=...`; no device results exist yet.
+For #101, the diagnostics button `등록 시간 비교` times throwaway registrations of an interval that contains now and one that starts in 2 minutes, logged as `SCREEN_TIME_PROBE interval=<current|future> n=<1..3> ms=...`.
+The device results of 2026-11-10 morning are in the [#101 measurement comment](https://github.com/AndrewDongminYoo/focus-study/issues/101#issuecomment-6757355284): outside any lock section, the first `current` call of the run took 2,376.897 ms, and the next 30 calls of both kinds took 18.3 to 48.5 ms.
+The same comment records the break transitions before #105: request 4,643.394 ms, automatic break start 7,011.413 ms and resume after the break end 4,652.340 ms.
+
+## Registration marker measured on 2026-11-10
+
+After #105 added the [registration marker](../specs/2026-11-10-registration-marker-design.md), the device was measured again with the design's [physical-device steps](../specs/2026-11-10-registration-marker-design.md#physical-device-verification).
+
+Environment: iPhone 16 Pro (`iPhone17,1`), iOS 27.0.1 (`24A446`), signed Debug version 0.1, build 1, built from `2aba43c` and installed over the existing app, launched twice with `--screen-time-diagnostics` and console forwarding; samples logged between 14:15:05 and 15:06:32 +09:00.
+
+| Registration inside a lock section | Samples (ms)                                                                  | Before #105 (ms)                                |
+| ---------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------- |
+| Everyday parts at launch           | 97.359, 1.208, 0.902, 0.782 (launch 1); 2.782, 0.996, 0.740, 0.670 (launch 2) | 2,375.712; 2,280.414 and 2,292.251 (first part) |
+| Everyday parts after a break ended | 8.942, 2.201, 1.171, 2.371                                                    | not measured                                    |
+| `register`, new focus activity     | 27.811, 38.893, 37.478                                                        | 2,309.640 to 2,323.773                          |
+| `register`, overwrite              | 23.621 to 51.898 (13 samples)                                                 | 4,607.604 to 4,619.592                          |
+| `register_break`                   | 47.430, 44.269, 46.182, 45.083                                                | 2,328.948                                       |
+
+The everyday registrations at launch are the first registration of each run, and neither reached 2,000 ms.
+
+| User action                  | Samples (ms)                                                             | Before #105 (ms)                                                |
+| ---------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| Start (`START_LATENCY`)      | 75.301, 86.658, 89.651 (the last as the first action after a new launch) | 2,389.948 to 2,403.707; 4,724.523 with an everyday registration |
+| Break request                | 61.290, 51.427, 37.212, 62.784                                           | 4,643.394                                                       |
+| Automatic break start        | 106.979, 98.570, 108.688, 104.072                                        | 7,011.413                                                       |
+| Resume after the break ended | 68.710                                                                   | 4,652.340                                                       |
+| Resume with an early return  | 2,426.931, 2,429.035                                                     | not measured                                                    |
+
+Every registration, start, break request, automatic break start and resume after the break end meets the design's acceptance (each registration below 2,000 ms and each action below 1,000 ms).
+
+The early-return resume does not.
+In one lock section it overwrites the focus schedule to end the break now, calls `monitoring.stopBreak` for the running break activity, and overwrites again to `active` (`reBlock` and `resume` in `Shared/SessionControl.swift`).
+In both samples the two `register` lines took 23.6 to 51.9 ms, and the gap between them was 2.334 s and 2.335 s.
+The only Screen Time call in that gap is `stopBreak`; the rest is the save, the removal of the break selection copy and the deadline check.
+`[UNCERTAIN, strong]` So stopping an activity whose interval is ongoing waits for its `intervalDidEnd(for:)` callback, as the registrations did before #105, and the callback spends the Monitor's bounded retry.
+`DiagnosticMonitoring` times registrations only, so no line times the stop itself.
+The resume after a break that had already ended made one `register` and no stop, because the Monitor had already re-blocked and stopped the break activity.
+The design left stops out of scope ([Stops](../specs/2026-11-10-registration-marker-design.md#stops)); #107 takes them up, including the stop in a session end, which no line has timed.
+
+Regression checks without the app in the foreground:
+
+- The break that started at 14:56:25 re-blocked the selected apps about 3 minutes later, observed on the phone outside the app.
+- A session end at its focus end was not checked; every session was ended by hand.
+- An everyday window end re-applying the everyday shield was not checked.
+
+The values measure main-actor occupation by the synchronous transition bodies, as in the sections above, not tap-to-visible feedback or when a shield became visible.

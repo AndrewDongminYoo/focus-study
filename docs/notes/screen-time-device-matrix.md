@@ -243,6 +243,14 @@ The focus activity registration took 2,313.355 to 2,323.773 ms and the focus shi
 Every start reached a running session and was ended before the next one.
 See the [measurement record](2026-11-05-start-latency.md#physical-device-phases-measured-on-2026-11-10) for the per-start table, the everyday registrations at launch, and the limits.
 
+## Registration marker: 2026-11-10
+
+On the same iPhone 16 Pro and iOS 27.0.1 (`24A446`), a signed Debug build from `2aba43c` (#105) launched with `--screen-time-diagnostics` measured every registration inside a lock section at 0.670 to 97.359 ms, three starts at 75.301 to 89.651 ms, four break requests at 37.212 to 62.784 ms, four automatic break starts at 98.570 to 108.688 ms, and a resume after the break end at 68.710 ms.
+Two resumes with an early return took 2,426.931 and 2,429.035 ms; the wait sits at the stop of the break activity, which #107 takes up.
+The break re-block about 3 minutes after the break start was confirmed outside the app.
+A session end at its focus end and an everyday window end re-applying the everyday shield remain unverified with this build.
+See the [measurement record](2026-11-05-start-latency.md#registration-marker-measured-on-2026-11-10) for the tables and the limits.
+
 ## 쉬는 시간 전환 지연 제보: 2026-11-08
 
 iPhone 16 Pro, iOS 27.0.1 (`24A446`)에 `e3e9116`에서 만든 서명된 Debug 빌드를 설치해 직접 사용한 결과다.
