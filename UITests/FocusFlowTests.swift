@@ -1,7 +1,15 @@
 import XCTest
 final class FocusFlowTests: XCTestCase {
-    func app(_ mode: String = "approved", selected: Bool = true, extra: [String] = []) -> XCUIApplication {
-        let app = XCUIApplication(); app.launchArguments = ["--ui-testing", mode] + (selected ? ["--selected"] : []) + extra; app.launch(); return app
+    func app(_ mode: String = "approved", selected: Bool = true, extra: [String] = [], environment: [String: String] = [:]) -> XCUIApplication {
+        let app = XCUIApplication(); app.launchArguments = ["--ui-testing", mode] + (selected ? ["--selected"] : []) + extra
+        app.launchEnvironment.merge(environment) { $1 }; app.launch(); return app
+    }
+    /// A `TZ` with a fixed offset in which launch falls between 12:00 and 12:30, computed like `FixtureEverydayLayer.noonCalendar(now:)`.
+    /// The `expiring` and `ending-soon` sessions start about one session length before now, and today's history keeps a record on its start day,
+    /// so a launch in the first minutes after local midnight would put that record on yesterday.
+    private func noonZone() -> [String: String] {
+        let seconds = Int(Date().timeIntervalSince1970) % 86_400, lateHalf = seconds % 3600 >= 1800
+        return ["TZ": TimeZone(secondsFromGMT: (12 - seconds / 3600) * 3600 - (lateHalf ? 1800 : 0))!.identifier]
     }
     /// Today's history and the usage report open from the one-line summary at the bottom of the timer screen.
     private func openToday(_ app: XCUIApplication) {
@@ -25,7 +33,7 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["집중 종료"].waitForExistence(timeout: 8))
     }
     func testTodaySummaryCountsOnlyCompletedSessions() {
-        let app = app("expiring")
+        let app = app("expiring", environment: noonZone())
         XCTAssertTrue(app.descendants(matching: .any)["completion"].waitForExistence(timeout: 15))
         app.buttons["completionDismiss"].tap()
         XCTAssertTrue(app.buttons["todaySummary"].waitForExistence(timeout: 5))
@@ -856,7 +864,9 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["end"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["countdown"].exists); XCTAssertFalse(app.descendants(matching: .any)["completion"].exists)
     }
-    private func shortBreaks(_ mode: String = "approved") -> XCUIApplication { app(mode, extra: ["--break-timing", "short"]) }
+    private func shortBreaks(_ mode: String = "approved", environment: [String: String] = [:]) -> XCUIApplication {
+        app(mode, extra: ["--break-timing", "short"], environment: environment)
+    }
     /// The break countdown or, after the break, the deadline notice: the break started.
     /// A slow CI runner can spend several seconds on one query, which outlasts the 3-second short break,
     /// so short-timing tests assert this outcome; the standard-timing tests assert the countdown itself.
@@ -962,7 +972,7 @@ final class FocusFlowTests: XCTestCase {
     func testMissedDeadlineRecordsUnfocusedSession() {
         // The start tap leaves 10 seconds of focus: a break taken at once and never resumed reaches the deadline about 29 seconds after the tap
         // (10 s of focus, a 1 s wait, a 3 s break and a 15 s slack); the notice stops counting about 10 seconds before that.
-        let app = shortBreaks("ending-soon")
+        let app = shortBreaks("ending-soon", environment: noonZone())
         let start = app.buttons["start"], breakStart = app.buttons["breakStart"]
         XCTAssertTrue(start.waitForExistence(timeout: ready)); start.tap()
         // A loaded host can drop a synthesized tap. A delivered tap first reserves the pending start and disables the button.
