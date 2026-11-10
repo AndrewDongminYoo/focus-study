@@ -95,19 +95,19 @@ When the published status changes, the existing subscription calls `refresh()`; 
 
 The screens follow the session before access, so a running session stays reachable while access is `checking`:
 
-| UI status                | Session current and not `terminal`                                       | No current session                                                                                                                          |
-| ------------------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `approved`               | timer screen, as today                                                   | timer screen or the next onboarding step, as today                                                                                          |
-| `checking`               | timer screen with its end and resume controls; no start control is shown | timer screen with the start control disabled and a short status line that access is being checked; the line's copy is left to visual review |
-| `denied`, `notRequested` | timer screen with its end and resume controls, as `checking`             | the permission step of onboarding, as today                                                                                                 |
+| UI status                | Session current and not `terminal`                                       | No current session                                                                                                                                                        |
+| ------------------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `approved`               | timer screen, as today                                                   | timer screen or the next onboarding step, as today                                                                                                                        |
+| `checking`               | timer screen with its end and resume controls; no start control is shown | timer screen with the start control enabled and a short status line that access is being checked; a tap runs the recovery below; the line's copy is left to visual review |
+| `denied`, `notRequested` | timer screen with its end and resume controls, as `checking`             | the permission step of onboarding, as today                                                                                                                               |
 
-So `FocusModel.route` and `startBlocker` treat `checking` as not ready to start, and only `denied` and `notRequested` without a current session route to the permission step.
+So `FocusModel.route` keeps the timer screen in `checking`, `startBlocker` reports `checking` as its own blocker whose action is the recovery tap, and only `denied` and `notRequested` without a current session route to the permission step.
 
 Leaving `checking` after a cold launch:
 
 - Observed on 2026-11-11, against the documentation's wording: in the app process the published value settled to approved without a new request. At the 07:42:47 launch the section right after the first one registered with access, and a start that requires `approved` passed at 07:43:53. `[UNCERTAIN]` Whether that holds on every launch and in the extension.
-- If the value stays `.notDetermined`, the person's start tap is the recovery: `requestIndividual()` runs the documented request also in `checking` (today it runs only in `notRequested`), and the start proceeds only after the published value reads approved. A request is never made without a person's tap, because it can show system UI. `[UNCERTAIN]` Whether a request after an earlier approval shows any UI.
-- A revocation that happened while the app was not running is then observed when the value settles to `.denied`, or when that request fails; until then, revocation cleanup waits, which is the accepted cost in [A real revocation](#a-real-revocation).
+- If the value stays `.notDetermined`, the person's tap on the enabled start control is the recovery: the app first runs `requestIndividual()`, which now runs the documented request also in `checking` (today only in `notRequested`), and calls the engine's `start` only after the published value reads approved; the engine's `start` still requires `approved` inside the lock. A request is never made without a person's tap, because it can show system UI. `[UNCERTAIN]` Whether a request after an earlier approval shows any UI.
+- A request that throws is not a revocation: the UI shows its error and stays in `checking`, and nothing reaches the engine. A revocation reaches the engine only as a published `.denied` read; until the value settles to `.denied`, revocation cleanup waits, which is the accepted cost in [A real revocation](#a-real-revocation).
 
 ### A real revocation
 
@@ -191,14 +191,14 @@ Simulator results and synthetic tests cannot establish any of these results.
 3. Repeat step 2 three times, at least once after the app was not running for several minutes.
 4. With the everyday range containing now and no session, leave the app in the background past an everyday edge, and record whether the everyday shield follows the schedule; on return, record whether the app had to register the everyday parts again (`register_everyday` with no `stop_everyday` before it).
 5. Launch the app cold with access on, and record the first section's lines (no `stop_everyday` before the registrations), how long the screen shows `checking`, and whether a session that ran before the launch stays reachable.
-6. Revoke access in Settings with the app not running, then launch it cold: record whether the value settles to `.denied`, or whether a start tap's request is needed to observe it.
+6. Revoke access in Settings with the app not running, then launch it cold: record whether the published value settles to `.denied`, and what a tap on the start control shows if it stays `.notDetermined`.
 7. Revoke access for the app in Settings with a session running and the app in the background, wait past one Monitor callback, then open the app. Record the end reason, whether the shields stayed while access was off, and grant access again.
 
 Acceptance:
 
 - Steps 2 and 3: the shield returns at the end of every break, and no session ends as `.authorizationRevoked`.
 - Steps 4 and 5: no everyday stop for access appears while access is on, and a running session stays reachable on every screen.
-- Step 6: the value or the start tap's request reports the revocation, and no session starts.
+- Step 6: no session starts; the session is never started on a request result alone, and the screen leaves `checking` only on a published value.
 - Step 7: the session ends as `.authorizationRevoked` at the latest when the app comes to the front, unless its timed end came first.
 
 ## Verification for the implementation
