@@ -187,6 +187,26 @@ import SwiftData
         XCTAssertEqual(samples.count, 1)
         if let duration = samples.first { XCTAssertGreaterThan(duration, 0) }
     }
+    func testEndMeasurementIsReportedOncePerEndOnlyWhenSet() {
+        let (original, history, _, _, _) = fixture()
+        var services = original.services
+        var samples: [TimeInterval] = []
+        services.didMeasureEnd = { samples.append($0) }
+        let model = FocusModel(services: services, history: history)
+        model.completeOnboarding(); model.start()
+        XCTAssertTrue(model.isActive)
+        model.end()
+        XCTAssertFalse(model.isActive)
+        XCTAssertEqual(samples.count, 1)
+        if let duration = samples.first { XCTAssertGreaterThan(duration, 0) }
+        // Without a session, the tap does nothing and reports nothing.
+        model.end()
+        XCTAssertEqual(samples.count, 1)
+        // Without the closure, an end reports nothing and still ends.
+        let (unmeasured, _, _, _, _) = fixture()
+        unmeasured.completeOnboarding(); unmeasured.start(); unmeasured.end()
+        XCTAssertFalse(unmeasured.isActive); XCTAssertNil(unmeasured.services.didMeasureEnd)
+    }
     func testStartMeasurementIncludesRefreshFailureButSkipsRejectedTap() {
         let (original, history, store, _, _) = fixture()
         var services = original.services

@@ -29,6 +29,8 @@ import Observation
     var didMeasureStart: ((TimeInterval) -> Void)?
     /// Opt-in timing of each accepted synchronous break transition call; never carries selection or usage data.
     var didMeasureBreak: ((BreakAction, TimeInterval) -> Void)?
+    /// Opt-in timing of each session end, from the tap to the return of the engine call; never carries selection or usage data.
+    var didMeasureEnd: ((TimeInterval) -> Void)?
     /// `--ui-testing ending-soon`: the focus seconds left when `start()` begins a session; the start time moves into the past.
     var fixtureFocusLeft: TimeInterval?
     /// `--break-delay`: seconds that the break feedback stays on screen before the transition runs; the main thread is not blocked.
@@ -213,7 +215,15 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
     }
     func end() {
         guard let id = current?.id else { return }
-        do { try services.engine.finish(id: id, reason: .earlyExit, now: Date()); refresh() }
+        #if DEBUG
+        let measurementStarted = services.didMeasureEnd == nil ? nil : ProcessInfo.processInfo.systemUptime
+        #endif
+        let finished = Result { try services.engine.finish(id: id, reason: .earlyExit, now: Date()) }
+        #if DEBUG
+        // From the tap to the return of the engine call; the refresh after it is not part of the end.
+        if let measurementStarted { services.didMeasureEnd?(ProcessInfo.processInfo.systemUptime - measurementStarted) }
+        #endif
+        do { try finished.get(); refresh() }
         catch {
             services.activityDidChange()
             current = nil; errorMessage = "종료 상태를 저장하지 못했어요. 다시 확인해 주세요."
