@@ -361,6 +361,9 @@ The same holds in M1 for an exit inside the expiry callback.
 
 - The lock, its 0.25-second timeout and the atomic JSON replace do not change.
 - A Monitor callback is often the only trigger of its timed change, so `FocusMonitor` retries it up to 4 times, 250 ms apart and with a fresh time, only when the lock times out. The pause is outside the lock, and the callback returns after about 2.25 seconds at most.
+  - Reconciliation (2026-11-10, #101): before these retries, the callback makes one lock attempt that does not wait (attempt 0).
+    After every lock timeout, a callback that matches the lock holder's fresh registration marker returns at once instead of retrying, as the [registration marker](2026-11-10-registration-marker-design.md#when-the-monitor-reads-the-marker) design says.
+    Every other callback keeps this bounded retry.
 - The waiting countdown runs in the app, outside the lock. Only the transitions take the lock.
 - A failed control-state read (corrupt JSON, unsupported schema, file protection) still clears this app's store and stops every `focus.<UUID>` registration. M2 adds the break activities to that cleanup, and it deletes every `break-selection.*` file. It never applies the shield to recover.
 - **Start** is unchanged otherwise. Like every lock section, it runs the cleanup of [Break artifacts](#break-artifacts) before it saves the new session. No stored session can be on a break then, so this removes every copy and every break activity that a downgrade or a crash left behind.

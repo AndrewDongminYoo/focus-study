@@ -48,6 +48,8 @@ App과 Monitor는 하나의 `ManagedSettingsStore(named: ManagedSettingsStore.Na
 개인 인증은 사용자가 철회할 수 있으며 앱 삭제 방지를 제공하지 않는다. [WWDC22 Screen Time API](https://developer.apple.com/videos/play/wwdc2022/110336/)
 
 App Group에는 `ControlEnvelope.schemaVersion`과 선택적인 `session`을 저장한다.
+조정(2026-11-10, #101): [등록 표시 설계](2026-11-10-registration-marker-design.md#marker-file)에 따라 App Group에는 잠금 구간 안의 `startMonitoring` 호출 동안 `SessionControl/registration-marker.json`도 있다.
+이 파일에는 활동 이름과 시각만 있고, 토큰·앱이나 웹사이트 이름·집중 모드 이름·사용량은 없으며, 기기 밖으로 나가지 않는다.
 세션에는 UUID, 시작/만료 시각, 단계(`preparing/active/ending/terminal`), 종료 사유·관측 시각을 둔다.
 `activityName`은 UUID에서 계산하며 JSON 필드로 저장하지 않는다.
 마지막 terminal 항목은 본체 기록 반영 확인 전까지 유지한다.

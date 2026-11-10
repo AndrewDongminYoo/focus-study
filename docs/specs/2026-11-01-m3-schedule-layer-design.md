@@ -293,6 +293,8 @@ M3 adds a route for `everyday.` names, before that check:
 
 `FocusMonitor` passes every name to `handleCallbackRetryingLock`, so a lock timeout is retried up to 4 times, as in M2.
 
+- Reconciliation (2026-11-10, #101): as for M2, attempt 0 comes before the retries, and a callback that matches the lock holder's fresh registration marker returns at once, as the [registration marker](2026-11-10-registration-marker-design.md#when-the-monitor-reads-the-marker) design says.
+
 ### Transitions of the everyday layer
 
 #### Save (turn on, edit, turn off)
@@ -317,6 +319,8 @@ Why this order is safe:
 - Inside the range, an accepted edit only makes the layer stricter. So between steps 3 and 5, the store holds the earlier, looser state, and the restrictions of the earlier settings are never lifted.
 - Outside the range, the earlier settings block nothing now.
 - When the new settings block now, the new range interval is ongoing. So step 2 sends `intervalDidStart(for:)` for the new range activity, and that callback repairs every later gap as soon as the app releases the lock. The callback is lost only if the Monitor cannot take the lock within its retries.
+  - Reconciliation (2026-11-10, #101): that `intervalDidStart(for:)` matches the app's registration marker, so it returns at once while the app holds the lock, as the [registration marker](2026-11-10-registration-marker-design.md#one-shot-callbacks-and-their-recovery) design says.
+    The convergence of the save section sets the store; after a process exit between steps 3 and 5, the next section repairs it.
 
 #### Range start and end, window start and end
 
@@ -457,6 +461,8 @@ The focus restrictions follow the M2 [break artifacts](2026-11-01-m2-break-pass-
 | Access revoked                                                                                           | stored        | none after a section that knows it       | empty                                  | When access is approved again, the next app section registers the activities and applies the layer.                                                             |
 
 - Reconciliation (2026-11-08, #87): the off-for-today section adds its own rows, and a save while the layer is off for today changes no store in any save row, as the [everyday off-for-today](2026-11-08-everyday-off-today.md#gaps-between-steps) spec says.
+- Reconciliation (2026-11-10, #101): in the row "Save, exit after step 3 or 4", the `intervalDidStart(for:)` that step 2 sent returns at once while the app holds the lock, because it matches the app's registration marker, as the [registration marker](2026-11-10-registration-marker-design.md#one-shot-callbacks-and-their-recovery) design says.
+  So the next section repairs the store; the store stays looser until then and never looser than the earlier settings.
 
 ### Process lock and recovery contract
 
