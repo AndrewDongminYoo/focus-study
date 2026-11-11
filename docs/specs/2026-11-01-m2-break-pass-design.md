@@ -301,6 +301,7 @@ The first match decides.
 
 1. `ending`: finish the cleanup (unchanged).
 2. Access not approved: end as `.authorizationRevoked` (unchanged, also during a break).
+   - Reconciliation (2026-11-11, #115): only access `denied` ends the session here; `unknown` skips this step and the order continues at step 3, as the [access-state design](2026-11-11-access-state-design.md#what-each-state-does) says.
 3. `preparing`: end as `.recoveryInterrupted` (unchanged).
 4. Observed clock change: end as `.clockChanged` (unchanged).
 5. Focus activity not registered: end as `.recoveryInterrupted` (unchanged).

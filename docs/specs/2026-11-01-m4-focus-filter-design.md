@@ -278,6 +278,8 @@ The handler runs one lock section (`endFromFocusFilter`), then step 5 of the sta
 4. If the stored session is still not `terminal` and its origin is `focusFilter`: end it with M2 transition 6 and `.earlyExit`. The save of `ending` writes the cleared marker. The M3 everyday step of transition 6 runs as usual.
 5. If the stored envelope still has a marker after steps 3 and 4: save the envelope without it.
 
+Reconciliation (2026-11-11, issue #115), step 3: the access value of the call is the state from the main-queue reader; after a caught error, `.authorizationRevoked` needs `denied`, and `unknown` takes the timed end, else `.earlyExit`, as the `endFromFocusFilter` row of the [access-state design](2026-11-11-access-state-design.md#what-each-state-does) says.
+
 Reconciliation (2026-11-02, issue #53): a thrown error in step 1 or step 3 no longer stops the section before step 4 when the session in memory is a filter-started session that is not `terminal`.
 
 - Step 2 clears the marker in memory also after a step 1 error, and step 3 does not run after a step 1 error.
