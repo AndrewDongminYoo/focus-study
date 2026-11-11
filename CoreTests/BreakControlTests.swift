@@ -94,7 +94,7 @@ final class BreakControlTests: XCTestCase {
     /// A 1500-second session that started at `t0` with the shield on.
     private func started(_ world: World) throws -> (SessionControl, UUID) {
         let engine = engine(world)
-        let session = try engine.start(now: t0, authorized: { true }, apply: { world.state.shieldOn = true }, matches: { world.state.shieldOn })
+        let session = try engine.start(now: t0, authorized: { .approved }, apply: { world.state.shieldOn = true }, matches: { world.state.shieldOn })
         return (engine, session.id)
     }
     /// Requests a break at `request` and starts it when the wait is over.
@@ -103,7 +103,7 @@ final class BreakControlTests: XCTestCase {
         try engine.startBreak(id: id, now: waiting.waitEndsAt!, saveSelection: { try world.saveCopy(id) })
     }
     private func reBlockAtBreakEnd(_ engine: SessionControl, _ world: World) throws {
-        try engine.reconcile(now: stored(world).breakEndsAt!, authorized: true)
+        try engine.reconcile(now: stored(world).breakEndsAt!, authorized: .approved)
     }
     /// Break 1 requested at +300 (break +315 to +495), re-blocked at +495: the stored phase is `breakOver` with the deadline +2295.
     private func afterReBlock(_ world: World) throws -> (SessionControl, UUID) {
@@ -168,7 +168,7 @@ final class BreakControlTests: XCTestCase {
         XCTAssertEqual(world.state, resumed)
         try takeBreak(engine, world, id, at: 400)
         let second = world.state
-        try engine.handleCallback(activityName: breakName(id, 1), kind: .willEndWarning, now: at(495), authorized: true)
+        try engine.handleCallback(activityName: breakName(id, 1), kind: .willEndWarning, now: at(495), authorized: .approved)
         XCTAssertEqual(world.state, second)
         XCTAssertEqual(stored(world).phase, .onBreak)
         XCTAssertEqual(stored(world).breaksTaken, 2)
@@ -247,13 +247,13 @@ final class BreakControlTests: XCTestCase {
         for snapshot in world.snapshots {
             let interrupted = World(snapshot)
             let nextEnd = try XCTUnwrap(interrupted.state.focus[id]?.end)
-            try self.engine(interrupted).handleCallback(activityName: focusName(id), kind: .didEnd, now: nextEnd, authorized: true)
+            try self.engine(interrupted).handleCallback(activityName: focusName(id), kind: .didEnd, now: nextEnd, authorized: .approved)
             // An overwrite before its save can deliver early; that callback restores the stored phase's end.
             if stored(interrupted).phase != .terminal {
                 let repairedEnd = try XCTUnwrap(interrupted.state.focus[id]?.end)
                 XCTAssertGreaterThan(repairedEnd, nextEnd)
                 XCTAssertLessThanOrEqual(repairedEnd, at(2295))
-                try self.engine(interrupted).handleCallback(activityName: focusName(id), kind: .didEnd, now: repairedEnd, authorized: true)
+                try self.engine(interrupted).handleCallback(activityName: focusName(id), kind: .didEnd, now: repairedEnd, authorized: .approved)
             }
             XCTAssertEqual(stored(interrupted).phase, .terminal)
             XCTAssertFalse(interrupted.state.shieldOn)
@@ -346,7 +346,7 @@ final class BreakControlTests: XCTestCase {
         _ = try engine.requestBreak(id: id, now: at(100)); world.failSavePhases = [.active]
         XCTAssertThrowsError(try engine.cancelWait(id: id, now: at(105)))
         XCTAssertEqual(stored(world).phase, .waiting); XCTAssertEqual(world.state.focusLog.last?.end, at(1525))
-        try engine.reconcile(now: at(1525), authorized: true)
+        try engine.reconcile(now: at(1525), authorized: .approved)
         XCTAssertEqual(stored(world).pausedSeconds, 25); XCTAssertEqual(stored(world).reason, .expired)
     }
     func testResumeSaveFailureRestoresDeadlineEnd() throws {
@@ -354,7 +354,7 @@ final class BreakControlTests: XCTestCase {
         world.failSavePhases = [.active]
         XCTAssertThrowsError(try engine.resume(id: id, now: at(600)))
         XCTAssertEqual(stored(world).phase, .breakOver); XCTAssertEqual(world.state.focusLog.last?.end, at(2295))
-        try engine.reconcile(now: at(2295), authorized: true)
+        try engine.reconcile(now: at(2295), authorized: .approved)
         XCTAssertEqual(stored(world).reason, .deadlineMissed); XCTAssertFalse(world.state.shieldOn)
     }
     func testStaleWaitCancelSaveFailureWithPastEndEndsSafely() throws {
@@ -362,7 +362,7 @@ final class BreakControlTests: XCTestCase {
         _ = try engine.requestBreak(id: id, now: at(100))
         world.state.breaks[BreakKey(id: id, index: 1)] = BreakRegistration(start: at(100), end: at(1000), warning: 720)
         world.failSavePhases = [.active]
-        XCTAssertThrowsError(try engine.reconcile(now: at(125 + 3600), authorized: true))
+        XCTAssertThrowsError(try engine.reconcile(now: at(125 + 3600), authorized: .approved))
         XCTAssertFalse(world.state.shieldOn); XCTAssertNil(world.state.focus[id]); XCTAssertTrue(world.state.breaks.isEmpty)
         XCTAssertEqual(stored(world).phase, .terminal); XCTAssertEqual(stored(world).reason, .recoveryInterrupted)
     }
@@ -374,7 +374,7 @@ final class BreakControlTests: XCTestCase {
         XCTAssertEqual(world.state.clears, clears + 1); XCTAssertNil(world.state.focus[id])
         XCTAssertEqual(stored(world).phase, .breakOver)
         world.failAllSaves = false
-        try engine.reconcile(now: at(601), authorized: true)
+        try engine.reconcile(now: at(601), authorized: .approved)
         XCTAssertEqual(stored(world).reason, .recoveryInterrupted)
     }
 
@@ -386,9 +386,9 @@ final class BreakControlTests: XCTestCase {
         try engine.resume(id: id, now: at(600))
         let exited = try overwriteSnapshot(world, storedPhase: .breakOver, end: at(1800))
         XCTAssertEqual(exited.state.focus[id]?.end, at(1800))
-        try self.engine(exited).handleCallback(activityName: focusName(id), kind: .didEnd, now: at(1800), authorized: true)
+        try self.engine(exited).handleCallback(activityName: focusName(id), kind: .didEnd, now: at(1800), authorized: .approved)
         XCTAssertEqual(stored(exited).phase, .breakOver); XCTAssertEqual(exited.state.focus[id]?.end, at(2295))
-        try self.engine(exited).handleCallback(activityName: focusName(id), kind: .didEnd, now: at(2295), authorized: true)
+        try self.engine(exited).handleCallback(activityName: focusName(id), kind: .didEnd, now: at(2295), authorized: .approved)
         XCTAssertEqual(stored(exited).reason, .deadlineMissed); XCTAssertFalse(exited.state.shieldOn)
     }
     func testCancelWaitExitNearFocusEndRegistersWaitingEndAgain() throws {
@@ -398,9 +398,9 @@ final class BreakControlTests: XCTestCase {
         try engine.cancelWait(id: id, now: at(1496))
         let exited = try overwriteSnapshot(world, storedPhase: .waiting, end: at(1495 + 6))
         XCTAssertEqual(exited.state.focus[id]?.end, at(1501))
-        try self.engine(exited).handleCallback(activityName: focusName(id), kind: .didEnd, now: at(1501), authorized: true)
+        try self.engine(exited).handleCallback(activityName: focusName(id), kind: .didEnd, now: at(1501), authorized: .approved)
         XCTAssertEqual(stored(exited).phase, .waiting); XCTAssertEqual(exited.state.focus[id]?.end, at(1495 + 30))
-        try self.engine(exited).handleCallback(activityName: focusName(id), kind: .didEnd, now: at(1525), authorized: true)
+        try self.engine(exited).handleCallback(activityName: focusName(id), kind: .didEnd, now: at(1525), authorized: .approved)
         XCTAssertEqual(stored(exited).pausedSeconds, 25); XCTAssertEqual(stored(exited).reason, .expired)
     }
     func testRequestBreakExitEndsWithinWaitPlusGrace() throws {
@@ -409,7 +409,7 @@ final class BreakControlTests: XCTestCase {
         _ = try engine.requestBreak(id: id, now: at(1400))
         let exited = try overwriteSnapshot(world, storedPhase: .active, end: at(1525))
         XCTAssertEqual(exited.state.focus[id]?.end, at(1525))
-        try self.engine(exited).handleCallback(activityName: focusName(id), kind: .didEnd, now: at(1525), authorized: true)
+        try self.engine(exited).handleCallback(activityName: focusName(id), kind: .didEnd, now: at(1525), authorized: .approved)
         let s = stored(exited)
         XCTAssertEqual(s.reason, .expired); XCTAssertEqual(s.recordedEnd.map { $0.timeIntervalSince(s.startedAt) }, 1500)
     }
@@ -419,7 +419,7 @@ final class BreakControlTests: XCTestCase {
         try engine.resume(id: id, now: at(600))
         let exited = try overwriteSnapshot(world, storedPhase: .breakOver, end: at(1800))
         exited.failAllFocusRegistrations = true
-        try? self.engine(exited).handleCallback(activityName: focusName(id), kind: .didEnd, now: at(1800), authorized: true)
+        try? self.engine(exited).handleCallback(activityName: focusName(id), kind: .didEnd, now: at(1800), authorized: .approved)
         XCTAssertFalse(exited.state.shieldOn); XCTAssertEqual(stored(exited).reason, .recoveryInterrupted)
     }
     func testDidStartAndEarlierSessionDidEndNeverRegisterFocusActivity() throws {
@@ -428,8 +428,8 @@ final class BreakControlTests: XCTestCase {
         try engine.resume(id: id, now: at(600))
         let exited = try overwriteSnapshot(world, storedPhase: .breakOver, end: at(1800))
         let registrations = exited.focusCalls
-        try self.engine(exited).handleCallback(activityName: focusName(id), kind: .didStart, now: at(1800), authorized: true)
-        try self.engine(exited).handleCallback(activityName: focusName(UUID()), kind: .didEnd, now: at(1800), authorized: true)
+        try self.engine(exited).handleCallback(activityName: focusName(id), kind: .didStart, now: at(1800), authorized: .approved)
+        try self.engine(exited).handleCallback(activityName: focusName(UUID()), kind: .didEnd, now: at(1800), authorized: .approved)
         XCTAssertEqual(exited.focusCalls, registrations); XCTAssertEqual(exited.state.focus[id]?.end, at(1800))
     }
 
@@ -438,10 +438,28 @@ final class BreakControlTests: XCTestCase {
     func testWarningCallbackReBlocksStopsBreakActivityAndRemovesCopy() throws {
         let world = World(); let (engine, id) = try started(world)
         try takeBreak(engine, world, id, at: 100)
-        try engine.handleCallback(activityName: breakName(id, 1), kind: .willEndWarning, now: at(290), authorized: true)
+        try engine.handleCallback(activityName: breakName(id, 1), kind: .willEndWarning, now: at(290), authorized: .approved)
         XCTAssertEqual(stored(world).phase, .breakOver); XCTAssertTrue(world.state.shieldOn)
         XCTAssertTrue(world.state.breaks.isEmpty); XCTAssertTrue(world.state.copies.isEmpty)
         XCTAssertEqual(world.state.focus[id]?.end, at(2295))
+    }
+    /// The 2026-11-11 access-state design: a cold extension reads `unknown`, and the warning still re-blocks instead of ending as revoked.
+    func testWarningCallbackWithUnknownAccessReBlocksAndDeniedEndsAsRevoked() throws {
+        let world = World(); let (engine, id) = try started(world)
+        try takeBreak(engine, world, id, at: 100)
+        try engine.handleCallback(activityName: breakName(id, 1), kind: .willEndWarning, now: at(290), authorized: .unknown)
+        XCTAssertEqual(stored(world).phase, .breakOver); XCTAssertTrue(world.state.shieldOn)
+        XCTAssertTrue(world.state.breaks.isEmpty); XCTAssertTrue(world.state.copies.isEmpty)
+        let revoked = World(); let (revokedEngine, revokedID) = try started(revoked)
+        try takeBreak(revokedEngine, revoked, revokedID, at: 100)
+        try revokedEngine.handleCallback(activityName: breakName(revokedID, 1), kind: .willEndWarning, now: at(290), authorized: .denied)
+        XCTAssertEqual(stored(revoked).reason, .authorizationRevoked)
+    }
+    func testTimedFocusEndWithUnknownAccessEndsByItsTimedReason() throws {
+        let world = World(); let (engine, id) = try started(world)
+        try engine.handleCallback(activityName: focusName(id), kind: .didEnd, now: at(1500), authorized: .unknown)
+        XCTAssertEqual(stored(world).phase, .terminal); XCTAssertEqual(stored(world).reason, .expired)
+        XCTAssertFalse(world.state.shieldOn)
     }
     /// Returns the given times in order, so a test sees which attempt read which time.
     private func clock(_ times: [Date]) -> (now: () -> Date, calls: () -> Int) {
@@ -454,7 +472,7 @@ final class BreakControlTests: XCTestCase {
         // Attempt 0 and the first retry time out; attempt 0 has no pause after it.
         world.lockFailures = [ControlIssue.lockTimeout, ControlIssue.lockTimeout]
         let clock = clock([at(290), at(291)]); var pauses: [TimeInterval] = []
-        try engine.handleCallbackRetryingLock(activityName: breakName(id, 1), kind: .willEndWarning, now: clock.now, authorized: { true }, sleep: { pauses.append($0) })
+        try engine.handleCallbackRetryingLock(activityName: breakName(id, 1), kind: .willEndWarning, now: clock.now, authorized: { .approved }, sleep: { pauses.append($0) })
         XCTAssertEqual(pauses, [0.25]); XCTAssertEqual(clock.calls(), 3)
         XCTAssertEqual(stored(world).phase, .breakOver); XCTAssertTrue(world.state.shieldOn)
         XCTAssertTrue(world.state.breaks.isEmpty); XCTAssertTrue(world.state.copies.isEmpty)
@@ -464,7 +482,7 @@ final class BreakControlTests: XCTestCase {
         world.lockFailures = [ControlIssue.lockTimeout, ControlIssue.lockTimeout]
         // The times of attempt 0 and the first retry are before the focus end, so only the fresh time of the second retry can end the session.
         let clock = clock([at(1499), at(1499), at(1500)]); var pauses: [TimeInterval] = []
-        try engine.handleCallbackRetryingLock(activityName: focusName(id), kind: .didEnd, now: clock.now, authorized: { true }, sleep: { pauses.append($0) })
+        try engine.handleCallbackRetryingLock(activityName: focusName(id), kind: .didEnd, now: clock.now, authorized: { .approved }, sleep: { pauses.append($0) })
         XCTAssertEqual(pauses, [0.25]); XCTAssertEqual(stored(world).reason, .expired)
         XCTAssertFalse(world.state.shieldOn); XCTAssertNil(world.state.focus[id])
     }
@@ -474,7 +492,7 @@ final class BreakControlTests: XCTestCase {
         // Attempt 0 and the 5 attempts of the bounded retry.
         world.lockFailures = Array(repeating: ControlIssue.lockTimeout, count: 6)
         let before = world.state; var pauses: [TimeInterval] = []
-        XCTAssertThrowsError(try engine.handleCallbackRetryingLock(activityName: breakName(id, 1), kind: .willEndWarning, now: { self.at(290) }, authorized: { true }, sleep: { pauses.append($0) })) {
+        XCTAssertThrowsError(try engine.handleCallbackRetryingLock(activityName: breakName(id, 1), kind: .willEndWarning, now: { self.at(290) }, authorized: { .approved }, sleep: { pauses.append($0) })) {
             XCTAssertEqual($0 as? ControlIssue, .lockTimeout)
         }
         XCTAssertEqual(pauses.count, 4); XCTAssertTrue(world.lockFailures.isEmpty); XCTAssertEqual(world.state, before)
@@ -484,7 +502,7 @@ final class BreakControlTests: XCTestCase {
         try takeBreak(engine, world, id, at: 100)
         world.lockFailures = [ControlIssue.io, ControlIssue.lockTimeout]
         let before = world.state; var pauses: [TimeInterval] = []
-        XCTAssertThrowsError(try engine.handleCallbackRetryingLock(activityName: breakName(id, 1), kind: .willEndWarning, now: { self.at(290) }, authorized: { true }, sleep: { pauses.append($0) })) {
+        XCTAssertThrowsError(try engine.handleCallbackRetryingLock(activityName: breakName(id, 1), kind: .willEndWarning, now: { self.at(290) }, authorized: { .approved }, sleep: { pauses.append($0) })) {
             XCTAssertEqual($0 as? ControlIssue, .io)
         }
         XCTAssertTrue(pauses.isEmpty); XCTAssertEqual(world.lockFailures.count, 1); XCTAssertEqual(world.state, before)
@@ -495,7 +513,7 @@ final class BreakControlTests: XCTestCase {
         try engine.resume(id: id, now: at(300))
         try takeBreak(engine, world, id, at: 400)
         let clears = world.state.clears, restores = world.restoreCalls
-        try engine.handleCallback(activityName: breakName(id, 1), kind: .willEndWarning, now: at(450), authorized: true)
+        try engine.handleCallback(activityName: breakName(id, 1), kind: .willEndWarning, now: at(450), authorized: .approved)
         XCTAssertEqual(stored(world).phase, .onBreak); XCTAssertEqual(stored(world).breaksTaken, 2)
         XCTAssertEqual(world.state.clears, clears); XCTAssertEqual(world.restoreCalls, restores); XCTAssertFalse(world.state.shieldOn)
         XCTAssertTrue(world.isBreakRegistered(id: id, index: 2)); XCTAssertTrue(world.state.copies.contains(id))
@@ -506,7 +524,7 @@ final class BreakControlTests: XCTestCase {
         s.pausedAt = at(2000); s.breakEndsAt = at(2180); s.deadlineCredit = 0 // deadline +2100
         world.state.envelope.session = s; world.state.focus[id] = Registration(start: t0, end: at(2100))
         world.state.breaks[BreakKey(id: id, index: 1)] = BreakRegistration(start: at(2000), end: at(2900), warning: 720); world.state.copies = [id]
-        try engine(world).handleCallback(activityName: breakName(id, 1), kind: .willEndWarning, now: at(2105), authorized: true)
+        try engine(world).handleCallback(activityName: breakName(id, 1), kind: .willEndWarning, now: at(2105), authorized: .approved)
         XCTAssertEqual(stored(world).reason, .deadlineMissed)
         XCTAssertFalse(world.state.savedPhases.contains(.breakOver)); XCTAssertEqual(world.restoreCalls, 0)
         XCTAssertFalse(world.state.shieldOn); XCTAssertGreaterThan(world.state.clears, 0)
@@ -515,20 +533,20 @@ final class BreakControlTests: XCTestCase {
     func testDidStartCallbackOfBreakNeverReBlocks() throws {
         let world = World(); let (engine, id) = try started(world)
         try takeBreak(engine, world, id, at: 100)
-        try engine.handleCallback(activityName: breakName(id, 1), kind: .didStart, now: at(116), authorized: true)
+        try engine.handleCallback(activityName: breakName(id, 1), kind: .didStart, now: at(116), authorized: .approved)
         XCTAssertEqual(stored(world).phase, .onBreak); XCTAssertFalse(world.state.shieldOn); XCTAssertEqual(world.restoreCalls, 0)
     }
     func testReBlockWithoutCopyEndsAsRecoveryInterrupted() throws {
         let world = World(); let (engine, id) = try started(world)
         try takeBreak(engine, world, id, at: 100)
         world.state.copies.removeAll()
-        try engine.reconcile(now: at(295), authorized: true)
+        try engine.reconcile(now: at(295), authorized: .approved)
         XCTAssertEqual(stored(world).reason, .recoveryInterrupted); XCTAssertFalse(world.state.shieldOn)
     }
     func testReBlockWithMismatchedStoreEndsAsRecoveryInterrupted() throws {
         let world = World(); let (engine, id) = try started(world)
         try takeBreak(engine, world, id, at: 100); world.shieldMismatch = true
-        try engine.reconcile(now: at(295), authorized: true)
+        try engine.reconcile(now: at(295), authorized: .approved)
         XCTAssertEqual(stored(world).reason, .recoveryInterrupted); XCTAssertFalse(world.state.shieldOn)
     }
 
@@ -537,7 +555,7 @@ final class BreakControlTests: XCTestCase {
     func testStaleWaitIsCancelledAsOfWaitEndPlusGrace() throws {
         let world = World(); let (engine, id) = try started(world)
         _ = try engine.requestBreak(id: id, now: at(100))
-        try engine.reconcile(now: at(125 + 3600), authorized: true)
+        try engine.reconcile(now: at(125 + 3600), authorized: .approved)
         let s = stored(world)
         XCTAssertEqual(s.pausedSeconds, 25); XCTAssertEqual(s.deadlineCredit, 25); XCTAssertEqual(s.breaksTaken ?? 0, 0)
     }
@@ -547,7 +565,7 @@ final class BreakControlTests: XCTestCase {
         try engine.resume(id: id, now: at(295 + 590))
         XCTAssertEqual(stored(world).focusEnd, at(2285)); XCTAssertEqual(stored(world).deadline(timing: .standard), at(2295))
         _ = try engine.requestBreak(id: id, now: at(2280))
-        try engine.reconcile(now: at(2300), authorized: true)
+        try engine.reconcile(now: at(2300), authorized: .approved)
         XCTAssertEqual(stored(world).phase, .waiting)
         try engine.startBreak(id: id, now: at(2310), saveSelection: { try world.saveCopy(id) })
         XCTAssertEqual(stored(world).phase, .onBreak); XCTAssertEqual(stored(world).deadline(timing: .standard), at(2295 + 30 + 180))
@@ -562,8 +580,8 @@ final class BreakControlTests: XCTestCase {
         let world = World(); let (engine, id) = try started(world)
         try takeBreak(engine, world, id, at: 100); try reBlockAtBreakEnd(engine, world)
         XCTAssertEqual(world.state.focus[id]?.end, at(2295))
-        try engine.reconcile(now: at(2294), authorized: true); XCTAssertEqual(stored(world).phase, .breakOver)
-        try engine.handleCallback(activityName: focusName(id), kind: .didEnd, now: at(2295), authorized: true)
+        try engine.reconcile(now: at(2294), authorized: .approved); XCTAssertEqual(stored(world).phase, .breakOver)
+        try engine.handleCallback(activityName: focusName(id), kind: .didEnd, now: at(2295), authorized: .approved)
         XCTAssertEqual(stored(world).reason, .deadlineMissed); XCTAssertFalse(world.state.shieldOn); XCTAssertNil(world.state.focus[id])
     }
     func testResumeAfterDeadlineEndsAsDeadlineMissed() throws {
@@ -575,8 +593,8 @@ final class BreakControlTests: XCTestCase {
         let world = World(); let (engine, id) = try afterReBlock(world)
         try engine.resume(id: id, now: at(1195))
         XCTAssertEqual(stored(world).focusEnd, at(2395)); XCTAssertEqual(world.state.focus[id]?.end, at(2295))
-        try engine.reconcile(now: at(2294), authorized: true); XCTAssertEqual(stored(world).phase, .active)
-        try engine.reconcile(now: at(2295), authorized: true)
+        try engine.reconcile(now: at(2294), authorized: .approved); XCTAssertEqual(stored(world).phase, .active)
+        try engine.reconcile(now: at(2295), authorized: .approved)
         XCTAssertEqual(stored(world).reason, .deadlineMissed); XCTAssertFalse(world.state.shieldOn)
     }
     /// Break 1 at +100 (re-block +295, resume +795), break 2 at +800 (re-block +1010, resume +1510): deadline +2505, focus end +2905.
@@ -590,18 +608,18 @@ final class BreakControlTests: XCTestCase {
     }
     func testTwoGapsThatTogetherExceedSlackEndAtDeadline() throws {
         let world = World(); let (engine, _) = try twoGaps(world)
-        try engine.reconcile(now: at(2504), authorized: true); XCTAssertEqual(stored(world).phase, .active)
-        try engine.reconcile(now: at(2505), authorized: true)
+        try engine.reconcile(now: at(2504), authorized: .approved); XCTAssertEqual(stored(world).phase, .active)
+        try engine.reconcile(now: at(2505), authorized: .approved)
         XCTAssertEqual(stored(world).reason, .deadlineMissed); XCTAssertFalse(world.state.shieldOn)
     }
     func testLateReconcileAfterBothTimesUsesTheEarlierOne() throws {
         let missed = World(); let (missedEngine, _) = try twoGaps(missed)
-        try missedEngine.reconcile(now: at(9000), authorized: true)
+        try missedEngine.reconcile(now: at(9000), authorized: .approved)
         XCTAssertEqual(stored(missed).reason, .deadlineMissed)
         let completed = World(); let (engine, id) = try started(completed)
         try takeBreak(engine, completed, id, at: 100); try reBlockAtBreakEnd(engine, completed); try engine.resume(id: id, now: at(296))
         XCTAssertLessThan(stored(completed).focusEnd, stored(completed).deadline(timing: .standard))
-        try engine.reconcile(now: at(9000), authorized: true)
+        try engine.reconcile(now: at(9000), authorized: .approved)
         XCTAssertEqual(stored(completed).reason, .expired)
     }
     /// A break requested with 10 minutes of focus left; the resume at +1100 gives the focus end +1700.
@@ -616,8 +634,8 @@ final class BreakControlTests: XCTestCase {
     }
     func testReconcileAtNewFocusEndExpiresAndNotBefore() throws {
         let world = World(); let (engine, _) = try resumedNearEnd(world)
-        try engine.reconcile(now: at(1699), authorized: true); XCTAssertEqual(stored(world).phase, .active)
-        try engine.reconcile(now: at(1700), authorized: true); XCTAssertEqual(stored(world).reason, .expired)
+        try engine.reconcile(now: at(1699), authorized: .approved); XCTAssertEqual(stored(world).phase, .active)
+        try engine.reconcile(now: at(1700), authorized: .approved); XCTAssertEqual(stored(world).reason, .expired)
     }
     func testBreakRequestOnVersion1SessionSavesVersion2() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -666,9 +684,9 @@ final class BreakControlTests: XCTestCase {
                 for owner in [id, other] { for index in 1...3 { world.state.breaks[BreakKey(id: owner, index: index)] = BreakRegistration(start: t0, end: at(900), warning: 720) } }
                 let engine = engine(world)
                 switch section {
-                case "reconcile": _ = try? engine.reconcile(now: at(200), authorized: true)
-                case "start": _ = try? engine.start(now: at(200), authorized: { true }, apply: { world.state.shieldOn = true }, matches: { true })
-                default: try? engine.handleCallback(activityName: focusName(UUID()), kind: .didEnd, now: at(200), authorized: true)
+                case "reconcile": _ = try? engine.reconcile(now: at(200), authorized: .approved)
+                case "start": _ = try? engine.start(now: at(200), authorized: { .approved }, apply: { world.state.shieldOn = true }, matches: { true })
+                default: try? engine.handleCallback(activityName: focusName(UUID()), kind: .didEnd, now: at(200), authorized: .approved)
                 }
                 let context = "\(phase.map(\.rawValue) ?? "none") \(section)"
                 assertArtifactTable(world, context)
@@ -699,11 +717,11 @@ final class BreakControlTests: XCTestCase {
         let scenarios = [
             Scenario(name: "request", setup: { try self.started($0) }, run: { engine, _, id in _ = try engine.requestBreak(id: id, now: self.at(1400)) }, now: at(1400), overwrite: true, boundAfterActiveEnd: 15 + 10),
             Scenario(name: "cancel by the person", setup: requested(1495), run: { engine, _, id in try engine.cancelWait(id: id, now: self.at(1496)) }, now: at(1496), overwrite: true),
-            Scenario(name: "stale-wait cancel", setup: requested(1495), run: { engine, _, _ in try engine.reconcile(now: self.at(1520 + 3600), authorized: true) }, now: at(1520 + 3600), overwrite: true),
+            Scenario(name: "stale-wait cancel", setup: requested(1495), run: { engine, _, _ in try engine.reconcile(now: self.at(1520 + 3600), authorized: .approved) }, now: at(1520 + 3600), overwrite: true),
             Scenario(name: "break start", setup: requested(100), run: startBreak, now: at(115), later: at(125 + 3600)),
             Scenario(name: "break start rollback", setup: { world in let result = try requested(100)(world); world.failSavePhases = [.onBreak]; return result }, run: startBreak, now: at(115), later: at(125 + 3600)),
             Scenario(name: "break start rollback with a failed cancel", setup: { world in let result = try requested(100)(world); world.failSavePhases = [.onBreak, .active]; return result }, run: startBreak, now: at(115), later: at(125 + 3600)),
-            Scenario(name: "re-block", setup: onBreak, run: { engine, _, id in try engine.handleCallback(activityName: self.breakName(id, 1), kind: .willEndWarning, now: self.at(295), authorized: true) }, now: at(295)),
+            Scenario(name: "re-block", setup: onBreak, run: { engine, _, id in try engine.handleCallback(activityName: self.breakName(id, 1), kind: .willEndWarning, now: self.at(295), authorized: .approved) }, now: at(295)),
             Scenario(name: "resume", setup: { try self.afterReBlock($0) }, run: { engine, _, id in try engine.resume(id: id, now: self.at(600)) }, now: at(600), overwrite: true),
             Scenario(name: "end during a break", setup: onBreak, run: { engine, _, id in try engine.finish(id: id, reason: .earlyExit, now: self.at(200)) }, now: at(200)),
             Scenario(name: "cleanup after an interrupted break start", setup: { world in
@@ -711,7 +729,7 @@ final class BreakControlTests: XCTestCase {
                 world.state.copies = [id]; world.state.breaks[BreakKey(id: id, index: 1)] = BreakRegistration(start: self.at(115), end: self.at(1015), warning: 720)
                 world.state.focus[id] = Registration(start: self.t0, end: self.at(2295))
                 return (engine, id)
-            }, run: { engine, _, _ in try engine.reconcile(now: self.at(116), authorized: true) }, now: at(116)),
+            }, run: { engine, _, _ in try engine.reconcile(now: self.at(116), authorized: .approved) }, now: at(116)),
         ]
         for scenario in scenarios {
             // Exit pass: a new process starts from each recorded state.
@@ -724,8 +742,8 @@ final class BreakControlTests: XCTestCase {
                     let context = "\(scenario.name) exit \(index) at +\(time.timeIntervalSince(t0))"
                     if scenario.overwrite {
                         let callback = max(snapshot.focus[id]?.end ?? time, time)
-                        try? restarted.handleCallback(activityName: focusName(id), kind: .didEnd, now: callback, authorized: true)
-                    } else { _ = try? restarted.reconcile(now: time, authorized: true) }
+                        try? restarted.handleCallback(activityName: focusName(id), kind: .didEnd, now: callback, authorized: .approved)
+                    } else { _ = try? restarted.reconcile(now: time, authorized: .approved) }
                     assertArtifactTable(exited, context)
                     if let bound = scenario.boundAfterActiveEnd {
                         let s = stored(exited)
@@ -742,7 +760,7 @@ final class BreakControlTests: XCTestCase {
                 let thrown = World(); let (engine, id) = try scenario.setup(thrown)
                 thrown.throwAtEffect = thrown.effects + offset
                 try? scenario.run(engine, thrown, id)
-                _ = try? engine.reconcile(now: scenario.now, authorized: true)
+                _ = try? engine.reconcile(now: scenario.now, authorized: .approved)
                 assertArtifactTable(thrown, "\(scenario.name) throw \(offset)")
             }
         }

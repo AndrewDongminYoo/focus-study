@@ -139,7 +139,7 @@ import Observation
     /// Reads the status again and keeps the draft. The screen calls it after the app's lock sections and when a boundary passes.
     func refreshStatus() {
         let now = clock()
-        do { status = try services.engine.everydayStatus(now: now, authorized: focus.access == .approved) }
+        do { status = try services.engine.everydayStatus(now: now, authorized: services.authorization.accessState()) }
         catch {
             var kept = status ?? EverydayStatus(schedule: nil, blocksNow: false, nextChange: nil, issue: nil)
             kept.issue = .unchecked; status = kept
@@ -207,7 +207,7 @@ import Observation
         do {
             try SelectionFeedback.validateUnion(selection, services.selection.selection)
             // The section passes the schedule to write, with the `offDay` that it sets; the draft's own `offDay` never reaches the file.
-            try services.engine.saveEveryday(schedule, now: clock(), authorized: { self.services.authorization.hasAccessNow() },
+            try services.engine.saveEveryday(schedule, now: clock(), authorized: { self.services.authorization.accessState() },
                                              containsStoredSelection: { try self.services.everydayContains(selection) },
                                              write: { try self.services.writeEveryday($0, selection) })
         } catch let reason as EverydayLockReason {
@@ -259,7 +259,7 @@ import Observation
         // The wait ends before the section, so a second tick cannot run it again.
         cancelOffWait()
         do {
-            try services.engine.turnEverydayOffForToday(revision: wait.revision, now: now, authorized: { self.services.authorization.hasAccessNow() },
+            try services.engine.turnEverydayOffForToday(revision: wait.revision, now: now, authorized: { self.services.authorization.accessState() },
                                                          write: { try self.services.writeEverydayOffDay($0) })
         } catch {
             refusalMessage = Self.offMessage(for: error)

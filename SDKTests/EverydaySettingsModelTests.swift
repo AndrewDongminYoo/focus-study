@@ -35,9 +35,23 @@ import ManagedSettings
     /// The stored layer 08:00-18:00 with lunch, on, with one app, converged at 10:00 as a launch would do it.
     private func storedLayer(_ layer: ModelTestEverydayLayer, _ settings: EverydaySettingsModel) {
         layer.write(EverydaySchedule(revision: UUID(), enabled: true, rangeStart: 480, rangeEnd: 1080, windows: [EverydaySchedule.template(.lunch)!]), apps(0..<1))
-        _ = try? settings.focus.services.engine.reconcile(now: tenAM, authorized: true)
+        _ = try? settings.focus.services.engine.reconcile(now: tenAM, authorized: .approved)
     }
 
+    /// `checking` reaches the engine as `unknown`: the status reads as approved, and the layer keeps its activities and its store.
+    func testCheckingKeepsTheLayerAndShowsNoAccessIssue() {
+        let (settings, layer, monitoring, _) = fixture()
+        storedLayer(layer, settings)
+        let registered = monitoring.registeredEveryday.count
+        (settings.focus.services.authorization as? ModelTestAuthorization)?.status = .checking
+        settings.focus.refresh(); settings.refreshStatus()
+        XCTAssertEqual(monitoring.registeredEveryday.count, registered); XCTAssertGreaterThan(registered, 0)
+        XCTAssertEqual(settings.status?.blocksNow, true); XCTAssertNil(settings.status?.issue)
+        XCTAssertFalse(settings.offersOffForToday, "turning the layer off still needs approved access")
+        (settings.focus.services.authorization as? ModelTestAuthorization)?.status = .denied
+        settings.focus.refresh()
+        XCTAssertEqual(monitoring.registeredEveryday.count, 0)
+    }
     func testNewLayerStartsFromTheStandardRangeAndIsOff() {
         let (settings, _, _, _) = fixture()
         settings.refresh()
@@ -268,7 +282,7 @@ import ManagedSettings
         let evening = tenAM.addingTimeInterval(9 * 3600)
         settings.clock = { evening }
         // The range-end callback of the Monitor clears the store.
-        _ = try? settings.focus.services.engine.reconcile(now: evening, authorized: true)
+        _ = try? settings.focus.services.engine.reconcile(now: evening, authorized: .approved)
         settings.refresh()
         XCTAssertEqual(EverydaySettingsModel.statusLine(settings.status, calendar: calendar), "켜져 있어요 · 08:00부터 제한해요")
     }
@@ -284,7 +298,7 @@ import ManagedSettings
         // Before the window-start callback of the Monitor, the store still holds the shield.
         settings.refreshStatus()
         XCTAssertEqual(settings.status?.issue, .notCleared)
-        _ = try? settings.focus.services.engine.reconcile(now: read, authorized: true)
+        _ = try? settings.focus.services.engine.reconcile(now: read, authorized: .approved)
         settings.refreshStatus()
         XCTAssertEqual(EverydaySettingsModel.statusLine(settings.status, calendar: calendar), "켜져 있어요 · 13:00부터 제한해요")
         XCTAssertEqual(settings.draft.windows, [])
@@ -462,7 +476,7 @@ import ManagedSettings
         let (settings, layer, _, _) = fixture()
         let start = at(23, 54, 45)
         layer.write(EverydaySchedule(revision: UUID(), enabled: true, rangeStart: 0, rangeEnd: 1435, windows: []), apps(0..<1))
-        _ = try? settings.focus.services.engine.reconcile(now: start, authorized: true)
+        _ = try? settings.focus.services.engine.reconcile(now: start, authorized: .approved)
         settings.clock = { start }; settings.refresh()
         XCTAssertTrue(settings.offersOffForToday)
         settings.startOffWait()

@@ -54,7 +54,7 @@ import SwiftData
             if model != nil, let runtime { Task { await runtime.checkActivation() }; return }
             guard model == nil, let runtime else { return }
             defer { runtime.holder.notifyActivity() }
-            do { try runtime.recovery.engine.reconcile(now: Date(), authorized: runtime.hasAccess()) }
+            do { try runtime.recovery.engine.reconcile(now: Date(), authorized: runtime.accessState()) }
             catch { errorMessage = "세션 상태를 확인하지 못했어요. 다시 확인해 주세요." }
         }
     }

@@ -4,7 +4,8 @@ import SwiftData
 
 @MainActor struct FocusRuntime {
     let recovery: StartupRecovery
-    let hasAccess: () -> Bool
+    /// The main-queue access read of launch recovery; a cold launch reads `unknown` until the published value settles.
+    let accessState: () -> AccessState
     /// The services and the `ModelContainer`, built once for the screens and the Focus filter.
     let holder: FocusRuntimeHolder
     private static var current: FocusRuntime?
@@ -56,13 +57,13 @@ import SwiftData
         let activityDidChange = FocusActivityRuntime.hook(engine: engine)
         #if DEBUG
         let diagnostics = diagnosticMonitoring.map {
-            DeviceDiagnostics(monitoring: $0, engine: engine, hasAccess: authorization.hasAccessNow, everydayShield: everydayShield,
+            DeviceDiagnostics(monitoring: $0, engine: engine, hasAccess: authorization.accessState, everydayShield: everydayShield,
                               probe: RegistrationProbe(center: SystemRegistrationProbeCenter()))
         }
         #endif
         // One settings object for the screens and the filter, so that a refusal recorded by the filter updates the guide that is shown.
         let settings = FocusSettings()
-        return FocusRuntime(recovery: StartupRecovery(engine: engine), hasAccess: authorization.hasAccessNow, holder: FocusRuntimeHolder(engine: engine, authorization: authorization, settings: settings, activityDidChange: activityDidChange) {
+        return FocusRuntime(recovery: StartupRecovery(engine: engine), accessState: authorization.accessState, holder: FocusRuntimeHolder(engine: engine, authorization: authorization, settings: settings, activityDidChange: activityDidChange) {
             let directory = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent("PrivateSelection")
             #if DEBUG
             let applySelection: (FamilyActivitySelection) -> Void = diagnostics == nil ? shield.apply : { selection in measureScreenTime(.applyShield, report: logTiming) { shield.apply(selection) } }
@@ -92,7 +93,7 @@ import SwiftData
     func prepare() throws -> (FocusServices, ModelContainer) {
         defer { holder.notifyActivity() }
         var loaded: (FocusServices, ModelContainer)?
-        try recovery.prepare(now: Date(), authorized: hasAccess()) { loaded = try holder.load() }
+        try recovery.prepare(now: Date(), authorized: accessState()) { loaded = try holder.load() }
         guard let loaded else { throw ControlIssue.io }
         return loaded
     }

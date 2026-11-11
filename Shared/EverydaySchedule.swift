@@ -158,16 +158,16 @@ public struct EverydaySchedule: Codable, Equatable {
 }
 /// The whole blocking rule of the spec "The blocking rule".
 public enum EverydayRules {
-    /// `authorized` is `nil` when the section does not know the access value. A `nil` session drops the break line, as the re-block needs.
-    public static func blocks(schedule: EverydaySchedule?, session: ControlSession?, authorized: Bool?, now: Date, calendar: Calendar) -> Bool {
-        guard let schedule, authorized != false, schedule.blocks(at: now, calendar: calendar) else { return false }
+    /// `authorized` is `unknown` when the section does not know the access value; only `denied` turns the rule off. A `nil` session drops the break line, as the re-block needs.
+    public static func blocks(schedule: EverydaySchedule?, session: ControlSession?, authorized: AccessState, now: Date, calendar: Calendar) -> Bool {
+        guard let schedule, authorized != .denied, schedule.blocks(at: now, calendar: calendar) else { return false }
         if let session, session.phase == .onBreak, now < (session.breakEndsAt ?? .distantPast) { return false }
         return true
     }
-    /// The next time that `blocks` changes; `nil` for a layer that is off or without access.
+    /// The next time that `blocks` changes; `nil` for a layer that is off or with access `denied`.
     /// During a break the rule stays off until `breakEndsAt`, and from then it follows the schedule.
-    public static func nextChange(schedule: EverydaySchedule?, session: ControlSession?, authorized: Bool?, now: Date, calendar: Calendar) -> Date? {
-        guard let schedule, authorized != false else { return nil }
+    public static func nextChange(schedule: EverydaySchedule?, session: ControlSession?, authorized: AccessState, now: Date, calendar: Calendar) -> Date? {
+        guard let schedule, authorized != .denied else { return nil }
         if let session, session.phase == .onBreak, let breakEndsAt = session.breakEndsAt, now < breakEndsAt {
             return schedule.blocks(at: breakEndsAt, calendar: calendar) ? breakEndsAt : schedule.nextChange(after: breakEndsAt, calendar: calendar)
         }

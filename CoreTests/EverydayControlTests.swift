@@ -134,7 +134,7 @@ final class EverydayControlTests: XCTestCase {
     private func engine(_ world: EverydayWorld) -> SessionControl {
         SessionControl(store: world, monitoring: world, shield: world, breakSelection: world, everyday: LayerView(world), calendar: calendar)
     }
-    private func save(_ engine: SessionControl, _ world: EverydayWorld, _ schedule: EverydaySchedule, _ selection: Set<String>, at now: Date, access: Bool = true) throws {
+    private func save(_ engine: SessionControl, _ world: EverydayWorld, _ schedule: EverydaySchedule, _ selection: Set<String>, at now: Date, access: AccessState = .approved) throws {
         try engine.saveEveryday(schedule, now: now, authorized: { access }, containsStoredSelection: { selection.isSuperset(of: world.state.file?.selection ?? []) },
                                 write: { try world.writeFile(StoredLayer(schedule: $0, selection: selection)) })
     }
@@ -142,12 +142,12 @@ final class EverydayControlTests: XCTestCase {
     private func onLayer(_ world: EverydayWorld) throws -> (SessionControl, EverydaySchedule) {
         let engine = engine(world), schedule = layer()
         try save(engine, world, schedule, s1, at: clock(7, 0))
-        try engine.reconcile(now: t0, authorized: true)
+        try engine.reconcile(now: t0, authorized: .approved)
         XCTAssertEqual(world.state.store, s1); XCTAssertEqual(world.state.activities, activities(schedule))
         return (engine, schedule)
     }
     private func started(_ engine: SessionControl, _ world: EverydayWorld) throws -> UUID {
-        try engine.start(now: t0, authorized: { true }, apply: { world.state.focusShield = true }, matches: { world.state.focusShield }).id
+        try engine.start(now: t0, authorized: { .approved }, apply: { world.state.focusShield = true }, matches: { world.state.focusShield }).id
     }
     /// Break 1 requested at +100, started at +115, until +295.
     private func takeBreak(_ engine: SessionControl, _ world: EverydayWorld, _ id: UUID) throws {
@@ -164,14 +164,14 @@ final class EverydayControlTests: XCTestCase {
         try save(engine, world, layer(), s1, at: clock(7, 0))
         XCTAssertNil(world.state.store)
         for (time, store) in [(t0, s1), (clock(12, 30), nil), (clock(13, 0), s1), (clock(18, 0), nil), (clock(7, 59, 59), nil)] as [(Date, Set<String>?)] {
-            try engine.reconcile(now: time, authorized: true)
+            try engine.reconcile(now: time, authorized: .approved)
             XCTAssertEqual(world.state.store, store, "\(time)")
         }
     }
     func testConvergenceRegistersTheStoredRevisionAndThenStopsOthers() throws {
         let earlier = layer(), stored = layer()
         let world = EverydayWorld(EverydayState(file: StoredLayer(schedule: stored, selection: s1), activities: activities(earlier)))
-        try engine(world).reconcile(now: t0, authorized: true)
+        try engine(world).reconcile(now: t0, authorized: .approved)
         XCTAssertEqual(world.state.activities, activities(stored))
         let lastRegister = try XCTUnwrap(world.log.lastIndex(of: "everyday.register")), firstStop = try XCTUnwrap(world.log.firstIndex(of: "everyday.stop"))
         XCTAssertLessThan(lastRegister, firstStop)
@@ -182,27 +182,27 @@ final class EverydayControlTests: XCTestCase {
         let world = EverydayWorld(EverydayState(file: StoredLayer(schedule: stored, selection: s1), activities: activities(earlier)))
         world.failEverydayParts = [.window(1)]
         let engine = engine(world)
-        try engine.reconcile(now: t0, authorized: true)
+        try engine.reconcile(now: t0, authorized: .approved)
         XCTAssertTrue(activities(earlier).isSubset(of: world.state.activities))
         XCTAssertTrue(world.state.activities.contains(Activity(revision: stored.revision, part: .range)))
-        XCTAssertEqual(try engine.everydayStatus(now: t0, authorized: true).issue, .registrationFailed)
+        XCTAssertEqual(try engine.everydayStatus(now: t0, authorized: .approved).issue, .registrationFailed)
         XCTAssertEqual(world.state.store, s1, "the store follows the stored file")
         world.failEverydayParts = []
-        try engine.reconcile(now: t0, authorized: true)
+        try engine.reconcile(now: t0, authorized: .approved)
         XCTAssertEqual(world.state.activities, activities(stored))
-        XCTAssertNil(try engine.everydayStatus(now: t0, authorized: true).issue)
+        XCTAssertNil(try engine.everydayStatus(now: t0, authorized: .approved).issue)
     }
     func testStatusReportsAShieldLeftOnWhenTheLayerDoesNotBlock() throws {
         // A window-start or range-end callback that came late or never came leaves the store applied.
         for time in [clock(12, 30), clock(18, 0)] {
             let world = EverydayWorld()
             let (engine, _) = try onLayer(world)
-            let status = try engine.everydayStatus(now: time, authorized: true)
+            let status = try engine.everydayStatus(now: time, authorized: .approved)
             XCTAssertFalse(status.blocksNow, "\(time)"); XCTAssertEqual(status.issue, .notCleared, "\(time)")
             XCTAssertEqual(world.state.store, s1, "the status section changes nothing")
-            try engine.reconcile(now: time, authorized: true)
+            try engine.reconcile(now: time, authorized: .approved)
             XCTAssertNil(world.state.store)
-            XCTAssertNil(try engine.everydayStatus(now: time, authorized: true).issue, "\(time)")
+            XCTAssertNil(try engine.everydayStatus(now: time, authorized: .approved).issue, "\(time)")
         }
     }
     func testDidStartSectionNeverRegisters() throws {
@@ -210,15 +210,15 @@ final class EverydayControlTests: XCTestCase {
         let world = EverydayWorld(EverydayState(file: StoredLayer(schedule: stored, selection: s1)))
         world.hideRegistrations = true
         let engine = engine(world)
-        try engine.handleCallback(activityName: name(stored.revision, "range"), kind: .didStart, now: t0, authorized: true)
+        try engine.handleCallback(activityName: name(stored.revision, "range"), kind: .didStart, now: t0, authorized: .approved)
         XCTAssertFalse(world.log.contains("everyday.register"))
         XCTAssertEqual(world.state.store, s1, "the store still converges")
-        try engine.handleCallback(activityName: name(stored.revision, "range"), kind: .didStart, now: t0, authorized: true)
+        try engine.handleCallback(activityName: name(stored.revision, "range"), kind: .didStart, now: t0, authorized: .approved)
         XCTAssertFalse(world.log.contains("everyday.register"))
-        try engine.handleCallback(activityName: name(stored.revision, "window.1"), kind: .didEnd, now: t0, authorized: true)
+        try engine.handleCallback(activityName: name(stored.revision, "window.1"), kind: .didEnd, now: t0, authorized: .approved)
         XCTAssertEqual(world.log.filter { $0 == "everyday.register" }.count, 2)
         world.hideRegistrations = false; world.log = []
-        try engine.reconcile(now: t0, authorized: true)
+        try engine.reconcile(now: t0, authorized: .approved)
         XCTAssertEqual(world.log.filter { $0 == "everyday.register" }.count, 2)
         XCTAssertEqual(world.state.activities, activities(stored))
     }
@@ -230,13 +230,13 @@ final class EverydayControlTests: XCTestCase {
         try takeBreak(engine, world, id)
         let stored = layer()
         world.state.file = StoredLayer(schedule: stored, selection: s1)
-        try engine.handleCallback(activityName: name(earlier.revision, "range"), kind: .didEnd, now: at(200), authorized: true)
+        try engine.handleCallback(activityName: name(earlier.revision, "range"), kind: .didEnd, now: at(200), authorized: .approved)
         XCTAssertEqual(Set(world.everydayStops), activities(earlier))
         XCTAssertNotNil(world.state.focus[id]); XCTAssertTrue(world.isBreakRegistered(id: id, index: 1))
         XCTAssertEqual(world.state.activities, activities(stored))
         // Without access, every everyday activity stops by name, and the session ends by the M2 rule only through its own callback.
         world.state.activities.insert(Activity(revision: UUID(), part: .window(3)))
-        try engine.handleCallback(activityName: name(stored.revision, "range"), kind: .didEnd, now: at(201), authorized: false)
+        try engine.handleCallback(activityName: name(stored.revision, "range"), kind: .didEnd, now: at(201), authorized: .denied)
         XCTAssertTrue(world.state.activities.isEmpty)
         XCTAssertNotNil(world.state.focus[id]); XCTAssertTrue(world.isBreakRegistered(id: id, index: 1)); XCTAssertEqual(phase(world), .onBreak)
         XCTAssertTrue(world.everydayStops.allSatisfy { $0.revision != id })
@@ -248,41 +248,63 @@ final class EverydayControlTests: XCTestCase {
         try save(engine, world, layer(enabled: false), s1, at: clock(18, 30))
         XCTAssertTrue(world.state.activities.isEmpty); XCTAssertNil(world.state.store)
         for kind in [CallbackKind.didStart, .didEnd, .willEndWarning] {
-            try engine.handleCallback(activityName: name(earlier.revision, "window.1"), kind: kind, now: clock(18, 31), authorized: true)
-            try engine.handleCallback(activityName: name(earlier.revision, "range"), kind: kind, now: t0.addingTimeInterval(86400), authorized: true)
+            try engine.handleCallback(activityName: name(earlier.revision, "window.1"), kind: kind, now: clock(18, 31), authorized: .approved)
+            try engine.handleCallback(activityName: name(earlier.revision, "range"), kind: kind, now: t0.addingTimeInterval(86400), authorized: .approved)
         }
         XCTAssertTrue(world.state.activities.isEmpty); XCTAssertNil(world.state.store)
         // A new revision with another range: the earlier callback applies only what the new file allows.
         let next = layer(14 * 60, 16 * 60, windows: [])
         try save(engine, world, next, s2, at: clock(18, 40))
-        try engine.handleCallback(activityName: name(earlier.revision, "range"), kind: .didStart, now: t0.addingTimeInterval(86400), authorized: true)
+        try engine.handleCallback(activityName: name(earlier.revision, "range"), kind: .didStart, now: t0.addingTimeInterval(86400), authorized: .approved)
         XCTAssertNil(world.state.store); XCTAssertEqual(world.state.activities, activities(next))
-        try engine.handleCallback(activityName: name(earlier.revision, "window.1"), kind: .didEnd, now: clock(15, 0).addingTimeInterval(86400), authorized: true)
+        try engine.handleCallback(activityName: name(earlier.revision, "window.1"), kind: .didEnd, now: clock(15, 0).addingTimeInterval(86400), authorized: .approved)
         XCTAssertEqual(world.state.store, s2); XCTAssertEqual(world.state.activities, activities(next))
     }
     func testUnreadableFileClearsTheStoreAndKeepsActivities() throws {
         let world = EverydayWorld()
         let (engine, schedule) = try onLayer(world)
         world.state.fileCorrupt = true
-        try engine.reconcile(now: t0, authorized: true)
+        try engine.reconcile(now: t0, authorized: .approved)
         XCTAssertNil(world.state.store); XCTAssertEqual(world.state.activities, activities(schedule))
-        let status = try engine.everydayStatus(now: t0, authorized: true)
+        let status = try engine.everydayStatus(now: t0, authorized: .approved)
         XCTAssertEqual(status.issue, .unreadable); XCTAssertNil(status.schedule); XCTAssertFalse(status.blocksNow)
     }
     func testUnauthorizedSectionStopsEveryEverydayActivityAndClearsTheStore() throws {
         let world = EverydayWorld()
         let (engine, _) = try onLayer(world)
         world.state.activities.insert(Activity(revision: UUID(), part: .range))
-        try engine.reconcile(now: t0, authorized: false)
+        try engine.reconcile(now: t0, authorized: .denied)
         XCTAssertTrue(world.state.activities.isEmpty); XCTAssertNil(world.state.store)
         XCTAssertNotNil(world.state.file, "the file stays")
+    }
+    /// The 2026-11-11 access-state design: `unknown` converges by schedule, as the earlier `nil` access did.
+    func testUnknownAccessSectionRegistersMissingPartsAndAppliesByTheSchedule() throws {
+        let world = EverydayWorld()
+        let (engine, schedule) = try onLayer(world)
+        world.state.activities = []; world.state.store = nil
+        try engine.reconcile(now: t0, authorized: .unknown)
+        XCTAssertEqual(world.state.activities, activities(schedule)); XCTAssertEqual(world.state.store, s1)
+        let callback = EverydayWorld()
+        let (callbackEngine, callbackSchedule) = try onLayer(callback)
+        try callbackEngine.handleCallback(activityName: name(callbackSchedule.revision, "range"), kind: .didEnd, now: t0, authorized: .unknown)
+        XCTAssertEqual(callback.state.activities, activities(callbackSchedule)); XCTAssertEqual(callback.state.store, s1)
+    }
+    func testRefusalsWithUnknownAccessKeepTheEverydayLayer() throws {
+        let world = EverydayWorld()
+        let (engine, stored) = try onLayer(world)
+        let before = world.state.file
+        world.log = []
+        XCTAssertThrowsError(try save(engine, world, layer(windows: []), s2, at: t0, access: .unknown)) { XCTAssertEqual($0 as? ControlIssue, .unauthorized) }
+        XCTAssertThrowsError(try turnOff(engine, world, at: t0, access: .unknown)) { XCTAssertEqual($0 as? ControlIssue, .unauthorized) }
+        XCTAssertFalse(world.log.contains("file.write")); XCTAssertEqual(world.state.file, before)
+        XCTAssertEqual(world.state.activities, activities(stored)); XCTAssertEqual(world.state.store, s1)
     }
     func testAccessBackRegistersAndApplies() throws {
         let world = EverydayWorld()
         let (engine, schedule) = try onLayer(world)
-        try engine.reconcile(now: t0, authorized: false)
+        try engine.reconcile(now: t0, authorized: .denied)
         XCTAssertTrue(world.state.activities.isEmpty)
-        try engine.reconcile(now: t0, authorized: true)
+        try engine.reconcile(now: t0, authorized: .approved)
         XCTAssertEqual(world.state.activities, activities(schedule)); XCTAssertEqual(world.state.store, s1)
     }
 
@@ -313,7 +335,7 @@ final class EverydayControlTests: XCTestCase {
             if name == "turn-on" { world.state.file?.schedule.enabled = false }
             let before = world.state.file
             world.log = []
-            XCTAssertThrowsError(try save(engine, world, edit(stored), s2, at: t0, access: false)) { XCTAssertEqual($0 as? ControlIssue, .unauthorized, name) }
+            XCTAssertThrowsError(try save(engine, world, edit(stored), s2, at: t0, access: .denied)) { XCTAssertEqual($0 as? ControlIssue, .unauthorized, name) }
             XCTAssertFalse(world.log.contains("everyday.register"), name); XCTAssertFalse(world.log.contains("file.write"), name)
             XCTAssertEqual(world.state.file, before, name)
             XCTAssertTrue(world.state.activities.isEmpty, name); XCTAssertNil(world.state.store, name)
@@ -322,11 +344,13 @@ final class EverydayControlTests: XCTestCase {
     func testStatusWithoutAccessDoesNotBlock() throws {
         let world = EverydayWorld()
         let (engine, schedule) = try onLayer(world)
-        let status = try engine.everydayStatus(now: t0, authorized: false)
+        let status = try engine.everydayStatus(now: t0, authorized: .denied)
         XCTAssertFalse(status.blocksNow); XCTAssertNil(status.nextChange); XCTAssertEqual(status.schedule, schedule)
         XCTAssertNil(status.issue, "a shield without access is not in force, so it is not reported as not cleared")
-        let approved = try engine.everydayStatus(now: t0, authorized: true)
+        let approved = try engine.everydayStatus(now: t0, authorized: .approved)
         XCTAssertTrue(approved.blocksNow); XCTAssertEqual(approved.nextChange, clock(12, 0)); XCTAssertNil(approved.issue)
+        let unknown = try engine.everydayStatus(now: t0, authorized: .unknown)
+        XCTAssertEqual(unknown, approved, "unknown access reads as approved in the status")
     }
     func testSaveInsideTheRangeRefusesLooserEdits() throws {
         let looser: [(String, EverydaySchedule, Set<String>, Date, EverydayLockReason)] = [
@@ -441,7 +465,7 @@ final class EverydayControlTests: XCTestCase {
         let (engine, _) = try onLayer(world)
         let id = try started(engine, world)
         try takeBreak(engine, world, id)
-        let status = try engine.everydayStatus(now: at(200), authorized: true)
+        let status = try engine.everydayStatus(now: at(200), authorized: .approved)
         XCTAssertFalse(status.blocksNow)
         XCTAssertEqual(status.nextChange, at(295))
         XCTAssertEqual(status.nextChange, world.state.envelope.session?.breakEndsAt)
@@ -451,13 +475,13 @@ final class EverydayControlTests: XCTestCase {
         let (engine, _) = try onLayer(world)
         // Started at 11:57; break 1 runs from 11:58:55 to 12:01:55, inside lunch.
         let start = clock(11, 57)
-        let id = try engine.start(now: start, authorized: { true }, apply: { world.state.focusShield = true }, matches: { world.state.focusShield }).id
+        let id = try engine.start(now: start, authorized: { .approved }, apply: { world.state.focusShield = true }, matches: { world.state.focusShield }).id
         let waiting = try engine.requestBreak(id: id, now: start.addingTimeInterval(100))
         try engine.startBreak(id: id, now: waiting.waitEndsAt!, saveSelection: { try world.saveCopy(id) })
         let breakEndsAt = try XCTUnwrap(world.state.envelope.session?.breakEndsAt)
         XCTAssertGreaterThan(breakEndsAt, clock(12, 0)); XCTAssertLessThan(breakEndsAt, clock(13, 0))
         for now in [clock(11, 59), clock(12, 0, 30)] {
-            let status = try engine.everydayStatus(now: now, authorized: true)
+            let status = try engine.everydayStatus(now: now, authorized: .approved)
             XCTAssertFalse(status.blocksNow, "\(now)")
             XCTAssertEqual(status.nextChange, clock(13, 0), "\(now)")
         }
@@ -468,7 +492,7 @@ final class EverydayControlTests: XCTestCase {
         let id = try started(engine, world)
         try takeBreak(engine, world, id)
         world.log = []
-        try engine.reconcile(now: at(295), authorized: true)
+        try engine.reconcile(now: at(295), authorized: .approved)
         let save = try XCTUnwrap(world.log.firstIndex(of: "save:breakOver"))
         XCTAssertLessThan(try XCTUnwrap(world.log.firstIndex(of: "focus.restore")), save)
         XCTAssertLessThan(try XCTUnwrap(world.log.firstIndex(of: "everyday.apply")), save)
@@ -506,7 +530,7 @@ final class EverydayControlTests: XCTestCase {
         let (engine, schedule) = try onLayer(world)
         let id = try started(engine, world)
         try takeBreak(engine, world, id)
-        try engine.handleCallback(activityName: name(schedule.revision, "window.1"), kind: .didEnd, now: at(305), authorized: true)
+        try engine.handleCallback(activityName: name(schedule.revision, "window.1"), kind: .didEnd, now: at(305), authorized: .approved)
         XCTAssertEqual(world.state.store, s1); XCTAssertEqual(phase(world), .breakOver); XCTAssertTrue(world.state.focusShield)
     }
     func testEverydayCallbackNeverChangesTheFocusPhaseOutsideALateBreak() throws {
@@ -514,7 +538,7 @@ final class EverydayControlTests: XCTestCase {
             ("active", 50, { _, _, _ in }),
             ("waiting", 105, { engine, _, id in _ = try engine.requestBreak(id: id, now: self.at(100)) }),
             ("onBreak before breakEndsAt", 200, { engine, world, id in try self.takeBreak(engine, world, id) }),
-            ("breakOver", 300, { engine, world, id in try self.takeBreak(engine, world, id); try engine.reconcile(now: self.at(295), authorized: true) }),
+            ("breakOver", 300, { engine, world, id in try self.takeBreak(engine, world, id); try engine.reconcile(now: self.at(295), authorized: .approved) }),
         ]
         for (phaseName, offset, setup) in setups {
             for storedRevision in [true, false] {
@@ -528,7 +552,7 @@ final class EverydayControlTests: XCTestCase {
                         if !approved { world.state.focus[id] = nil }
                         world.log = []
                         let callback = name(storedRevision ? schedule.revision : UUID(), storedRevision ? "range" : "window.1")
-                        try engine.handleCallback(activityName: callback, kind: kind, now: at(offset), authorized: approved)
+                        try engine.handleCallback(activityName: callback, kind: kind, now: at(offset), authorized: approved ? .approved : .denied)
                         let context = "\(phaseName) stored=\(storedRevision) \(kind) approved=\(approved)"
                         XCTAssertEqual(world.state.envelope.session, before, context)
                         for event in ["focus.register", "focus.stop", "focus.clear"] { XCTAssertFalse(world.log.contains(event), "\(event): \(context)") }
@@ -582,10 +606,10 @@ final class EverydayControlTests: XCTestCase {
     }
     func testControlReadFailureClearsBothStoresAndKeepsEverydayActivities() throws {
         let sections: [(String, (SessionControl) throws -> Void)] = [
-            ("reconcile", { _ = try $0.reconcile(now: self.t0, authorized: true) }),
+            ("reconcile", { _ = try $0.reconcile(now: self.t0, authorized: .approved) }),
             ("snapshot", { _ = try $0.snapshot() }),
-            ("status", { _ = try $0.everydayStatus(now: self.t0, authorized: true) }),
-            ("callback", { try $0.handleCallback(activityName: "everyday.\(UUID().uuidString).range", kind: .didEnd, now: self.t0, authorized: true) }),
+            ("status", { _ = try $0.everydayStatus(now: self.t0, authorized: .approved) }),
+            ("callback", { try $0.handleCallback(activityName: "everyday.\(UUID().uuidString).range", kind: .didEnd, now: self.t0, authorized: .approved) }),
         ]
         for (name, run) in sections {
             let world = EverydayWorld()
@@ -622,12 +646,12 @@ final class EverydayControlTests: XCTestCase {
         try Data(json.utf8).write(to: directory.appendingPathComponent("control.json"))
         let world = EverydayWorld(); world.state.focus[id] = at(1500)
         let engine = SessionControl(store: SharedControlStore(directory: directory), monitoring: world, shield: world, breakSelection: world, everyday: LayerView(world), calendar: calendar)
-        let running = try engine.reconcile(now: at(100), authorized: true)
+        let running = try engine.reconcile(now: at(100), authorized: .approved)
         XCTAssertEqual(running.session?.id, id); XCTAssertEqual(running.session?.phase, .active)
         XCTAssertEqual(TimeRules.remaining(session: try XCTUnwrap(running.session), now: at(100)), 1400)
-        let status = try engine.everydayStatus(now: at(100), authorized: true)
+        let status = try engine.everydayStatus(now: at(100), authorized: .approved)
         XCTAssertNil(status.schedule); XCTAssertFalse(status.blocksNow); XCTAssertNil(status.issue)
-        XCTAssertEqual(try engine.reconcile(now: at(1500), authorized: true).session?.reason, .expired)
+        XCTAssertEqual(try engine.reconcile(now: at(1500), authorized: .approved).session?.reason, .expired)
         XCTAssertFalse(world.log.contains("everyday.register")); XCTAssertNil(world.state.store)
     }
 
@@ -637,7 +661,7 @@ final class EverydayControlTests: XCTestCase {
     private func assertEverydayTable(_ world: EverydayWorld, now: Date, _ context: String, file: StaticString = #filePath, line: UInt = #line) {
         guard !world.state.fileCorrupt else { XCTAssertNil(world.state.store, context, file: file, line: line); return }
         let schedule = world.state.file?.schedule
-        let blocks = EverydayRules.blocks(schedule: schedule, session: world.state.envelope.session, authorized: true, now: now, calendar: calendar)
+        let blocks = EverydayRules.blocks(schedule: schedule, session: world.state.envelope.session, authorized: .approved, now: now, calendar: calendar)
         XCTAssertEqual(world.state.store, blocks ? world.state.file?.selection : nil, "store: \(context)", file: file, line: line)
         let expected = schedule.map { $0.enabled ? activities($0) : [] } ?? []
         XCTAssertEqual(world.state.activities, expected, "activities: \(context)", file: file, line: line)
@@ -665,14 +689,14 @@ final class EverydayControlTests: XCTestCase {
                 let earlier = self.layer(), stored = self.layer()
                 world.state = EverydayState(file: StoredLayer(schedule: stored, selection: self.s1), activities: self.activities(earlier))
                 return (self.engine(world), nil)
-            }, run: { engine, _, _ in try engine.reconcile(now: self.t0, authorized: true) }, now: t0),
+            }, run: { engine, _, _ in try engine.reconcile(now: self.t0, authorized: .approved) }, now: t0),
             Scenario(name: "start", setup: layered, run: { engine, world, _ in _ = try self.started(engine, world) }, now: t0),
             Scenario(name: "start rollback", setup: { world in let result = try layered(world); world.failSavePhases = [.active]; return result },
                      run: { engine, world, _ in _ = try self.started(engine, world) }, now: t0),
             Scenario(name: "break start", setup: { world in
                 let (engine, id) = try session(world); _ = try engine.requestBreak(id: id!, now: self.at(100)); return (engine, id)
             }, run: { engine, world, id in try engine.startBreak(id: id!, now: self.at(115), saveSelection: { try world.saveCopy(id!) }) }, now: at(115)),
-            Scenario(name: "re-block", setup: onBreak, run: { engine, _, _ in try engine.reconcile(now: self.at(295), authorized: true) }, now: at(295)),
+            Scenario(name: "re-block", setup: onBreak, run: { engine, _, _ in try engine.reconcile(now: self.at(295), authorized: .approved) }, now: at(295)),
             Scenario(name: "end", setup: session, run: { engine, _, id in try engine.finish(id: id!, reason: .earlyExit, now: self.at(200)) }, now: at(200)),
             Scenario(name: "end during a break", setup: onBreak, run: { engine, _, id in try engine.finish(id: id!, reason: .earlyExit, now: self.at(200)) }, now: at(200)),
             Scenario(name: "off for today", setup: layered, run: { engine, world, _ in try self.turnOff(engine, world, at: self.t0) }, now: t0),
@@ -689,7 +713,7 @@ final class EverydayControlTests: XCTestCase {
                 let context = "\(scenario.name) exit \(index)"
                 if let earlier = scenario.earlier { XCTAssertTrue(earlier.isSubset(of: snapshot.store ?? []), "never looser: \(context)") }
                 let exited = EverydayWorld(snapshot)
-                _ = try? self.engine(exited).reconcile(now: scenario.now, authorized: true)
+                _ = try? self.engine(exited).reconcile(now: scenario.now, authorized: .approved)
                 assertEverydayTable(exited, now: scenario.now, context)
             }
             // Throw pass: each throwable effect throws once, then reconcile runs.
@@ -701,7 +725,7 @@ final class EverydayControlTests: XCTestCase {
                 thrown.throwAtEffect = thrown.effects + offset
                 try? scenario.run(engine, thrown, id)
                 if let earlier = scenario.earlier { XCTAssertTrue(earlier.isSubset(of: thrown.state.store ?? []), "never looser: \(scenario.name) throw \(offset)") }
-                _ = try? engine.reconcile(now: scenario.now, authorized: true)
+                _ = try? engine.reconcile(now: scenario.now, authorized: .approved)
                 assertEverydayTable(thrown, now: scenario.now, "\(scenario.name) throw \(offset)")
             }
         }
@@ -713,11 +737,11 @@ final class EverydayControlTests: XCTestCase {
         calendar.date(from: DateComponents(year: 2026, month: 11, day: day, hour: hour, minute: minute, second: second))!
     }
     /// The off-for-today section for the stored revision, unless another is given; the write keeps the stored selection.
-    private func turnOff(_ engine: SessionControl, _ world: EverydayWorld, revision: UUID? = nil, at now: Date, access: Bool = true) throws {
+    private func turnOff(_ engine: SessionControl, _ world: EverydayWorld, revision: UUID? = nil, at now: Date, access: AccessState = .approved) throws {
         try engine.turnEverydayOffForToday(revision: revision ?? world.state.file?.schedule.revision ?? UUID(), now: now, authorized: { access },
                                            write: { try world.writeFile(StoredLayer(schedule: $0, selection: world.state.file?.selection ?? [])) })
     }
-    private func refusal(_ engine: SessionControl, _ world: EverydayWorld, revision: UUID? = nil, at now: Date, access: Bool = true) -> Error? {
+    private func refusal(_ engine: SessionControl, _ world: EverydayWorld, revision: UUID? = nil, at now: Date, access: AccessState = .approved) -> Error? {
         do { try turnOff(engine, world, revision: revision, at: now, access: access); return nil } catch { return error }
     }
 
@@ -734,22 +758,22 @@ final class EverydayControlTests: XCTestCase {
         // Steps 1 and 2 register and stop nothing; the convergence finds the revision complete.
         XCTAssertFalse(world.log.contains("everyday.register")); XCTAssertFalse(world.log.contains("everyday.stop"))
         XCTAssertLessThan(try XCTUnwrap(world.log.firstIndex(of: "file.write")), try XCTUnwrap(world.log.firstIndex(of: "everyday.clear")))
-        let status = try engine.everydayStatus(now: at(60), authorized: true)
+        let status = try engine.everydayStatus(now: at(60), authorized: .approved)
         XCTAssertTrue(status.offForToday); XCTAssertFalse(status.blocksNow); XCTAssertNil(status.issue)
         XCTAssertEqual(status.nextChange, day(3, 8))
         // Later edges today leave the store empty; the next day's range blocks again without the app.
         for time in [clock(12, 0), clock(13, 0), clock(17, 59, 59)] {
-            try engine.handleCallback(activityName: name(schedule.revision, "range"), kind: .didStart, now: time, authorized: true)
+            try engine.handleCallback(activityName: name(schedule.revision, "range"), kind: .didStart, now: time, authorized: .approved)
             XCTAssertNil(world.state.store, "\(time)")
         }
-        try engine.handleCallback(activityName: name(schedule.revision, "range"), kind: .didStart, now: day(3, 8), authorized: true)
+        try engine.handleCallback(activityName: name(schedule.revision, "range"), kind: .didStart, now: day(3, 8), authorized: .approved)
         XCTAssertEqual(world.state.store, s1)
-        let tomorrow = try engine.everydayStatus(now: day(3, 8), authorized: true)
+        let tomorrow = try engine.everydayStatus(now: day(3, 8), authorized: .approved)
         XCTAssertFalse(tomorrow.offForToday); XCTAssertTrue(tomorrow.blocksNow)
     }
     func testOffForTodayRefusesEachConditionInOrderAndWritesNothing() throws {
         // Each case: setup, the expected refusal; the file never changes.
-        func check(_ name: String, at now: Date = t0, access: Bool = true, revision: ((EverydaySchedule?) -> UUID)? = nil,
+        func check(_ name: String, at now: Date = t0, access: AccessState = .approved, revision: ((EverydaySchedule?) -> UUID)? = nil,
                    setup: (EverydayWorld, SessionControl) throws -> Void, expect: (Error?) -> Bool) throws {
             let world = EverydayWorld()
             let (engine, _) = try onLayer(world)
@@ -761,8 +785,8 @@ final class EverydayControlTests: XCTestCase {
             XCTAssertEqual(world.state.file, before, name); XCTAssertFalse(world.log.contains("file.write"), name)
         }
         let session: (EverydayWorld, SessionControl) throws -> Void = { world, engine in _ = try self.started(engine, world) }
-        try check("unauthorized", access: false, setup: { _, _ in }) { $0 as? ControlIssue == .unauthorized }
-        try check("unauthorized before busy", access: false, setup: session) { $0 as? ControlIssue == .unauthorized }
+        try check("unauthorized", access: .denied, setup: { _, _ in }) { $0 as? ControlIssue == .unauthorized }
+        try check("unauthorized before busy", access: .denied, setup: session) { $0 as? ControlIssue == .unauthorized }
         try check("busy", setup: session) { $0 as? ControlIssue == .busy }
         try check("busy before unreadable", setup: { world, engine in try session(world, engine); world.state.fileCorrupt = true }) { $0 as? ControlIssue == .busy }
         try check("unreadable", setup: { world, _ in world.state.fileCorrupt = true }) { $0 as? EverydayOffRefusal == .unreadable }
@@ -785,7 +809,7 @@ final class EverydayControlTests: XCTestCase {
         // A refusal for access stops every everyday activity and clears the store (M3 row "Access revoked").
         let world = EverydayWorld()
         let (engine, _) = try onLayer(world)
-        XCTAssertNotNil(refusal(engine, world, at: t0, access: false))
+        XCTAssertNotNil(refusal(engine, world, at: t0, access: .denied))
         XCTAssertTrue(world.state.activities.isEmpty); XCTAssertNil(world.state.store)
         // Another refusal registers a missing activity of the stored revision and keeps the store by the schedule.
         let other = EverydayWorld()
@@ -856,9 +880,9 @@ final class EverydayControlTests: XCTestCase {
         try turnOff(engine, world, at: t0)
         try save(engine, world, layer(windows: []), s2, at: at(300))
         XCTAssertNil(world.state.store, "nothing blocks until today ends")
-        try engine.reconcile(now: clock(12, 30), authorized: true)
+        try engine.reconcile(now: clock(12, 30), authorized: .approved)
         XCTAssertNil(world.state.store)
-        try engine.reconcile(now: day(3, 8), authorized: true)
+        try engine.reconcile(now: day(3, 8), authorized: .approved)
         XCTAssertEqual(world.state.store, s2)
     }
     func testOffForTodayThenALooserEditAfterTheRangeEndAndThenTheNextDay() throws {
@@ -867,9 +891,9 @@ final class EverydayControlTests: XCTestCase {
         try turnOff(engine, world, at: t0)
         try save(engine, world, layer(9 * 60, 17 * 60, windows: []), ["site1"], at: clock(19, 0))
         XCTAssertEqual(world.state.file?.schedule.offDay, "2026-11-02")
-        try engine.reconcile(now: day(3, 8, 30), authorized: true)
+        try engine.reconcile(now: day(3, 8, 30), authorized: .approved)
         XCTAssertNil(world.state.store, "the new schedule starts at 09:00")
-        try engine.reconcile(now: day(3, 9), authorized: true)
+        try engine.reconcile(now: day(3, 9), authorized: .approved)
         XCTAssertEqual(world.state.store, ["site1"])
     }
     func testTurningTheLayerOffAndOnOutsideTheRangeKeepsItOffForToday() throws {
@@ -880,16 +904,16 @@ final class EverydayControlTests: XCTestCase {
         try save(engine, world, layer(6 * 60, 23 * 60), s1, at: clock(19, 5))
         XCTAssertEqual(world.state.file?.schedule.offDay, "2026-11-02")
         XCTAssertNil(world.state.store, "there is no way to turn it back on for today")
-        XCTAssertTrue(try engine.everydayStatus(now: clock(19, 10), authorized: true).offForToday)
+        XCTAssertTrue(try engine.everydayStatus(now: clock(19, 10), authorized: .approved).offForToday)
         XCTAssertEqual(refusal(engine, world, at: clock(19, 10)) as? EverydayOffRefusal, .alreadyOff)
     }
     func testOffForTodayOnDayDThenTheNextDayBlocksAndOffersTheActionAgain() throws {
         let world = EverydayWorld()
         let (engine, _) = try onLayer(world)
         try turnOff(engine, world, at: t0)
-        try engine.reconcile(now: day(3, 10), authorized: true)
+        try engine.reconcile(now: day(3, 10), authorized: .approved)
         XCTAssertEqual(world.state.store, s1)
-        XCTAssertFalse(try engine.everydayStatus(now: day(3, 10), authorized: true).offForToday)
+        XCTAssertFalse(try engine.everydayStatus(now: day(3, 10), authorized: .approved).offForToday)
         XCTAssertThrowsError(try save(engine, world, layer(enabled: false), s1, at: day(3, 10))) { XCTAssertEqual($0 as? EverydayLockReason, .turnsOff) }
         try turnOff(engine, world, at: day(3, 10))
         XCTAssertEqual(world.state.file?.schedule.offDay, "2026-11-03"); XCTAssertNil(world.state.store)
@@ -934,10 +958,10 @@ final class EverydayControlTests: XCTestCase {
         let later = EverydayWorld(world.state)
         let laterEngine = self.engine(later)
         // A session that starts after the action: its break, the re-block and the end all read the off day.
-        let next = try laterEngine.start(now: t0, authorized: { true }, apply: { later.state.focusShield = true }, matches: { later.state.focusShield }).id
+        let next = try laterEngine.start(now: t0, authorized: { .approved }, apply: { later.state.focusShield = true }, matches: { later.state.focusShield }).id
         try takeBreak(laterEngine, later, next)
         XCTAssertNil(later.state.store)
-        try laterEngine.reconcile(now: at(295), authorized: true)
+        try laterEngine.reconcile(now: at(295), authorized: .approved)
         XCTAssertEqual(phase(later), .breakOver); XCTAssertTrue(later.state.focusShield); XCTAssertNil(later.state.store)
         try laterEngine.finish(id: next, reason: .earlyExit, now: at(400))
         XCTAssertFalse(later.state.focusShield); XCTAssertNil(later.state.store)
@@ -946,9 +970,9 @@ final class EverydayControlTests: XCTestCase {
         let world = EverydayWorld()
         let (engine, _) = try onLayer(world)
         try turnOff(engine, world, at: t0)
-        try engine.reconcile(now: day(3, 10), authorized: true)
+        try engine.reconcile(now: day(3, 10), authorized: .approved)
         XCTAssertEqual(world.state.store, s1)
-        try engine.reconcile(now: clock(11, 0), authorized: true, clockChanged: true)
+        try engine.reconcile(now: clock(11, 0), authorized: .approved, clockChanged: true)
         XCTAssertNil(world.state.store, "off again for that local date")
         try save(engine, world, layer(), s1, at: day(3, 19))
         XCTAssertNil(world.state.file?.schedule.offDay)

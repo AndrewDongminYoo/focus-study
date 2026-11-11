@@ -65,7 +65,8 @@ struct FocusView: View {
             default: break
             }
         }
-        .onChange(of: model.access) { _, _ in cancelPendingStart(); model.refresh() }
+        // A change to approved keeps a reserved start: the access recovery reserves one right after the value settles.
+        .onChange(of: model.access) { _, access in if access != .approved { cancelPendingStart() }; model.refresh() }
         .onChange(of: model.isInSession) { _, inSession in
             if !inSession, sheet == .endConfirmation { sheet = nil }
         }
@@ -106,7 +107,7 @@ struct FocusView: View {
                 if model.isInSession {
                     Text("집중 시간 진행 중").font(.subheadline).foregroundStyle(FocusTheme.Palette.secondaryText)
                 } else {
-                    Button("집중 시작하기") { model.requestStart() }.modifier(FocusPrimaryAction()).controlSize(.large).modifier(ProminentLabel())
+                    Button("집중 시작하기") { if model.access == .checking { Task { await model.recoverAccessAndStart() } } else { model.requestStart() } }.modifier(FocusPrimaryAction()).controlSize(.large).modifier(ProminentLabel())
                         .disabled(!model.canStart).accessibilityIdentifier("start")
                     if let request = model.startRequestID {
                         PendingFeedback(request: request, ready: model.performPendingStart, cancel: model.cancelPendingStart)
@@ -182,6 +183,7 @@ struct FocusView: View {
     private func blockerText(_ blocker: StartBlocker) -> String {
         switch blocker {
         case .access: "스크린 타임 권한을 허용하면 시작할 수 있어요."
+        case .checking: "스크린 타임 권한을 확인하고 있어요. 시작하면 다시 확인해요."
         case .error: "오류를 다시 확인한 뒤에 시작할 수 있어요."
         case .selection: "제한할 앱이나 웹사이트를 고르면 시작할 수 있어요."
         }

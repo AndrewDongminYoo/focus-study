@@ -8,7 +8,8 @@ import SwiftData
     private(set) var requests = 0
     func requestIndividual() async { requests += 1 }
     func refresh() {}
-    func hasAccessNow() -> Bool { status == .approved }
+    /// `checking` and `notRequested` are `.notDetermined`, which the engine reads as `unknown`.
+    func accessState() -> AccessState { status == .approved ? .approved : status == .denied ? .denied : .unknown }
 }
 @MainActor final class FilterTestHistory: SessionHistoryProviding {
     var failSave = false
@@ -66,7 +67,7 @@ import SwiftData
     func testOnCallImportsAPendingTerminalThenStarts() async throws {
         for expired in [true, false] {
             let rig = rig()
-            let earlier = try rig.engine.start(now: Date().addingTimeInterval(expired ? -1500 : -60), authorized: { true }, apply: {}, matches: { true })
+            let earlier = try rig.engine.start(now: Date().addingTimeInterval(expired ? -1500 : -60), authorized: { .approved }, apply: {}, matches: { true })
             if !expired { try rig.engine.finish(id: earlier.id, reason: .earlyExit, now: Date()) }
             await rig.handler.focusDidChange(startsSession: true)
             XCTAssertEqual(rig.history.imported, [earlier.id], "\(expired)")
@@ -80,7 +81,7 @@ import SwiftData
     }
     func testFailedImportRefusesWithHistory() async throws {
         let rig = rig()
-        let earlier = try rig.engine.start(now: Date().addingTimeInterval(-60), authorized: { true }, apply: {}, matches: { true })
+        let earlier = try rig.engine.start(now: Date().addingTimeInterval(-60), authorized: { .approved }, apply: {}, matches: { true })
         try rig.engine.finish(id: earlier.id, reason: .earlyExit, now: Date())
         rig.history.failSave = true
         await rig.handler.focusDidChange(startsSession: true)
@@ -178,6 +179,19 @@ import SwiftData
         XCTAssertNotEqual(session.id, first.id); XCTAssertEqual(session.origin, .focusFilter); XCTAssertEqual(session.phase, .active)
         XCTAssertNotNil(rig.store.envelope.filterActivation); XCTAssertTrue(rig.shield.applied)
     }
+    /// The access-state design, "Gaps between steps": each attempt reads again, so a retry after a lock timeout uses the value read after the pause.
+    func testOffCallRetryReadsTheAccessValueAgain() async throws {
+        let rig = rig()
+        await rig.handler.focusDidChange(startsSession: true)
+        rig.authorization.status = .checking
+        // The off call's end section is its first lock call, and it times out once; during the pause the value settles to `denied`.
+        rig.store.lockTimeoutCalls = [rig.store.calls + 1]
+        await FocusFilterHandler.end(engine: rig.engine, authorization: rig.authorization, settings: rig.services.settings, now: Date.init,
+                                     pause: { _ in rig.authorization.status = .denied })
+        let session = try XCTUnwrap(stored(rig))
+        XCTAssertEqual(session.phase, .terminal); XCTAssertEqual(session.reason, .authorizationRevoked)
+        XCTAssertFalse(rig.shield.applied)
+    }
     func testOffCallEndsTheFilterSessionAndRefreshes() async throws {
         let rig = rig()
         await rig.handler.focusDidChange(startsSession: true)
@@ -208,8 +222,17 @@ import SwiftData
         await rig.handler.checkActivation(reading: { .off })
         XCTAssertNil(rig.store.envelope.filterActivation); XCTAssertEqual(stored(rig), session)
     }
+    /// Focus off while access is `checking`, such as with the app not running: the session ends as the person's end, never as revoked.
+    func testOffCallWhileCheckingEndsWithoutRevocation() async throws {
+        let rig = rig()
+        await rig.handler.focusDidChange(startsSession: true)
+        XCTAssertEqual(stored(rig)?.phase, .active)
+        rig.authorization.status = .checking
+        await rig.handler.focusDidChange(startsSession: false)
+        XCTAssertEqual(stored(rig)?.phase, .terminal); XCTAssertEqual(stored(rig)?.reason, .earlyExit)
+    }
     func testHandlerNeverRequestsAuthorization() async throws {
-        for status in [AccessStatus.approved, .denied, .notRequested] {
+        for status in [AccessStatus.approved, .denied, .notRequested, .checking] {
             let rig = rig(); rig.authorization.status = status
             await rig.handler.focusDidChange(startsSession: true)
             await rig.handler.checkActivation(reading: { .off })

@@ -105,11 +105,11 @@ final class FocusFilterControlTests: XCTestCase {
         SessionControl(store: world, monitoring: world, shield: world, breakSelection: world, everyday: FilterLayer(world), calendar: calendar)
     }
     @discardableResult
-    private func on(_ engine: SessionControl, _ world: FilterWorld, at now: Date, access: Bool = true, ready: Bool = true, matches: Bool = true) throws -> FocusFilterStart {
+    private func on(_ engine: SessionControl, _ world: FilterWorld, at now: Date, access: AccessState = .approved, ready: Bool = true, matches: Bool = true) throws -> FocusFilterStart {
         try engine.startFromFocusFilter(now: now, length: 1500, authorized: { access }, selectionReady: ready, apply: { world.apply() }, matches: { matches && world.state.focusShield })
     }
     private func manual(_ engine: SessionControl, _ world: FilterWorld, at now: Date) throws -> ControlSession {
-        try engine.start(now: now, authorized: { true }, apply: { world.apply() }, matches: { world.state.focusShield })
+        try engine.start(now: now, authorized: { .approved }, apply: { world.apply() }, matches: { world.state.focusShield })
     }
     private func started(_ result: FocusFilterStart, file: StaticString = #filePath, line: UInt = #line) -> ControlSession? {
         guard case .started(let session) = result else { XCTFail("not started: \(result)", file: file, line: line); return nil }
@@ -170,7 +170,7 @@ final class FocusFilterControlTests: XCTestCase {
             for world in [repeated, reconciled] { world.state.copies = [world.state.envelope.session!.id] }
             reconciled.state.envelope.session = repeated.state.envelope.session; reconciled.state.focus = repeated.state.focus; reconciled.state.copies = repeated.state.copies
             XCTAssertEqual(try on(engine(repeated), repeated, at: now), .repeated)
-            try engine(reconciled).reconcile(now: now, authorized: true)
+            try engine(reconciled).reconcile(now: now, authorized: .approved)
             XCTAssertEqual(repeated.log.filter { $0.hasPrefix("save") || $0.hasPrefix("focus") || $0.hasPrefix("break") },
                            reconciled.log.filter { $0.hasPrefix("save") || $0.hasPrefix("focus") || $0.hasPrefix("break") }, "\(now)")
             XCTAssertFalse(repeated.log.isEmpty, "\(now)")
@@ -179,13 +179,14 @@ final class FocusFilterControlTests: XCTestCase {
         }
     }
     func testRefusalsSetTheMarkerAndStartNothing() throws {
-        var cases: [(String, FilterWorld, Bool, Bool, FocusFilterRefusal)] = [
-            ("access", FilterWorld(), false, true, .access), ("selection", FilterWorld(), true, false, .selection),
+        var cases: [(String, FilterWorld, AccessState, Bool, FocusFilterRefusal)] = [
+            ("access", FilterWorld(), .denied, true, .access), ("unknown access", FilterWorld(), .unknown, true, .access),
+            ("selection", FilterWorld(), .approved, false, .selection),
         ]
         for phase in [SessionPhase.preparing, .active, .waiting, .onBreak, .breakOver, .ending] {
-            cases.append(("\(phase)", stored(phase, origin: .manual, marker: nil), true, true, .busy))
+            cases.append(("\(phase)", stored(phase, origin: .manual, marker: nil), .approved, true, .busy))
         }
-        cases.append(("terminal", stored(.terminal, origin: .manual, marker: nil), true, true, .history))
+        cases.append(("terminal", stored(.terminal, origin: .manual, marker: nil), .approved, true, .history))
         for (name, world, access, ready, reason) in cases {
             let before = world.state.envelope.session
             world.log = []
@@ -226,7 +227,7 @@ final class FocusFilterControlTests: XCTestCase {
                 for marker in [nil, UUID()] {
                     let context = "\(phase) \(origin.map { "\($0)" } ?? "none") \(marker != nil)"
                     let world = stored(phase, origin: origin, marker: marker), before = world.state.envelope.session
-                    try engine(world).endFromFocusFilter(now: at(110), authorized: true)
+                    try engine(world).endFromFocusFilter(now: at(110), authorized: .approved)
                     let after = try XCTUnwrap(world.state.envelope.session, context)
                     if origin == .focusFilter {
                         XCTAssertEqual(after.phase, .terminal, context); XCTAssertEqual(after.reason, .earlyExit, context)
@@ -244,13 +245,13 @@ final class FocusFilterControlTests: XCTestCase {
         let slack = BreakTiming.standard.slack
         for origin in [SessionOrigin.manual, .focusFilter] {
             let expired = stored(.active, origin: origin, marker: UUID())
-            try engine(expired).endFromFocusFilter(now: at(1500), authorized: true)
+            try engine(expired).endFromFocusFilter(now: at(1500), authorized: .approved)
             XCTAssertEqual(expired.state.envelope.session?.reason, .expired, "\(origin)")
             let missed = stored(.onBreak, origin: origin, marker: UUID())
-            try engine(missed).endFromFocusFilter(now: at(1500 + 195 + slack), authorized: true)
+            try engine(missed).endFromFocusFilter(now: at(1500 + 195 + slack), authorized: .approved)
             XCTAssertEqual(missed.state.envelope.session?.reason, .deadlineMissed, "\(origin)")
             let revoked = stored(.active, origin: origin, marker: UUID())
-            try engine(revoked).endFromFocusFilter(now: at(110), authorized: false)
+            try engine(revoked).endFromFocusFilter(now: at(110), authorized: .denied)
             XCTAssertEqual(revoked.state.envelope.session?.reason, .authorizationRevoked, "\(origin)")
             for world in [expired, missed, revoked] {
                 XCTAssertEqual(world.state.envelope.session?.phase, .terminal, "\(origin)"); XCTAssertNil(world.state.envelope.filterActivation, "\(origin)")
@@ -261,23 +262,23 @@ final class FocusFilterControlTests: XCTestCase {
         let world = FilterWorld(), engine = engine(world)
         try on(engine, world, at: t0)
         world.saved = []
-        try engine.endFromFocusFilter(now: at(200), authorized: true)
+        try engine.endFromFocusFilter(now: at(200), authorized: .approved)
         XCTAssertEqual(world.saved.map { $0.session?.phase }, [.ending, .terminal])
         XCTAssertTrue(world.saved.allSatisfy { $0.filterActivation == nil })
     }
     func testOffCallWithoutAFilterSessionSavesOnlyAStoredMarker() throws {
         let marked = FilterWorld(); marked.state.envelope.filterActivation = UUID()
-        try engine(marked).endFromFocusFilter(now: t0, authorized: true)
+        try engine(marked).endFromFocusFilter(now: t0, authorized: .approved)
         XCTAssertEqual(marked.saved.count, 1); XCTAssertNil(marked.saved.first?.filterActivation); XCTAssertNil(marked.state.envelope.session)
         let unmarked = FilterWorld()
-        try engine(unmarked).endFromFocusFilter(now: t0, authorized: true)
+        try engine(unmarked).endFromFocusFilter(now: t0, authorized: .approved)
         XCTAssertTrue(unmarked.saved.isEmpty)
     }
     func testOffCallDuringABreakRemovesBreakArtifactsAndBlocksTheEverydayLayer() throws {
         let world = stored(.onBreak, origin: .focusFilter, marker: UUID())
         world.schedule = EverydaySchedule(revision: UUID(), enabled: true, rangeStart: 8 * 60, rangeEnd: 18 * 60, windows: [])
         let id = try XCTUnwrap(world.state.envelope.session?.id)
-        try engine(world).endFromFocusFilter(now: at(200), authorized: true)
+        try engine(world).endFromFocusFilter(now: at(200), authorized: .approved)
         XCTAssertEqual(world.state.envelope.session?.reason, .earlyExit)
         XCTAssertTrue(world.state.copies.isEmpty); XCTAssertTrue(world.state.breaks.isEmpty); XCTAssertNil(world.state.focus[id]); XCTAssertFalse(world.state.focusShield)
         let order = ["save:ending:unmarked", "focus.clear", "focus.stop", "copy.remove", "everyday.apply", "save:terminal:unmarked"].map { world.log.firstIndex(of: $0) }
@@ -310,7 +311,7 @@ final class FocusFilterControlTests: XCTestCase {
         // The break ended at 295 s, so the reconcile restores the focus shield and then throws at the save of `breakOver`, its first throwable effect.
         let world = stored(.onBreak, origin: .focusFilter, marker: UUID())
         world.throwAtEffect = world.effects
-        XCTAssertNoThrow(try engine(world).endFromFocusFilter(now: at(300), authorized: true))
+        XCTAssertNoThrow(try engine(world).endFromFocusFilter(now: at(300), authorized: .approved))
         XCTAssertTrue(world.log.contains("focus.restore"), "\(world.log)")
         assertReleased(world, .earlyExit, "re-block")
         XCTAssertEqual(world.saved.map { $0.session?.phase }, [.ending, .terminal])
@@ -320,14 +321,14 @@ final class FocusFilterControlTests: XCTestCase {
         for effect in [0, 1] {
             let world = interruptedBreakStart(origin: .focusFilter)
             world.throwAtEffect = effect
-            XCTAssertNoThrow(try engine(world).endFromFocusFilter(now: at(130), authorized: true), "effect \(effect)")
+            XCTAssertNoThrow(try engine(world).endFromFocusFilter(now: at(130), authorized: .approved), "effect \(effect)")
             assertReleased(world, .earlyExit, "cleanup effect \(effect)")
         }
         // Without a break copy, the wait cancel of the reconcile throws instead.
         for effect in [0, 1] {
             let world = stored(.waiting, origin: .focusFilter, marker: UUID())
             world.throwAtEffect = effect
-            XCTAssertNoThrow(try engine(world).endFromFocusFilter(now: at(130), authorized: true), "effect \(effect)")
+            XCTAssertNoThrow(try engine(world).endFromFocusFilter(now: at(130), authorized: .approved), "effect \(effect)")
             assertReleased(world, .earlyExit, "reconcile effect \(effect)")
         }
     }
@@ -335,18 +336,18 @@ final class FocusFilterControlTests: XCTestCase {
         // Before the focus end, the off call with the caught error gives the reason of the same call without it.
         let clean = interruptedBreakStart(origin: .focusFilter), failing = interruptedBreakStart(origin: .focusFilter)
         failing.throwAtEffect = 1
-        try engine(clean).endFromFocusFilter(now: at(130), authorized: true)
-        XCTAssertNoThrow(try engine(failing).endFromFocusFilter(now: at(130), authorized: true))
+        try engine(clean).endFromFocusFilter(now: at(130), authorized: .approved)
+        XCTAssertNoThrow(try engine(failing).endFromFocusFilter(now: at(130), authorized: .approved))
         XCTAssertEqual(clean.state.envelope.session?.reason, .earlyExit)
         assertReleased(failing, .earlyExit, "before the focus end")
         // After the focus end (1525 s with the cancelled wait), the M2 registered-end rule ends the session before the Focus-off rule runs.
         // So the Focus-off rule never records `.earlyExit` for a session whose time is up, and the end's own result propagates as today.
         let expired = interruptedBreakStart(origin: .focusFilter)
-        try engine(expired).endFromFocusFilter(now: at(1600), authorized: true)
+        try engine(expired).endFromFocusFilter(now: at(1600), authorized: .approved)
         XCTAssertEqual(expired.state.envelope.session?.reason, .expired)
         let late = interruptedBreakStart(origin: .focusFilter)
         late.throwAtEffect = 1
-        XCTAssertThrowsError(try engine(late).endFromFocusFilter(now: at(1600), authorized: true))
+        XCTAssertThrowsError(try engine(late).endFromFocusFilter(now: at(1600), authorized: .approved))
         XCTAssertNil(late.throwAtEffect)
         XCTAssertEqual(late.state.envelope.session?.phase, .terminal); XCTAssertEqual(late.state.envelope.session?.reason, .recoveryInterrupted)
         XCTAssertFalse(late.state.focusShield); XCTAssertTrue(late.state.focus.isEmpty); XCTAssertTrue(late.state.breaks.isEmpty); XCTAssertTrue(late.state.copies.isEmpty)
@@ -357,22 +358,34 @@ final class FocusFilterControlTests: XCTestCase {
         // Without access the reconcile ends the session before any wait cancel or re-block, so only a cleanup error reaches this rule.
         let clean = interruptedBreakStart(origin: .focusFilter), failing = interruptedBreakStart(origin: .focusFilter)
         failing.throwAtEffect = 1
-        try engine(clean).endFromFocusFilter(now: at(130), authorized: false)
-        XCTAssertNoThrow(try engine(failing).endFromFocusFilter(now: at(130), authorized: false))
+        try engine(clean).endFromFocusFilter(now: at(130), authorized: .denied)
+        XCTAssertNoThrow(try engine(failing).endFromFocusFilter(now: at(130), authorized: .denied))
         XCTAssertEqual(clean.state.envelope.session?.reason, .authorizationRevoked)
         assertReleased(failing, .authorizationRevoked, "access")
+    }
+    /// The 2026-11-11 access-state design: Focus off with `unknown` access, such as with the app not running, is never a revocation.
+    func testOffCallWithUnknownAccessNeverEndsAsRevoked() throws {
+        let clean = interruptedBreakStart(origin: .focusFilter), failing = interruptedBreakStart(origin: .focusFilter)
+        failing.throwAtEffect = 1
+        try engine(clean).endFromFocusFilter(now: at(130), authorized: .unknown)
+        XCTAssertNoThrow(try engine(failing).endFromFocusFilter(now: at(130), authorized: .unknown))
+        XCTAssertEqual(clean.state.envelope.session?.reason, .earlyExit)
+        assertReleased(failing, .earlyExit, "unknown access")
+        let expired = stored(.active, origin: .focusFilter, marker: UUID())
+        try engine(expired).endFromFocusFilter(now: at(1500), authorized: .unknown)
+        XCTAssertEqual(expired.state.envelope.session?.reason, .expired)
     }
     func testOffCallStillThrowsForAManualSessionWhenReconcileFails() throws {
         let reBlock = stored(.onBreak, origin: .manual, marker: UUID())
         reBlock.throwAtEffect = reBlock.effects
-        XCTAssertThrowsError(try engine(reBlock).endFromFocusFilter(now: at(300), authorized: true))
+        XCTAssertThrowsError(try engine(reBlock).endFromFocusFilter(now: at(300), authorized: .approved))
         XCTAssertNil(reBlock.throwAtEffect)
         XCTAssertEqual(reBlock.state.envelope.session?.phase, .onBreak); XCTAssertNil(reBlock.state.envelope.session?.reason)
         XCTAssertTrue(reBlock.state.focusShield); XCTAssertNotNil(reBlock.state.focus[reBlock.state.envelope.session!.id])
         XCTAssertFalse(reBlock.log.contains("focus.clear"), "\(reBlock.log)")
         let cleanup = interruptedBreakStart(origin: .manual)
         cleanup.throwAtEffect = 1
-        XCTAssertThrowsError(try engine(cleanup).endFromFocusFilter(now: at(130), authorized: true))
+        XCTAssertThrowsError(try engine(cleanup).endFromFocusFilter(now: at(130), authorized: .approved))
         XCTAssertNil(cleanup.throwAtEffect)
         XCTAssertEqual(cleanup.state.envelope.session?.phase, .waiting); XCTAssertNil(cleanup.state.envelope.session?.reason)
         XCTAssertTrue(cleanup.state.focusShield); XCTAssertNotNil(cleanup.state.focus[cleanup.state.envelope.session!.id])
@@ -397,24 +410,24 @@ final class FocusFilterControlTests: XCTestCase {
         // On, S1 completes by time, the import removes it, a repeated on call.
         let world = FilterWorld(), engine = engine(world)
         let s1 = try XCTUnwrap(started(try on(engine, world, at: t0)))
-        XCTAssertEqual(try engine.reconcile(now: at(1500), authorized: true).session?.reason, .expired)
+        XCTAssertEqual(try engine.reconcile(now: at(1500), authorized: .approved).session?.reason, .expired)
         try engine.acknowledgeTerminal(id: s1.id)
         XCTAssertEqual(try on(engine, world, at: at(1510)), .repeated); XCTAssertNil(world.state.envelope.session)
         // Then off, then on: S2 starts.
-        try engine.endFromFocusFilter(now: at(1520), authorized: true)
+        try engine.endFromFocusFilter(now: at(1520), authorized: .approved)
         let s2 = try XCTUnwrap(started(try on(engine, world, at: at(1530))))
         XCTAssertNotEqual(s2.id, s1.id)
 
         // On, refused for access, access approved, a repeated on call.
         let refused = FilterWorld(), refusedEngine = self.engine(refused)
-        XCTAssertEqual(try on(refusedEngine, refused, at: t0, access: false), .refused(.access))
+        XCTAssertEqual(try on(refusedEngine, refused, at: t0, access: .denied), .refused(.access))
         XCTAssertEqual(try on(refusedEngine, refused, at: at(10)), .repeated); XCTAssertNil(refused.state.envelope.session)
 
         // On, S1 starts, the off call is lost, S1 ends by time, the app opens and checks, the next on starts S2.
         for checked in [true, false] {
             let lost = FilterWorld(), lostEngine = self.engine(lost)
             let first = try XCTUnwrap(started(try on(lostEngine, lost, at: t0)))
-            try lostEngine.reconcile(now: at(1500), authorized: true); try lostEngine.acknowledgeTerminal(id: first.id)
+            try lostEngine.reconcile(now: at(1500), authorized: .approved); try lostEngine.acknowledgeTerminal(id: first.id)
             if checked, let marker = try lostEngine.snapshot().filterActivation { try lostEngine.clearFilterActivation(matching: marker, now: at(1600)) }
             let next = try on(lostEngine, lost, at: at(1700))
             if checked { XCTAssertNotNil(started(next)) } else { XCTAssertEqual(next, .repeated); XCTAssertNil(lost.state.envelope.session) }
@@ -423,9 +436,9 @@ final class FocusFilterControlTests: XCTestCase {
         // The off call of one activation arrives after the on call of the next: it ends S2 and clears the marker.
         let late = FilterWorld(), lateEngine = self.engine(late)
         let a = try XCTUnwrap(started(try on(lateEngine, late, at: t0)))
-        try lateEngine.endFromFocusFilter(now: at(10), authorized: true); try lateEngine.acknowledgeTerminal(id: a.id)
+        try lateEngine.endFromFocusFilter(now: at(10), authorized: .approved); try lateEngine.acknowledgeTerminal(id: a.id)
         let b = try XCTUnwrap(started(try on(lateEngine, late, at: at(20))))
-        try lateEngine.endFromFocusFilter(now: at(30), authorized: true)
+        try lateEngine.endFromFocusFilter(now: at(30), authorized: .approved)
         XCTAssertEqual(late.state.envelope.session?.id, b.id); XCTAssertEqual(late.state.envelope.session?.reason, .earlyExit)
         XCTAssertNil(late.state.envelope.filterActivation)
 
@@ -439,10 +452,10 @@ final class FocusFilterControlTests: XCTestCase {
                 if phase != "waiting" {
                     try breakingEngine.startBreak(id: s.id, now: waiting.waitEndsAt!, saveSelection: { try breaking.saveCopy(s.id) }); offAt = at(200)
                 }
-                if phase == "breakOver" { try breakingEngine.reconcile(now: at(295), authorized: true); offAt = at(300) }
+                if phase == "breakOver" { try breakingEngine.reconcile(now: at(295), authorized: .approved); offAt = at(300) }
                 XCTAssertEqual(breaking.state.envelope.session?.phase.rawValue, phase)
             }
-            try breakingEngine.endFromFocusFilter(now: offAt, authorized: true)
+            try breakingEngine.endFromFocusFilter(now: offAt, authorized: .approved)
             XCTAssertEqual(breaking.state.envelope.session?.reason, phase == "expired" ? .expired : .earlyExit, phase)
             XCTAssertTrue(breaking.state.breaks.isEmpty, phase); XCTAssertTrue(breaking.state.copies.isEmpty, phase); XCTAssertTrue(breaking.state.focus.isEmpty, phase)
         }
@@ -452,7 +465,7 @@ final class FocusFilterControlTests: XCTestCase {
         let world = FilterWorld(), engine = engine(world)
         let m = try manual(engine, world, at: t0)
         XCTAssertEqual(try on(engine, world, at: at(10)), .refused(.busy)); XCTAssertNotNil(world.state.envelope.filterActivation)
-        try engine.endFromFocusFilter(now: at(20), authorized: true)
+        try engine.endFromFocusFilter(now: at(20), authorized: .approved)
         XCTAssertEqual(world.state.envelope.session?.id, m.id); XCTAssertEqual(world.state.envelope.session?.phase, .active)
         XCTAssertNil(world.state.envelope.filterActivation)
 
@@ -462,7 +475,7 @@ final class FocusFilterControlTests: XCTestCase {
         try otherEngine.finish(id: s1.id, reason: .earlyExit, now: at(10)); try otherEngine.acknowledgeTerminal(id: s1.id)
         let m2 = try manual(otherEngine, other, at: at(20))
         XCTAssertEqual(try on(otherEngine, other, at: at(30)), .repeated)
-        try otherEngine.endFromFocusFilter(now: at(40), authorized: true)
+        try otherEngine.endFromFocusFilter(now: at(40), authorized: .approved)
         XCTAssertEqual(other.state.envelope.session?.id, m2.id); XCTAssertEqual(other.state.envelope.session?.phase, .active)
         XCTAssertEqual(other.state.envelope.session?.origin, .manual); XCTAssertNotNil(other.state.focus[m2.id]); XCTAssertTrue(other.state.focusShield)
 
@@ -472,16 +485,16 @@ final class FocusFilterControlTests: XCTestCase {
             let s = try manual(breakingEngine, breaking, at: t0)
             let waiting = try breakingEngine.requestBreak(id: s.id, now: at(100)); var offAt = at(105)
             if phase != "waiting" { try breakingEngine.startBreak(id: s.id, now: waiting.waitEndsAt!, saveSelection: { try breaking.saveCopy(s.id) }); offAt = at(200) }
-            if phase == "breakOver" { try breakingEngine.reconcile(now: at(295), authorized: true); offAt = at(300) }
+            if phase == "breakOver" { try breakingEngine.reconcile(now: at(295), authorized: .approved); offAt = at(300) }
             let before = breaking.state.envelope.session
-            try breakingEngine.endFromFocusFilter(now: offAt, authorized: true)
+            try breakingEngine.endFromFocusFilter(now: offAt, authorized: .approved)
             XCTAssertEqual(breaking.state.envelope.session, before, phase)
         }
 
         // Focus A starts S1; a switch that sends off then on ends S1 and starts S2.
         let switching = FilterWorld(), switchingEngine = self.engine(switching)
         let a = try XCTUnwrap(started(try on(switchingEngine, switching, at: t0)))
-        try switchingEngine.endFromFocusFilter(now: at(10), authorized: true)
+        try switchingEngine.endFromFocusFilter(now: at(10), authorized: .approved)
         XCTAssertEqual(switching.state.envelope.session?.reason, .earlyExit)
         try switchingEngine.acknowledgeTerminal(id: a.id)
         XCTAssertNotNil(started(try on(switchingEngine, switching, at: at(20))))
@@ -499,24 +512,24 @@ final class FocusFilterControlTests: XCTestCase {
         let waiting = try engine.requestBreak(id: s.id, now: at(200)); check("requestBreak 2")
         try engine.startBreak(id: s.id, now: waiting.waitEndsAt!, saveSelection: { try world.saveCopy(s.id) }); check("startBreak")
         let breakEnd = try XCTUnwrap(world.state.envelope.session?.breakEndsAt)
-        try engine.reconcile(now: breakEnd, authorized: true); check("re-block")
+        try engine.reconcile(now: breakEnd, authorized: .approved); check("re-block")
         XCTAssertEqual(world.state.envelope.session?.phase, .breakOver)
         try engine.resume(id: s.id, now: breakEnd.addingTimeInterval(5)); check("resume")
         for kind in [CallbackKind.didStart, .willEndWarning, .didEnd] {
-            try engine.handleCallback(activityName: s.activityName, kind: kind, now: breakEnd.addingTimeInterval(10), authorized: true); check("callback \(kind)")
+            try engine.handleCallback(activityName: s.activityName, kind: kind, now: breakEnd.addingTimeInterval(10), authorized: .approved); check("callback \(kind)")
         }
         XCTAssertEqual(world.state.envelope.session?.phase, .active)
         try engine.finish(id: s.id, reason: .earlyExit, now: breakEnd.addingTimeInterval(20)); check("finish")
         try engine.acknowledgeTerminal(id: s.id); check("acknowledgeTerminal")
         XCTAssertNil(world.state.envelope.session)
         let schedule = EverydaySchedule(revision: UUID(), enabled: true, rangeStart: 8 * 60, rangeEnd: 18 * 60, windows: [])
-        try engine.saveEveryday(schedule, now: breakEnd.addingTimeInterval(30), authorized: { true }, containsStoredSelection: { true }, write: { world.schedule = $0 })
+        try engine.saveEveryday(schedule, now: breakEnd.addingTimeInterval(30), authorized: { .approved }, containsStoredSelection: { true }, write: { world.schedule = $0 })
         check("saveEveryday")
     }
     func testControlReadFailureInAFilterSectionThrows() throws {
         let sections: [(String, (SessionControl, FilterWorld) throws -> Void)] = [
             ("start", { try self.on($0, $1, at: self.t0) }),
-            ("end", { engine, _ in try engine.endFromFocusFilter(now: self.t0, authorized: true) }),
+            ("end", { engine, _ in try engine.endFromFocusFilter(now: self.t0, authorized: .approved) }),
             ("check", { engine, _ in try engine.clearFilterActivation(matching: UUID(), now: self.t0) }),
         ]
         for (name, run) in sections {
@@ -570,22 +583,22 @@ final class FocusFilterControlTests: XCTestCase {
         let scenarios = [
             Scenario(name: "start", setup: { FilterWorld() }, run: { try self.on($0, $1, at: self.t0) }, now: at(1), rule: { ($1 != nil) == ($0 != nil) }),
             Scenario(name: "refusal", setup: { FilterWorld() }, run: { try self.on($0, $1, at: self.t0, ready: false) }, now: at(1), rule: { session, _ in session == nil }),
-            Scenario(name: "end", setup: filterSession, run: { engine, _ in try engine.endFromFocusFilter(now: self.at(200), authorized: true) }, now: at(201),
+            Scenario(name: "end", setup: filterSession, run: { engine, _ in try engine.endFromFocusFilter(now: self.at(200), authorized: .approved) }, now: at(201),
                      rule: { ($1 == nil) == ($0?.phase == .terminal) && $0?.origin == .focusFilter }, thrown: ended),
-            Scenario(name: "end during a break", setup: filterBreak, run: { engine, _ in try engine.endFromFocusFilter(now: self.at(200), authorized: true) }, now: at(201),
+            Scenario(name: "end during a break", setup: filterBreak, run: { engine, _ in try engine.endFromFocusFilter(now: self.at(200), authorized: .approved) }, now: at(201),
                      rule: { ($1 == nil) == ($0?.phase == .terminal) && $0?.origin == .focusFilter }, thrown: ended),
-            Scenario(name: "end after the break end", setup: filterBreak, run: { engine, _ in try engine.endFromFocusFilter(now: self.at(300), authorized: true) },
+            Scenario(name: "end after the break end", setup: filterBreak, run: { engine, _ in try engine.endFromFocusFilter(now: self.at(300), authorized: .approved) },
                      now: at(301), rule: exitedAfterReconcile, thrown: ended),
             Scenario(name: "end in an interrupted break start", setup: {
                 let world = try filterSession(), engine = self.engine(world), id = world.state.envelope.session!.id
                 _ = try engine.requestBreak(id: id, now: self.at(100)); try world.saveCopy(id)
                 return world
-            }, run: { engine, _ in try engine.endFromFocusFilter(now: self.at(130), authorized: true) }, now: at(131), rule: exitedAfterReconcile, thrown: ended),
+            }, run: { engine, _ in try engine.endFromFocusFilter(now: self.at(130), authorized: .approved) }, now: at(131), rule: exitedAfterReconcile, thrown: ended),
             Scenario(name: "off with a manual session", setup: {
                 let world = FilterWorld(), engine = self.engine(world)
                 _ = try self.manual(engine, world, at: self.t0); _ = try self.on(engine, world, at: self.at(1))
                 return world
-            }, run: { engine, _ in try engine.endFromFocusFilter(now: self.at(200), authorized: true) }, now: at(201),
+            }, run: { engine, _ in try engine.endFromFocusFilter(now: self.at(200), authorized: .approved) }, now: at(201),
                      rule: { session, _ in session?.phase == .active && session?.origin == .manual }),
             Scenario(name: "activation check", setup: filterSession, run: { engine, world in
                 try engine.clearFilterActivation(matching: world.state.envelope.filterActivation!, now: self.at(200))
@@ -600,7 +613,7 @@ final class FocusFilterControlTests: XCTestCase {
             for (index, snapshot) in world.snapshots.enumerated() {
                 let context = "\(scenario.name) exit \(index)"
                 let exited = FilterWorld(snapshot), engine = engine(exited)
-                _ = try? engine.reconcile(now: scenario.now, authorized: true)
+                _ = try? engine.reconcile(now: scenario.now, authorized: .approved)
                 assertGapTable(exited, scenario.rule, context)
                 let marker = exited.state.envelope.filterActivation, session = exited.state.envelope.session
                 let replay = try on(engine, exited, at: scenario.now)
@@ -618,7 +631,7 @@ final class FocusFilterControlTests: XCTestCase {
                 let thrown = try scenario.setup(), engine = engine(thrown)
                 thrown.throwAtEffect = thrown.effects + offset
                 try? scenario.run(engine, thrown)
-                _ = try? engine.reconcile(now: scenario.now, authorized: true)
+                _ = try? engine.reconcile(now: scenario.now, authorized: .approved)
                 assertGapTable(thrown, scenario.thrown ?? scenario.rule, "\(scenario.name) throw \(offset)")
             }
         }

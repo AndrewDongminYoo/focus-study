@@ -3,7 +3,7 @@ import Foundation
 final class StartupRecovery {
     let engine: SessionControl
     init(engine: SessionControl) { self.engine = engine }
-    func prepare(now: Date, authorized: Bool, loadStorage: () throws -> Void) throws {
+    func prepare(now: Date, authorized: AccessState, loadStorage: () throws -> Void) throws {
         try engine.reconcile(now: now, authorized: authorized)
         try loadStorage()
     }

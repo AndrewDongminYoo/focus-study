@@ -82,6 +82,7 @@ SwiftData `SessionRecord`는 UUID를 고유 키로 하고 시작/예정 만료/�
 
 앱 활성화·재시작과 Monitor 진입 시 상태를 조정한다.
 권한 철회는 즉시 관측 가능한 시점에 중단/미사용으로 전환하고 store와 monitoring을 정리한다.
+조정(2026-11-11, #115): [권한 상태 설계](2026-11-11-access-state-design.md#what-each-state-does)에 따라 철회는 `denied` 읽기로만 관측한다. `.notDetermined`는 `unknown`이며 철회 관측이 아니다.
 등록이 유지된 active가 만료하면 만료 처리하고, 등록이 사라진 active와 잔존 preparing은 중단 처리하며, ending은 정리를 재시도한다.
 읽을 수 없는 메타데이터에서는 새 시작을 막고 가능한 범위에서 이 앱 store를 해제한다.
 기기가 잠기거나 앱이 종료되면 콜백이 지연될 수 있어 초 단위 자동 해제를 보장하지 않는다.
@@ -157,6 +158,7 @@ SwiftData `SessionRecord`는 UUID를 고유 키로 하고 시작/예정 만료/�
 - 타깃과 데이터 경계의 "App Group에는 `ControlEnvelope.schemaVersion`과 선택적인 `session`을 저장한다.": envelope에는 선택적인 `filterActivation`(집중 모드 활성화 표시, `UUID`)도 저장한다. 집중 모드 이름은 저장하지 않으며 기기 밖으로 보내지 않는다. `schemaVersion`은 2로 남는다.
 - 같은 절의 "세션에는 UUID, 시작/만료 시각, 단계(`preparing/active/ending/terminal`), 종료 사유·관측 시각을 둔다.": 세션에는 선택적인 `origin`(`manual` 또는 `focusFilter`)도 둔다. 값이 없으면 `manual`이다.
 - 세션 상태와 원자성 5단계의 "종료는 ID 일치 확인 후": 집중 모드를 끌 때의 종료는 호출자가 가진 ID가 아니라 잠금 안에서 저장된 세션의 `origin`으로 대상을 고른다. `focusFilter` 세션만 이 규칙으로 끝난다. 같은 잠금 안에서 그 호출의 권한 값으로 M2의 reconcile 순서가 먼저 실행되므로, 시간이 이미 끝난 세션은 `.expired` 또는 `.deadlineMissed`로, 권한이 없으면 `.authorizationRevoked`로 끝난다. 그 뒤에도 세션이 `terminal`이 아닐 때만 종료 사유가 `.earlyExit`("집중 종료")이다.
+  - 조정(2026-11-11, #115): "권한이 없으면 `.authorizationRevoked`"는 그 호출의 권한 값이 `denied`일 때만이다. `unknown`이면 오류가 난 뒤에도 시간 종료 사유, 그 밖에는 `.earlyExit`로 끝난다([권한 상태 설계](2026-11-11-access-state-design.md#what-each-state-does)).
 
 ## Live Activity adoption amendment: 2026-11-06
 

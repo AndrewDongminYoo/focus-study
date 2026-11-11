@@ -4,10 +4,18 @@ import ManagedSettings
 import FamilyControls
 
 enum ScreenTimeAccess {
-    static func isApproved(_ status: AuthorizationStatus) -> Bool {
-        if status == .approved { return true }
-        if #available(iOS 26.4, *), status == .approvedWithDataAccess { return true }
-        return false
+    /// The table of the 2026-11-11 access-state design: `.notDetermined` and every other or future value are `unknown`, never a revocation.
+    static func state(_ status: AuthorizationStatus) -> AccessState {
+        if status == .approved { return .approved }
+        if #available(iOS 26.4, *), status == .approvedWithDataAccess { return .approved }
+        if status == .denied { return .denied }
+        return .unknown
+    }
+    /// Apple documents `authorizationStatus` as main-queue only, so every read goes through the main queue, also in the Monitor extension.
+    /// Call it before a lock attempt, never inside a lock section: off the main thread it waits for the main queue.
+    /// `read` stands in for `AuthorizationCenter.shared.authorizationStatus` in tests; it always runs on the main thread.
+    static func current(read: () -> AuthorizationStatus = { AuthorizationCenter.shared.authorizationStatus }) -> AccessState {
+        Thread.isMainThread ? state(read()) : DispatchQueue.main.sync { state(read()) }
     }
 }
 enum GroupConfiguration {
