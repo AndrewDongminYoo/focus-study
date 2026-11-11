@@ -43,8 +43,10 @@ import ManagedSettings
         let (settings, layer, monitoring, _) = fixture()
         storedLayer(layer, settings)
         let registered = monitoring.registeredEveryday.count
-        (settings.focus.services.authorization as? ModelTestAuthorization)?.status = .checking
-        settings.focus.refresh(); settings.refreshStatus()
+        let authorization = settings.focus.services.authorization
+        (authorization as? ModelTestAuthorization)?.status = .checking
+        // `FocusModel.refresh()` reconciles at the wall clock, which can be outside the range; the section runs at the fixture's 10:00.
+        _ = try? settings.focus.services.engine.reconcile(now: tenAM, authorized: authorization.accessState()); settings.refreshStatus()
         XCTAssertEqual(monitoring.registeredEveryday.count, registered); XCTAssertGreaterThan(registered, 0)
         XCTAssertEqual(settings.status?.blocksNow, true); XCTAssertNil(settings.status?.issue)
         XCTAssertFalse(settings.offersOffForToday, "turning the layer off still needs approved access")
