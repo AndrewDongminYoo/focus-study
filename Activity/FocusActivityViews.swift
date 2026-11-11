@@ -13,7 +13,7 @@ extension FocusActivityContent {
         switch phase {
         case .focus: return focusEnd == targetAt ? "집중 예정" : "세션 마감"
         case .waiting: return "앱에서"
-        case .onBreak: return "휴식 예정"
+        case .onBreak: return "휴식 끝"
         case .breakOver: return "복귀 마감"
         }
     }
