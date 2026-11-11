@@ -263,3 +263,20 @@ iPhone 16 Pro, iOS 27.0.1 (`24A446`)에 `e3e9116`에서 만든 서명된 Debug �
 
 쉬는 시간 전환의 기기 시간은 아직 재지 않았다.
 이 기록은 위 세 가지 관찰만 남기며, 위 표의 다른 시나리오를 확인한 것으로 바꾸지 않는다.
+
+## Access state: 2026-11-11
+
+On the same iPhone 16 Pro with iOS 27.0.1, a signed Debug build from `fecb739` (#117) launched with `--screen-time-diagnostics` ran the [access-state design's device steps](../specs/2026-11-11-access-state-design.md#physical-device-verification) from 16:29 to 18:01 +09:00.
+The history rows show the session start time, not the end time.
+
+| Step                                                        | Result                                                                                                                                                                               |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2 and 3. Break re-block with the app in the background      | Passed four times, twice after the app was not running for 5 minutes; the app logged nothing at the break ends, so the Monitor re-blocked                                            |
+| 4. Everyday range end with no session                       | Passed: the everyday apps unlocked at 18:00, and the app on return logged no `register_everyday` and no `stop_everyday`                                                              |
+| 5. Cold launch with access on                               | Passed twice: four `register_everyday` lines and no `stop_everyday` before them; the `checking` line did not appear                                                                  |
+| 6. Cold launch after a revocation                           | The screen stayed in `checking` and never reached `denied`; a tap on start ran the recovery request, access was granted, and only then the session started                           |
+| 7. Revocation during a break with the app in the background | Failed twice: a blocked app opened at once, and both sessions ended as `.recoveryInterrupted` ("중단된 세션 정리"); the Live Activity disappeared in one run and stayed in the other |
+
+On iOS 27.0.1 a revocation in Settings reads `.notDetermined`, not `.denied`, in a running app process and in a cold launch, so step 7 cannot pass with the current design; #118 takes it up, and #115 stays open.
+Every focus registration that overwrote a registered focus activity took 289.9 to 300.3 ms or 508.3 to 510.1 ms, while the first registration of a session took 19.6 and 36.7 ms; #119 takes it up.
+The per-step evidence is in the #115 comments of 2026-11-11.
