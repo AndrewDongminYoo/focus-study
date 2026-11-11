@@ -58,7 +58,7 @@ enum FocusFilterReading: Equatable { case on, off, unknown }
         // Steps 3 and 4.
         do {
             let result = try await retryingLock {
-                try self.engine.startFromFocusFilter(now: self.now(), length: length, authorized: { self.services.authorization.hasAccessNow() }, selectionReady: selectionReady,
+                try self.engine.startFromFocusFilter(now: self.now(), length: length, authorized: { self.services.authorization.accessState() }, selectionReady: selectionReady,
                                                      apply: { self.services.applySelection(frozen) }, matches: { self.services.matchesSelection(frozen) })
             }
             switch result {
@@ -83,14 +83,15 @@ enum FocusFilterReading: Equatable { case on, off, unknown }
                                    pause: (TimeInterval) async -> Void) async {
         authorization.refresh()
         do {
-            try await retryingLock(pause: pause) { try engine.endFromFocusFilter(now: now(), authorized: authorization.status == .approved) }
+            // Each attempt reads the access value again, so a retry after a lock timeout uses the value after the pause.
+            try await retryingLock(pause: pause) { try engine.endFromFocusFilter(now: now(), authorized: authorization.accessState()) }
             log("off done", settings: settings, at: now())
         } catch { log("off error", settings: settings, at: now()) }
     }
     /// The first part of `FocusModel.refresh()`: reconcile, snapshot and the import of a terminal session.
     private func importPendingTerminal() async {
         do {
-            let access = services.authorization.status == .approved
+            let access = services.authorization.accessState()
             try await retryingLock { _ = try self.engine.reconcile(now: self.now(), authorized: access) }
             guard let terminal = try await retryingLock({ try self.engine.snapshot().session }), terminal.phase == .terminal else { return }
             // A repeated import finds the saved record and only acknowledges it.

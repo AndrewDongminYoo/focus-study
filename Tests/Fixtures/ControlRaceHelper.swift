@@ -117,22 +117,22 @@ private func waitForReady(_ root: URL) {
                     try! Data("focus.\(id.uuidString)".utf8).write(to: root.appendingPathComponent("ready"), options: .atomic)
                     usleep(UInt32(args[3])!)
                 }
-                _ = try engine.start(now: markerStart, authorized: { true }, apply: {}, matches: { true })
+                _ = try engine.start(now: markerStart, authorized: { .approved }, apply: {}, matches: { true })
             case "marker-exit":
                 // Exits inside the registration call, so the marker stays behind.
                 monitor.onRegister = { _ in exit(0) }
-                _ = try engine.start(now: markerStart, authorized: { true }, apply: {}, matches: { true })
+                _ = try engine.start(now: markerStart, authorized: { .approved }, apply: {}, matches: { true })
             case "marker-skip":
                 waitForReady(root)
                 let name = try String(contentsOf: root.appendingPathComponent("ready"), encoding: .utf8)
-                try engine.handleCallbackRetryingLock(activityName: name, kind: .didEnd, now: { markerCallbackNow }, authorized: { true })
+                try engine.handleCallbackRetryingLock(activityName: name, kind: .didEnd, now: { markerCallbackNow }, authorized: { .approved })
                 // The callback returned while the holder still held the lock, so its section did not run.
                 do { try SharedControlStore(directory: root).withExclusiveAccess(timeout: 0) { _ in }; exit(1) } catch ControlIssue.lockTimeout {}
             case "marker-wait":
                 waitForReady(root)
                 let begin = ProcessInfo.processInfo.systemUptime
                 do {
-                    try engine.handleCallbackRetryingLock(activityName: "focus.\(UUID().uuidString)", kind: .didEnd, now: { markerCallbackNow }, authorized: { true })
+                    try engine.handleCallbackRetryingLock(activityName: "focus.\(UUID().uuidString)", kind: .didEnd, now: { markerCallbackNow }, authorized: { .approved })
                     exit(1)
                 } catch ControlIssue.lockTimeout {
                     // 5 lock waits of 0.25 s and 4 pauses of 0.25 s.
@@ -140,7 +140,7 @@ private func waitForReady(_ root: URL) {
                 }
             case "stop-hold":
                 // Starts a session, then holds the lock inside the stop call of its end, while the engine's stop marker lists the focus activity.
-                let session = try engine.start(now: markerStart, authorized: { true }, apply: {}, matches: { true })
+                let session = try engine.start(now: markerStart, authorized: { .approved }, apply: {}, matches: { true })
                 monitor.onStop = { _ in
                     try! Data(session.activityName.utf8).write(to: root.appendingPathComponent("ready"), options: .atomic)
                     usleep(UInt32(args[3])!)
@@ -150,7 +150,7 @@ private func waitForReady(_ root: URL) {
                 waitForReady(root)
                 let name = try String(contentsOf: root.appendingPathComponent("ready"), encoding: .utf8)
                 let control = root.appendingPathComponent("control.json"), before = try Data(contentsOf: control)
-                try engine.handleCallbackRetryingLock(activityName: name, kind: .didEnd, now: { markerCallbackNow }, authorized: { true })
+                try engine.handleCallbackRetryingLock(activityName: name, kind: .didEnd, now: { markerCallbackNow }, authorized: { .approved })
                 // The callback returned while the holder still held the lock, so its section did not run and `control.json` is the holder's `ending`.
                 do { try SharedControlStore(directory: root).withExclusiveAccess(timeout: 0) { _ in }; exit(1) } catch ControlIssue.lockTimeout {}
                 if try Data(contentsOf: control) != before { exit(1) }
@@ -162,16 +162,16 @@ private func waitForReady(_ root: URL) {
                 let kind: CallbackKind = args[3] == "didStart" ? .didStart : .willEndWarning
                 let begin = ProcessInfo.processInfo.systemUptime
                 do {
-                    try engine.handleCallbackRetryingLock(activityName: name, kind: kind, now: { markerCallbackNow }, authorized: { true })
+                    try engine.handleCallbackRetryingLock(activityName: name, kind: kind, now: { markerCallbackNow }, authorized: { .approved })
                     exit(1)
                 } catch ControlIssue.lockTimeout {
                     // 5 lock waits of 0.25 s and 4 pauses of 0.25 s.
                     if ProcessInfo.processInfo.systemUptime - begin < 2 { exit(1) }
                 }
             case "marker-run":
-                try engine.handleCallbackRetryingLock(activityName: args[3], kind: .didEnd, now: { markerCallbackNow }, authorized: { true })
+                try engine.handleCallbackRetryingLock(activityName: args[3], kind: .didEnd, now: { markerCallbackNow }, authorized: { .approved })
             case "new":
-                _ = try engine.start(now: Date(timeIntervalSince1970: 2000), authorized: { true }, apply: {
+                _ = try engine.start(now: Date(timeIntervalSince1970: 2000), authorized: { .approved }, apply: {
                     try! Data("B".utf8).write(to: shield.file)
                     try! Data().write(to: root.appendingPathComponent("ready"))
                     usleep(60_000) // Hold the actual production lock while the stale worker attempts entry.
@@ -185,23 +185,23 @@ private func waitForReady(_ root: URL) {
                 })
             case "break-stale":
                 waitForReady(root)
-                try engine.handleCallback(activityName: args[3], kind: .willEndWarning, now: Date(timeIntervalSince1970: 540), authorized: true)
+                try engine.handleCallback(activityName: args[3], kind: .willEndWarning, now: Date(timeIntervalSince1970: 540), authorized: .approved)
             case "everyday-new":
                 let next = everydayLayer()
-                try engine.saveEveryday(next, now: everydayNow, authorized: { true }, containsStoredSelection: { true }, write: {
+                try engine.saveEveryday(next, now: everydayNow, authorized: { .approved }, containsStoredSelection: { true }, write: {
                     try! Data().write(to: root.appendingPathComponent("ready"))
                     usleep(60_000) // Hold the lock between the registration and the write of the new revision while the stale worker attempts entry.
                     try layer.write(SyntheticLayer(schedule: $0, selection: "B"))
                 })
             case "everyday-stale":
                 waitForReady(root)
-                try engine.handleCallback(activityName: args[3], kind: .didEnd, now: everydayNow, authorized: true)
+                try engine.handleCallback(activityName: args[3], kind: .didEnd, now: everydayNow, authorized: .approved)
             case "filter-end":
                 waitForReady(root)
-                try engine.endFromFocusFilter(now: Date(timeIntervalSince1970: 2100), authorized: true)
+                try engine.endFromFocusFilter(now: Date(timeIntervalSince1970: 2100), authorized: .approved)
             default:
                 waitForReady(root)
-                try engine.handleCallback(activityName: args[3], kind: .didEnd, now: Date(timeIntervalSince1970: 5000), authorized: true)
+                try engine.handleCallback(activityName: args[3], kind: .didEnd, now: Date(timeIntervalSince1970: 5000), authorized: .approved)
             }
             return
         }
@@ -290,7 +290,7 @@ private func waitForReady(_ root: URL) {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
         let shield = FileShield(root), engine = SessionControl(store: SharedControlStore(directory: root), monitoring: LocalMonitor(root), shield: shield, breakSelection: FileCopies(root, shield: shield), everyday: FileLayer(root))
-        let a = try engine.start(now: Date(timeIntervalSince1970: 100), authorized: { true }, apply: {}, matches: { true })
+        let a = try engine.start(now: Date(timeIntervalSince1970: 100), authorized: { .approved }, apply: {}, matches: { true })
         try engine.finish(id: a.id, reason: .earlyExit, now: Date(timeIntervalSince1970: 101))
         try engine.acknowledgeTerminal(id: a.id)
         let exited = try run(executable, ["stale", root.path, a.activityName], ["new", root.path])
@@ -305,10 +305,10 @@ private func waitForReady(_ root: URL) {
         defer { try? FileManager.default.removeItem(at: root) }
         let shield = FileShield(root), copies = FileCopies(root, shield: shield)
         let engine = SessionControl(store: SharedControlStore(directory: root), monitoring: LocalMonitor(root), shield: shield, breakSelection: copies, everyday: FileLayer(root))
-        let s = try engine.start(now: Date(timeIntervalSince1970: 100), authorized: { true }, apply: { try! Data("on".utf8).write(to: shield.file) }, matches: { true })
+        let s = try engine.start(now: Date(timeIntervalSince1970: 100), authorized: { .approved }, apply: { try! Data("on".utf8).write(to: shield.file) }, matches: { true })
         _ = try engine.requestBreak(id: s.id, now: Date(timeIntervalSince1970: 200))
         try engine.startBreak(id: s.id, now: Date(timeIntervalSince1970: 215), saveSelection: { try copies.save(id: s.id) })
-        try engine.handleCallback(activityName: s.breakActivityName(index: 1), kind: .willEndWarning, now: Date(timeIntervalSince1970: 390), authorized: true)
+        try engine.handleCallback(activityName: s.breakActivityName(index: 1), kind: .willEndWarning, now: Date(timeIntervalSince1970: 390), authorized: .approved)
         try engine.resume(id: s.id, now: Date(timeIntervalSince1970: 400))
         _ = try engine.requestBreak(id: s.id, now: Date(timeIntervalSince1970: 500))
         let exited = try run(executable, ["break-stale", root.path, s.breakActivityName(index: 1)], ["break-new", root.path, s.id.uuidString])
@@ -324,7 +324,7 @@ private func waitForReady(_ root: URL) {
         let layer = FileLayer(root), monitor = LocalMonitor(root), shield = FileShield(root)
         let engine = SessionControl(store: SharedControlStore(directory: root), monitoring: monitor, shield: shield, breakSelection: FileCopies(root, shield: shield), everyday: layer, calendar: utc)
         let first = everydayLayer()
-        try engine.saveEveryday(first, now: everydayNow, authorized: { true }, containsStoredSelection: { true }, write: { try layer.write(SyntheticLayer(schedule: $0, selection: "A")) })
+        try engine.saveEveryday(first, now: everydayNow, authorized: { .approved }, containsStoredSelection: { true }, write: { try layer.write(SyntheticLayer(schedule: $0, selection: "A")) })
         guard layer.applied == "A" else { exit(1) }
         let exited = try run(executable, ["everyday-stale", root.path, "everyday.\(first.revision.uuidString).range"], ["everyday-new", root.path])
         guard exited, let stored = try layer.stored(), stored.schedule.revision != first.revision,
@@ -339,7 +339,7 @@ private func waitForReady(_ root: URL) {
         let shield = FileShield(root)
         let engine = SessionControl(store: SharedControlStore(directory: root), monitoring: LocalMonitor(root), shield: shield, breakSelection: FileCopies(root, shield: shield), everyday: FileLayer(root))
         // A refused on call stores the activation marker without a session.
-        guard try engine.startFromFocusFilter(now: Date(timeIntervalSince1970: 1000), length: 1500, authorized: { true }, selectionReady: false, apply: {}, matches: { true }) == .refused(.selection),
+        guard try engine.startFromFocusFilter(now: Date(timeIntervalSince1970: 1000), length: 1500, authorized: { .approved }, selectionReady: false, apply: {}, matches: { true }) == .refused(.selection),
               try engine.snapshot().filterActivation != nil else { exit(1) }
         let exited = try run(executable, ["filter-end", root.path], ["new", root.path])
         let stored = try engine.snapshot(), current = stored.session

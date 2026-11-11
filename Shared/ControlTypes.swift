@@ -4,6 +4,9 @@ public enum SessionPhase: String, Codable { case preparing, active, waiting, onB
 public enum EndReason: String, Codable { case expired, earlyExit, authorizationRevoked, startFailed, recoveryInterrupted, clockChanged, deadlineMissed }
 /// Who started the session. Only a `focusFilter` session ends when its Focus turns off.
 public enum SessionOrigin: String, Codable { case manual, focusFilter }
+/// The access value that a lock section uses (the 2026-11-11 access-state design). It is an input to a section and is never stored.
+/// Only `denied` is an observation of revocation; `unknown` (no value yet, or a value that this code does not know) runs a section as with access, except that an action that needs access refuses.
+public enum AccessState: Equatable, Sendable { case approved, denied, unknown }
 public struct ControlSession: Codable, Equatable {
     public var id: UUID
     public var startedAt: Date

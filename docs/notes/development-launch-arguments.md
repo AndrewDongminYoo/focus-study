@@ -13,6 +13,7 @@ Debug 빌드의 scheme 설정에서 Launch Arguments에 넣어 특정 화면이�
 | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `--ui-testing approved --selected`             | 권한을 받고 제한할 앱을 고른 기본 화면                                                                                       |
 | `--ui-testing denied --selected`               | 권한을 거절한 화면                                                                                                           |
+| `--ui-testing checking --selected`             | 권한 값을 아직 확인하지 못한 화면입니다. 시작 버튼을 누르면 권한을 요청하고, 승인된 뒤에 시작합니다.                         |
 | `--ui-testing registration-failure --selected` | monitoring 등록에 실패한 화면                                                                                                |
 | `--ui-testing startup-failure --selected`      | 세션이 진행 중일 때 저장소가 처음 한 번 실패하는 복구 화면                                                                   |
 | `--ui-testing onboarding`                      | 설정을 마치지 않은 새 사용자의 온보딩                                                                                        |

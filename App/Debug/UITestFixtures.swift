@@ -8,10 +8,17 @@ import SwiftUI
 
 @MainActor @Observable final class FixtureAuthorization: AuthorizationProviding {
     var status: AccessStatus
-    init(denied: Bool, notRequested: Bool = false) { status = notRequested ? .notRequested : denied ? .denied : .approved }
+    /// `checking` stays until a request: the fixture of a cold launch whose published value has not settled yet.
+    init(denied: Bool, notRequested: Bool = false, checking: Bool = false) { status = notRequested ? .notRequested : checking ? .checking : denied ? .denied : .approved }
     func requestIndividual() async { status = .approved }
     func refresh() {}
-    func hasAccessNow() -> Bool { status == .approved }
+    func accessState() -> AccessState {
+        switch status {
+        case .approved: .approved
+        case .denied: .denied
+        case .notRequested, .checking: .unknown
+        }
+    }
 }
 @MainActor @Observable final class FixtureSelection: SelectionStoring {
     var selected: Bool
@@ -159,7 +166,7 @@ extension FocusServices {
         }
         let engine = SessionControl(store: store, monitoring: monitoring, shield: FixtureShield(), breakSelection: breakSelection, everyday: everyday, timing: timing, calendar: calendar)
         let onboarding = arguments.contains("onboarding")
-        var services = FocusServices(authorization: FixtureAuthorization(denied: arguments.contains("denied"), notRequested: arguments.contains("not-requested") || onboarding), selection: FixtureSelection(selected: arguments.contains("--selected") && !onboarding), engine: engine, applySelection: { _ in }, matchesSelection: { _ in true }, isFixture: true)
+        var services = FocusServices(authorization: FixtureAuthorization(denied: arguments.contains("denied"), notRequested: arguments.contains("not-requested") || onboarding, checking: arguments.contains("checking")), selection: FixtureSelection(selected: arguments.contains("--selected") && !onboarding), engine: engine, applySelection: { _ in }, matchesSelection: { _ in true }, isFixture: true)
         services.saveBreakSelection = { _, id in breakSelection.copies.insert(id) }
         services.everydaySelection = { everyday.schedule == nil ? nil : everyday.selection }
         services.everydayContains = { everyday.contains($0) }
@@ -196,15 +203,15 @@ extension FocusRuntime {
     static func fixture(arguments: [String]) throws -> FocusRuntime {
         let services = FocusServices.fixture(arguments: arguments)
         if arguments.contains("startup-failure") {
-            _ = try services.engine.start(now: Date(), authorized: { true }, apply: {}, matches: { true })
+            _ = try services.engine.start(now: Date(), authorized: { .approved }, apply: {}, matches: { true })
         }
         if arguments.contains("expiring") {
             // A session with the configured length that started 3 seconds before its end, so the UI test sees the real expiry path.
             let length = services.settings.lengthSeconds
-            _ = try services.engine.start(now: Date().addingTimeInterval(-(length - 3)), length: length, authorized: { true }, apply: {}, matches: { true })
+            _ = try services.engine.start(now: Date().addingTimeInterval(-(length - 3)), length: length, authorized: { .approved }, apply: {}, matches: { true })
         }
         var attempts = 0
-        return FocusRuntime(recovery: StartupRecovery(engine: services.engine), hasAccess: services.authorization.hasAccessNow, holder: FocusRuntimeHolder(engine: services.engine, authorization: services.authorization, settings: services.settings, activityDidChange: services.activityDidChange) {
+        return FocusRuntime(recovery: StartupRecovery(engine: services.engine), accessState: services.authorization.accessState, holder: FocusRuntimeHolder(engine: services.engine, authorization: services.authorization, settings: services.settings, activityDidChange: services.activityDidChange) {
             attempts += 1
             if arguments.contains("startup-failure"), attempts == 1 { throw ControlIssue.io }
             let container = try ModelContainer(for: SessionRecord.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none))

@@ -8,10 +8,10 @@ import XCTest
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let engine = SessionControl(store: SharedControlStore(directory: directory), monitoring: monitor, shield: shield, breakSelection: DiagnosticBreakSelectionSpy(), everyday: ModelTestEverydayLayer())
-        let diagnostics = DeviceDiagnostics(monitoring: monitor, engine: engine, hasAccess: { true })
+        let diagnostics = DeviceDiagnostics(monitoring: monitor, engine: engine, hasAccess: { .approved })
         diagnostics.armRegistrationFailure()
         var applied = false
-        XCTAssertThrowsError(try engine.start(now: Date(), authorized: { true }, apply: { applied = true }, matches: { true }))
+        XCTAssertThrowsError(try engine.start(now: Date(), authorized: { .approved }, apply: { applied = true }, matches: { true }))
         XCTAssertEqual(base.registered.count, 1)
         XCTAssertEqual(base.stopped, base.registered)
         XCTAssertTrue(base.registeredSessionIDs.isEmpty)
@@ -21,7 +21,7 @@ import XCTest
         XCTAssertEqual(failed.phase, .terminal)
         XCTAssertEqual(failed.reason, .startFailed)
         try engine.acknowledgeTerminal(id: failed.id)
-        let next = try engine.start(now: Date(), authorized: { true }, apply: {}, matches: { true })
+        let next = try engine.start(now: Date(), authorized: { .approved }, apply: {}, matches: { true })
         XCTAssertTrue(base.isRegistered(id: next.id))
         XCTAssertEqual(next.phase, .active)
     }
@@ -44,14 +44,14 @@ import XCTest
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let engine = SessionControl(store: SharedControlStore(directory: directory), monitoring: monitor, shield: shield, breakSelection: DiagnosticBreakSelectionSpy(), everyday: ModelTestEverydayLayer())
-        let diagnostics = DeviceDiagnostics(monitoring: monitor, engine: engine, hasAccess: { false })
-        let first = try engine.start(now: Date(), authorized: { true }, apply: {}, matches: { true })
+        let diagnostics = DeviceDiagnostics(monitoring: monitor, engine: engine, hasAccess: { .denied })
+        let first = try engine.start(now: Date(), authorized: { .approved }, apply: {}, matches: { true })
         diagnostics.capture(first)
         XCTAssertFalse(diagnostics.canReplay(current: first))
         XCTAssertThrowsError(try diagnostics.replay(current: first))
         try engine.finish(id: first.id, reason: .earlyExit, now: Date())
         try engine.acknowledgeTerminal(id: first.id)
-        let next = try engine.start(now: Date(), authorized: { true }, apply: {}, matches: { true })
+        let next = try engine.start(now: Date(), authorized: { .approved }, apply: {}, matches: { true })
         let clears = shield.clearCount, stops = base.stopped
         XCTAssertTrue(diagnostics.canReplay(current: next))
         try diagnostics.replay(current: next)
@@ -194,9 +194,9 @@ import XCTest
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let engine = SessionControl(store: SharedControlStore(directory: directory), monitoring: monitor, shield: shield, breakSelection: DiagnosticBreakSelectionSpy(), everyday: ModelTestEverydayLayer())
-        let diagnostics = DeviceDiagnostics(monitoring: monitor, engine: engine, hasAccess: { true }, probe: RegistrationProbe(center: center, log: { _ in }))
+        let diagnostics = DeviceDiagnostics(monitoring: monitor, engine: engine, hasAccess: { .approved }, probe: RegistrationProbe(center: center, log: { _ in }))
         XCTAssertTrue(diagnostics.canProbeRegistration)
-        let session = try engine.start(now: Date(), authorized: { true }, apply: {}, matches: { true })
+        let session = try engine.start(now: Date(), authorized: { .approved }, apply: {}, matches: { true })
         diagnostics.runRegistrationProbe()
         XCTAssertTrue(center.events.isEmpty)
         XCTAssertEqual(diagnostics.message, "세션이 남아 있어 비교하지 않았습니다. 세션을 끝낸 뒤 다시 눌러 주세요.")
@@ -217,18 +217,18 @@ import XCTest
         XCTAssertNil(try engine.snapshot().session)
         XCTAssertEqual(shield.clearCount, shieldsBefore)
         XCTAssertEqual(base.stopped, stopsBefore)
-        XCTAssertFalse(DeviceDiagnostics(monitoring: monitor, engine: engine, hasAccess: { true }).canProbeRegistration)
+        XCTAssertFalse(DeviceDiagnostics(monitoring: monitor, engine: engine, hasAccess: { .approved }).canProbeRegistration)
     }
     func testProbeActivityCallbackNeitherEndsSessionNorChangesShield() throws {
         let base = DiagnosticMonitoringSpy(), shield = DiagnosticShieldSpy()
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let engine = SessionControl(store: SharedControlStore(directory: directory), monitoring: base, shield: shield, breakSelection: DiagnosticBreakSelectionSpy(), everyday: ModelTestEverydayLayer())
-        let session = try engine.start(now: Date(), authorized: { true }, apply: {}, matches: { true })
+        let session = try engine.start(now: Date(), authorized: { .approved }, apply: {}, matches: { true })
         let clears = shield.clearCount, stops = base.stopped
         for name in RegistrationProbe.activityNames {
             for kind in [CallbackKind.didStart, .willEndWarning, .didEnd] {
-                try engine.handleCallback(activityName: name, kind: kind, now: Date(), authorized: true)
+                try engine.handleCallback(activityName: name, kind: kind, now: Date(), authorized: .approved)
             }
         }
         XCTAssertEqual(try engine.snapshot().session?.id, session.id)

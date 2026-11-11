@@ -20,7 +20,7 @@ import XCTest
         let store = ModelTestStore()
         let engine = SessionControl(store: store, monitoring: ModelTestMonitoring(), shield: ModelTestShield(),
                                     breakSelection: ModelTestBreakSelection(), everyday: ModelTestEverydayLayer())
-        _ = try engine.start(now: Date(), authorized: { true }, apply: {}, matches: { true })
+        _ = try engine.start(now: Date(), authorized: { .approved }, apply: {}, matches: { true })
         return (engine, store)
     }
     func testAppPrivateMarkerSurvivesCoordinatorAndDefaultsReconstruction() async throws {
@@ -47,7 +47,7 @@ import XCTest
         let monitor = ModelTestMonitoring(), shield = ModelTestShield()
         let selection = ModelTestBreakSelection(), everyday = ModelTestEverydayLayer()
         let engine = SessionControl(store: store, monitoring: monitor, shield: shield, breakSelection: selection, everyday: everyday)
-        let session = try engine.start(now: Date(), authorized: { true }, apply: { shield.applied = true }, matches: { shield.applied })
+        let session = try engine.start(now: Date(), authorized: { .approved }, apply: { shield.applied = true }, matches: { shield.applied })
         selection.copies.insert(session.id); everyday.shieldOn = true
         let coordinator = FocusActivityRuntime.coordinator(engine: engine, defaults: UserDefaults(suiteName: UUID().uuidString)!, client: client, canStart: { true })
         await coordinator.synchronize(); store.failRead = true

@@ -45,7 +45,7 @@ enum BreakAction: String { case request, cancelWait, startBreak, resume }
 /// A break transition reserved by the screen before its feedback has had a chance to appear.
 /// `requestedAt` is the tick time of an automatic break start, which the engine checks against the wait end and its grace.
 struct PendingBreak: Equatable { let id: UUID; let action: BreakAction; let requestedAt: Date }
-enum StartBlocker: Equatable { case access, error, selection }
+enum StartBlocker: Equatable { case access, checking, error, selection }
 enum OnboardingStep: Int, CaseIterable { case intro, permission, selection, length }
 enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
 @MainActor @Observable final class FocusModel {
@@ -56,6 +56,8 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
     private(set) var errorMessage: String?
     private(set) var isStarting = false
     private(set) var startRequestID: UUID?
+    /// The recovery tap whose access request is in flight; leaving the foreground clears it.
+    private var accessRecoveryID: UUID?
     /// A break transition that waits for its feedback frame; while it is set, every break action is refused.
     private(set) var pendingBreak: PendingBreak?
     private(set) var now = Date()
@@ -92,26 +94,32 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
         return Int(ceil(max(0, lastResume.timeIntervalSince(now))))
     }
     var counts: (apps: Int, websites: Int, categories: Int) { services.selection.counts }
-    var canStart: Bool { access == .approved && current == nil && !isStarting && errorMessage == nil && counts.apps + counts.websites > 0 }
+    /// In `checking` the start control stays enabled: its tap is the access recovery (`recoverAccessAndStart`).
+    var canStart: Bool { (access == .approved || access == .checking) && current == nil && !isStarting && errorMessage == nil && counts.apps + counts.websites > 0 }
     /// The first unmet start condition, in the order the person has to resolve them.
     var startBlocker: StartBlocker? {
         guard current == nil, !isStarting else { return nil }
+        // A failed recovery tap sets the error, which disables the start control until "다시 확인하기".
+        if access == .checking { return errorMessage == nil ? .checking : .error }
         if access != .approved { return .access }
         if errorMessage != nil { return .error }
         return counts.apps + counts.websites == 0 ? .selection : nil
     }
     var remaining: Int { current.map { TimeRules.remaining(session: $0, now: now) } ?? Int(services.settings.lengthSeconds) }
     /// Which screen launch shows: onboarding resumes at its first unfinished step; a finished person who lost access or selection returns to that step.
+    /// The screens follow the session before access, so a session that is not `terminal` stays reachable in every access status.
     var route: LaunchRoute {
+        if let current, current.phase != .terminal { return .timer }
         let hasSelection = counts.apps + counts.websites > 0
         if !services.settings.hasCompletedOnboarding {
             switch access {
             case .notRequested: return .onboarding(.intro)
-            case .denied: return .onboarding(.permission)
+            case .denied, .checking: return .onboarding(.permission)
             case .approved: return .onboarding(hasSelection ? .length : .selection)
             }
         }
-        if access != .approved { return .onboarding(.permission) }
+        // `checking` is not a revocation: the timer screen shows its recovery start control.
+        if access == .denied || access == .notRequested { return .onboarding(.permission) }
         return hasSelection ? .timer : .onboarding(.selection)
     }
     convenience init(services: FocusServices, context: ModelContext) {
@@ -128,7 +136,7 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
         defer { services.activityDidChange() }
         services.authorization.refresh(); now = Date()
         do {
-            try services.engine.reconcile(now: now, authorized: access == .approved, clockChanged: clockChanged)
+            try services.engine.reconcile(now: now, authorized: services.authorization.accessState(), clockChanged: clockChanged)
             current = try services.engine.snapshot().session
         } catch {
             current = nil
@@ -157,7 +165,7 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
     }
     /// Its own `do`/`catch`: a lock timeout against a Monitor everyday callback never changes `current` or `errorMessage`.
     func refreshEveryday() {
-        do { everydayStatus = try services.engine.everydayStatus(now: Date(), authorized: access == .approved) }
+        do { everydayStatus = try services.engine.everydayStatus(now: Date(), authorized: services.authorization.accessState()) }
         catch {
             var kept = everydayStatus ?? EverydayStatus(schedule: nil, blocksNow: false, nextChange: nil, issue: nil)
             kept.issue = .unchecked; everydayStatus = kept
@@ -167,6 +175,24 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
     func start() {
         guard canStart else { return }
         performStart()
+    }
+    /// The tap on the start control while access is `checking`: request access, then reserve the start only after the published value reads approved.
+    /// The engine's start still requires `approved` inside the lock, so a request result alone never starts a session.
+    /// Leaving the foreground during the request cancels the tap, so a start never waits for the return.
+    func recoverAccessAndStart() async {
+        guard access == .checking, canStart else { return }
+        let recovery = UUID()
+        accessRecoveryID = recovery; isStarting = true
+        await services.authorization.requestIndividual()
+        let wasCancelled = accessRecoveryID != recovery
+        if !wasCancelled { accessRecoveryID = nil; isStarting = false }
+        refresh()
+        guard !wasCancelled else { return }
+        guard access == .approved else {
+            if access == .checking, errorMessage == nil { errorMessage = "스크린 타임 권한을 확인하지 못했어요. 다시 확인해 주세요." }
+            return
+        }
+        requestStart()
     }
     /// Reserves the UI action before its feedback has had a chance to appear. No control operation runs here.
     @discardableResult func requestStart() -> UUID? {
@@ -206,7 +232,7 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
             #else
             let startedAt = Date()
             #endif
-            _ = try services.engine.start(now: startedAt, length: length, authorized: { self.services.authorization.hasAccessNow() }, apply: { self.services.applySelection(frozen) }, matches: { self.services.matchesSelection(frozen) })
+            _ = try services.engine.start(now: startedAt, length: length, authorized: { self.services.authorization.accessState() }, apply: { self.services.applySelection(frozen) }, matches: { self.services.matchesSelection(frozen) })
             refresh()
         } catch {
             refresh()
@@ -274,6 +300,7 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
     /// A pending break action is dropped first; a pending automatic break start then gives way to that cancel.
     func sceneDidLeaveForeground() {
         if let request = startRequestID { cancelPendingStart(request) }
+        if accessRecoveryID != nil { accessRecoveryID = nil; isStarting = false }
         if let pending = pendingBreak { cancelPendingBreak(pending.id) }
         if current?.phase == .waiting { cancelWait() }
     }

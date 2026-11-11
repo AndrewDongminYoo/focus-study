@@ -3,10 +3,20 @@ import FamilyControls
 import DeviceActivity
 import ManagedSettings
 final class ScreenTimeAdapterTests: XCTestCase {
-    func testApprovedStatusIsAcceptedButDeniedAndUnknownAreNot() {
-        XCTAssertTrue(ScreenTimeAccess.isApproved(.approved))
-        XCTAssertFalse(ScreenTimeAccess.isApproved(.denied)); XCTAssertFalse(ScreenTimeAccess.isApproved(.notDetermined))
-        if #available(iOS 26.4, *) { XCTAssertTrue(ScreenTimeAccess.isApproved(.approvedWithDataAccess)) }
+    func testStatusMapsToApprovedDeniedOrUnknown() {
+        XCTAssertEqual(ScreenTimeAccess.state(.approved), .approved)
+        XCTAssertEqual(ScreenTimeAccess.state(.denied), .denied)
+        XCTAssertEqual(ScreenTimeAccess.state(.notDetermined), .unknown, "not determined is not a revocation")
+        if #available(iOS 26.4, *) { XCTAssertEqual(ScreenTimeAccess.state(.approvedWithDataAccess), .approved) }
+    }
+    func testReaderReadsOnTheMainQueueFromAnyThread() {
+        XCTAssertEqual(ScreenTimeAccess.current(read: { XCTAssertTrue(Thread.isMainThread); return .denied }), .denied)
+        let done = expectation(description: "background read")
+        DispatchQueue.global().async {
+            let state = ScreenTimeAccess.current(read: { XCTAssertTrue(Thread.isMainThread); return .notDetermined })
+            XCTAssertEqual(state, .unknown); done.fulfill()
+        }
+        wait(for: [done], timeout: 5)
     }
     func testScheduleNeverExpiresBeforeFractionalDeadline() {
         let end = Date(timeIntervalSince1970: 3000.75)

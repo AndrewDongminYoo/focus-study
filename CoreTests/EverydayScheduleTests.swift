@@ -100,21 +100,21 @@ final class EverydayScheduleTests: XCTestCase {
     func testBreakLiftsTheLayerOnlyBeforeBreakEndsAt() {
         let schedule = layer(), now = at(10, 0)
         var session = ControlSession(startedAt: now.addingTimeInterval(-300)); session.phase = .onBreak; session.breakEndsAt = now
-        XCTAssertFalse(EverydayRules.blocks(schedule: schedule, session: session, authorized: true, now: now.addingTimeInterval(-1), calendar: calendar))
-        XCTAssertTrue(EverydayRules.blocks(schedule: schedule, session: session, authorized: true, now: now, calendar: calendar))
+        XCTAssertFalse(EverydayRules.blocks(schedule: schedule, session: session, authorized: .approved, now: now.addingTimeInterval(-1), calendar: calendar))
+        XCTAssertTrue(EverydayRules.blocks(schedule: schedule, session: session, authorized: .approved, now: now, calendar: calendar))
         for phase in [SessionPhase.preparing, .active, .waiting, .breakOver, .ending, .terminal] {
             var other = session; other.phase = phase
-            XCTAssertTrue(EverydayRules.blocks(schedule: schedule, session: other, authorized: true, now: now.addingTimeInterval(-1), calendar: calendar), "\(phase)")
-            XCTAssertFalse(EverydayRules.blocks(schedule: schedule, session: other, authorized: true, now: at(7, 0), calendar: calendar), "\(phase)")
+            XCTAssertTrue(EverydayRules.blocks(schedule: schedule, session: other, authorized: .approved, now: now.addingTimeInterval(-1), calendar: calendar), "\(phase)")
+            XCTAssertFalse(EverydayRules.blocks(schedule: schedule, session: other, authorized: .approved, now: at(7, 0), calendar: calendar), "\(phase)")
         }
-        XCTAssertTrue(EverydayRules.blocks(schedule: schedule, session: nil, authorized: true, now: now, calendar: calendar))
-        XCTAssertFalse(EverydayRules.blocks(schedule: nil, session: nil, authorized: true, now: now, calendar: calendar))
+        XCTAssertTrue(EverydayRules.blocks(schedule: schedule, session: nil, authorized: .approved, now: now, calendar: calendar))
+        XCTAssertFalse(EverydayRules.blocks(schedule: nil, session: nil, authorized: .approved, now: now, calendar: calendar))
     }
     func testUnauthorizedNeverBlocksAndUnknownAccessFollowsTheSchedule() {
         let schedule = layer()
-        XCTAssertFalse(EverydayRules.blocks(schedule: schedule, session: nil, authorized: false, now: at(10, 0), calendar: calendar))
-        XCTAssertTrue(EverydayRules.blocks(schedule: schedule, session: nil, authorized: nil, now: at(10, 0), calendar: calendar))
-        XCTAssertFalse(EverydayRules.blocks(schedule: schedule, session: nil, authorized: nil, now: at(19, 0), calendar: calendar))
+        XCTAssertFalse(EverydayRules.blocks(schedule: schedule, session: nil, authorized: .denied, now: at(10, 0), calendar: calendar))
+        XCTAssertTrue(EverydayRules.blocks(schedule: schedule, session: nil, authorized: .unknown, now: at(10, 0), calendar: calendar))
+        XCTAssertFalse(EverydayRules.blocks(schedule: schedule, session: nil, authorized: .unknown, now: at(19, 0), calendar: calendar))
     }
     func testStricterEditsAreAcceptedInsideTheRange() {
         let stored = layer(windows: [lunch]), now = at(10, 0)
@@ -194,12 +194,12 @@ final class EverydayScheduleTests: XCTestCase {
         let schedule = off(layer()), now = at(10, 0)
         var session = ControlSession(startedAt: now.addingTimeInterval(-300)); session.phase = .onBreak; session.breakEndsAt = now
         // The re-block evaluates the rule without its break line (`session: nil`); the session end evaluates it with the stored `ending` phase.
-        XCTAssertFalse(EverydayRules.blocks(schedule: schedule, session: nil, authorized: nil, now: now, calendar: calendar))
+        XCTAssertFalse(EverydayRules.blocks(schedule: schedule, session: nil, authorized: .unknown, now: now, calendar: calendar))
         for phase in [SessionPhase.onBreak, .breakOver, .ending, .terminal] {
             var other = session; other.phase = phase
-            XCTAssertFalse(EverydayRules.blocks(schedule: schedule, session: other, authorized: true, now: now, calendar: calendar), "\(phase)")
+            XCTAssertFalse(EverydayRules.blocks(schedule: schedule, session: other, authorized: .approved, now: now, calendar: calendar), "\(phase)")
         }
-        XCTAssertEqual(EverydayRules.nextChange(schedule: schedule, session: session, authorized: true, now: now.addingTimeInterval(-60), calendar: calendar),
+        XCTAssertEqual(EverydayRules.nextChange(schedule: schedule, session: session, authorized: .approved, now: now.addingTimeInterval(-60), calendar: calendar),
                        at(8, 0, day: 3), "a break that ends on a day that is off changes nothing that day")
     }
     func testNextChangeOnADayThatIsOffIsTheNextDaysFirstBlockedTime() {

@@ -126,12 +126,12 @@ struct RegistrationProbe {
 @MainActor @Observable final class DeviceDiagnostics {
     let monitoring: DiagnosticMonitoring
     private let engine: SessionControl
-    private let hasAccess: () -> Bool
+    private let hasAccess: () -> AccessState
     private let everydayShield: ScreenTimeEverydayShield?
     private let probe: RegistrationProbe?
     private var savedActivity: String?
     private(set) var message: String?
-    init(monitoring: DiagnosticMonitoring, engine: SessionControl, hasAccess: @escaping () -> Bool, everydayShield: ScreenTimeEverydayShield? = nil,
+    init(monitoring: DiagnosticMonitoring, engine: SessionControl, hasAccess: @escaping () -> AccessState, everydayShield: ScreenTimeEverydayShield? = nil,
          probe: RegistrationProbe? = nil) {
         self.monitoring = monitoring; self.engine = engine; self.hasAccess = hasAccess; self.everydayShield = everydayShield; self.probe = probe
     }

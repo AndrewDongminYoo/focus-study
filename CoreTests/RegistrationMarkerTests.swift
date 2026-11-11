@@ -82,7 +82,7 @@ final class RegistrationMarkerTests: XCTestCase {
     /// A 1500-second session that started at `t0`.
     private func started() throws -> (SessionControl, MarkerControlStore, MarkerSpyMonitoring, ControlSession) {
         let (engine, store, monitor, _) = world()
-        let session = try engine.start(now: t0, authorized: { true }, apply: {}, matches: { true })
+        let session = try engine.start(now: t0, authorized: { .approved }, apply: {}, matches: { true })
         return (engine, store, monitor, session)
     }
 
@@ -180,7 +180,7 @@ final class RegistrationMarkerTests: XCTestCase {
         store.lockFailures = [ControlIssue.lockTimeout]
         let before = store.envelope.session; var pauses: [TimeInterval] = [], reads = 0
         // The section would end the session at its focus end.
-        try engine.handleCallbackRetryingLock(activityName: session.activityName, kind: .didEnd, now: { reads += 1; return self.at(1500) }, authorized: { true }, sleep: { pauses.append($0) })
+        try engine.handleCallbackRetryingLock(activityName: session.activityName, kind: .didEnd, now: { reads += 1; return self.at(1500) }, authorized: { .approved }, sleep: { pauses.append($0) })
         XCTAssertTrue(pauses.isEmpty); XCTAssertEqual(reads, 1)
         XCTAssertEqual(store.timeouts.suffix(1), [0]); XCTAssertEqual(store.envelope.session, before)
     }
@@ -198,7 +198,7 @@ final class RegistrationMarkerTests: XCTestCase {
             let before = store.envelope.session, firstLockCall = store.timeouts.count
             store.lockFailures = Array(repeating: ControlIssue.lockTimeout, count: 6)
             var pauses: [TimeInterval] = []
-            XCTAssertThrowsError(try engine.handleCallbackRetryingLock(activityName: session.activityName, kind: kind, now: { self.at(1500) }, authorized: { true }, sleep: { pauses.append($0) }), label) {
+            XCTAssertThrowsError(try engine.handleCallbackRetryingLock(activityName: session.activityName, kind: kind, now: { self.at(1500) }, authorized: { .approved }, sleep: { pauses.append($0) }), label) {
                 XCTAssertEqual($0 as? ControlIssue, .lockTimeout, label)
             }
             XCTAssertEqual(pauses, Array(repeating: 0.25, count: 4), label)
@@ -215,7 +215,7 @@ final class RegistrationMarkerTests: XCTestCase {
             if attempt == firstLockCall + 2 { store.markers.marker = RegistrationMarker(activityName: session.activityName, uptime: 1000, validUntil: self.at(2000)) }
         }
         let before = store.envelope.session; var pauses: [TimeInterval] = []
-        try engine.handleCallbackRetryingLock(activityName: session.activityName, kind: .didEnd, now: { self.at(1500) }, authorized: { true }, sleep: { pauses.append($0) })
+        try engine.handleCallbackRetryingLock(activityName: session.activityName, kind: .didEnd, now: { self.at(1500) }, authorized: { .approved }, sleep: { pauses.append($0) })
         XCTAssertEqual(pauses, [0.25]); XCTAssertEqual(store.timeouts.count - firstLockCall, 3)
         XCTAssertEqual(store.lockFailures.count, 3); XCTAssertEqual(store.envelope.session, before)
     }
@@ -224,7 +224,7 @@ final class RegistrationMarkerTests: XCTestCase {
         // A marker without a busy lock is a leftover, so the callback runs.
         store.markers.marker = RegistrationMarker(activityName: session.activityName, uptime: 1000, validUntil: at(2000))
         var pauses: [TimeInterval] = []
-        try engine.handleCallbackRetryingLock(activityName: session.activityName, kind: .didEnd, now: { self.at(1500) }, authorized: { true }, sleep: { pauses.append($0) })
+        try engine.handleCallbackRetryingLock(activityName: session.activityName, kind: .didEnd, now: { self.at(1500) }, authorized: { .approved }, sleep: { pauses.append($0) })
         XCTAssertTrue(pauses.isEmpty); XCTAssertEqual(store.timeouts.last, 0)
         XCTAssertEqual(store.envelope.session?.phase, .terminal); XCTAssertEqual(store.envelope.session?.reason, .expired)
     }
@@ -255,7 +255,7 @@ final class RegistrationMarkerTests: XCTestCase {
         let (engine, store, monitor, everyday) = world()
         let now = utc.date(from: DateComponents(year: 2026, month: 11, day: 10, hour: 10, minute: 30, second: 15))!.addingTimeInterval(0.5)
         let schedule = EverydaySchedule(revision: UUID(), enabled: true, rangeStart: 0, rangeEnd: 23 * 60 + 55, windows: [EverydayWindow(kind: .lunch, start: 13 * 60, end: 14 * 60)])
-        try engine.saveEveryday(schedule, now: now, authorized: { true }, containsStoredSelection: { true }, write: { everyday.schedule = $0 })
+        try engine.saveEveryday(schedule, now: now, authorized: { .approved }, containsStoredSelection: { true }, write: { everyday.schedule = $0 })
         let markers = monitor.seen.filter { $0.call == "registerEveryday" }.map(\.marker)
         XCTAssertEqual(markers.map { $0?.activityNames.first }, ["everyday.\(schedule.revision.uuidString).range", "everyday.\(schedule.revision.uuidString).window.1"])
         let nextMinute = utc.date(from: DateComponents(year: 2026, month: 11, day: 10, hour: 10, minute: 31))!
@@ -267,9 +267,9 @@ final class RegistrationMarkerTests: XCTestCase {
         let now = utc.date(from: DateComponents(year: 2026, month: 11, day: 10, hour: 10, minute: 30, second: 15))!
         let nextMinute = utc.date(from: DateComponents(year: 2026, month: 11, day: 10, hour: 10, minute: 31))!
         let sections: [(String, (SessionControl, EverydaySchedule) throws -> Void)] = [
-            ("reconcile", { engine, _ in _ = try engine.reconcile(now: now, authorized: true) }),
+            ("reconcile", { engine, _ in _ = try engine.reconcile(now: now, authorized: .approved) }),
             ("didEnd callback", { engine, schedule in
-                try engine.handleCallback(activityName: "everyday.\(schedule.revision.uuidString).window.1", kind: .didEnd, now: now, authorized: true)
+                try engine.handleCallback(activityName: "everyday.\(schedule.revision.uuidString).window.1", kind: .didEnd, now: now, authorized: .approved)
             })
         ]
         for (label, run) in sections {
@@ -287,21 +287,21 @@ final class RegistrationMarkerTests: XCTestCase {
     func testMarkerIsDeletedAfterARegistrationThatThrows() throws {
         let (engine, store, monitor, _) = world()
         monitor.failRegistration = true
-        XCTAssertThrowsError(try engine.start(now: t0, authorized: { true }, apply: {}, matches: { true }))
+        XCTAssertThrowsError(try engine.start(now: t0, authorized: { .approved }, apply: {}, matches: { true }))
         XCTAssertNotNil(monitor.seen.first?.marker)
         XCTAssertNil(store.markers.marker); XCTAssertEqual(store.envelope.session?.reason, .startFailed)
     }
     func testMarkerWriteThatThrowsDoesNotStopTheRegistration() throws {
         let (engine, store, monitor, _) = world()
         store.markers.failWrite = true
-        let session = try engine.start(now: t0, authorized: { true }, apply: {}, matches: { true })
+        let session = try engine.start(now: t0, authorized: { .approved }, apply: {}, matches: { true })
         XCTAssertEqual(store.markers.writes, 1); XCTAssertNil(monitor.seen.first?.marker)
         XCTAssertEqual(store.envelope.session?.phase, .active); XCTAssertTrue(monitor.isRegistered(id: session.id))
     }
     func testMarkerDeleteThatThrowsDoesNotFailTheSection() throws {
         let (engine, store, _, _) = world()
         store.markers.failDelete = true
-        let session = try engine.start(now: t0, authorized: { true }, apply: {}, matches: { true })
+        let session = try engine.start(now: t0, authorized: { .approved }, apply: {}, matches: { true })
         XCTAssertEqual(store.envelope.session?.id, session.id); XCTAssertEqual(store.envelope.session?.phase, .active)
         XCTAssertEqual(store.markers.marker?.activityNames, [session.activityName], "a leftover for the next lock holder")
     }
@@ -312,7 +312,7 @@ final class RegistrationMarkerTests: XCTestCase {
     private func onBreak() throws -> (SessionControl, MarkerControlStore, MarkerSpyMonitoring, FakeEverydayStore, ControlSession) {
         let store = MarkerControlStore(), monitor = MarkerSpyMonitoring(markers: store.markers), everyday = FakeEverydayStore(), copies = FakeBreakSelection()
         let engine = SessionControl(store: store, monitoring: monitor, shield: FakeShield(), breakSelection: copies, everyday: everyday, calendar: utc)
-        let session = try engine.start(now: t0, authorized: { true }, apply: {}, matches: { true })
+        let session = try engine.start(now: t0, authorized: { .approved }, apply: {}, matches: { true })
         _ = try engine.requestBreak(id: session.id, now: at(100))
         try engine.startBreak(id: session.id, now: at(115), saveSelection: { copies.copies.insert(session.id) })
         XCTAssertEqual(store.envelope.session?.phase, .onBreak)
@@ -344,9 +344,9 @@ final class RegistrationMarkerTests: XCTestCase {
     func testEverydayStopsMarkTheStoppedPart() throws {
         let (engine, store, monitor, everyday) = world()
         let first = EverydaySchedule(revision: UUID(), enabled: true, rangeStart: 0, rangeEnd: 23 * 60 + 55, windows: [EverydayWindow(kind: .lunch, start: 13 * 60, end: 14 * 60)])
-        try engine.saveEveryday(first, now: t0, authorized: { true }, containsStoredSelection: { true }, write: { everyday.schedule = $0 })
+        try engine.saveEveryday(first, now: t0, authorized: { .approved }, containsStoredSelection: { true }, write: { everyday.schedule = $0 })
         var second = first; second.revision = UUID()
-        try engine.saveEveryday(second, now: t0, authorized: { true }, containsStoredSelection: { true }, write: { everyday.schedule = $0 })
+        try engine.saveEveryday(second, now: t0, authorized: { .approved }, containsStoredSelection: { true }, write: { everyday.schedule = $0 })
         XCTAssertEqual(monitor.stops.map(\.call), ["stopEveryday", "stopEveryday"])
         XCTAssertEqual(monitor.stops.map { $0.marker?.call }, [.stop, .stop])
         XCTAssertEqual(Set(monitor.stops.compactMap { $0.marker?.activityNames }), [[MarkedMonitoring.everydayActivityName(revision: first.revision, part: .range)],
@@ -364,7 +364,7 @@ final class RegistrationMarkerTests: XCTestCase {
     func testReadFailureStopsOfLockHoldersOutsideSectionsAreMarked() throws {
         let holders: [(String, (SessionControl) throws -> Void)] = [
             ("snapshot", { _ = try $0.snapshot() }),
-            ("everydayStatus", { _ = try $0.everydayStatus(now: self.at(200), authorized: true) })
+            ("everydayStatus", { _ = try $0.everydayStatus(now: self.at(200), authorized: .approved) })
         ]
         for (label, holder) in holders {
             let (engine, store, monitor, _, session) = try onBreak()
@@ -400,10 +400,10 @@ final class RegistrationMarkerTests: XCTestCase {
             store.lockFailures = Array(repeating: ControlIssue.lockTimeout, count: 6)
             var pauses: [TimeInterval] = []
             skipped = (try? engine.handleCallbackRetryingLock(activityName: "everyday.\(earlier.uuidString).range", kind: .didEnd, now: { breakEnd.addingTimeInterval(1) },
-                                                              authorized: { true }, sleep: { pauses.append($0) })) != nil && pauses.isEmpty && store.lockFailures.count == 5
+                                                              authorized: { .approved }, sleep: { pauses.append($0) })) != nil && pauses.isEmpty && store.lockFailures.count == 5
             store.lockFailures = []
         }
-        try engine.reconcile(now: breakEnd.addingTimeInterval(-1), authorized: true)
+        try engine.reconcile(now: breakEnd.addingTimeInterval(-1), authorized: .approved)
         XCTAssertEqual(monitor.registeredEveryday.map(\.revision), [stored.revision])
         XCTAssertEqual(store.envelope.session?.phase, .onBreak, "the skipped didEnd did not re-block")
         XCTAssertNil(store.markers.marker)
@@ -414,7 +414,7 @@ final class RegistrationMarkerTests: XCTestCase {
         XCTAssertTrue(skipped)
         let breakEnd = try XCTUnwrap(store.envelope.session?.breakEndsAt)
         // The warning is not listed, so it took the bounded retry and gets the lock after the section.
-        try engine.handleCallbackRetryingLock(activityName: session.breakActivityName(index: 1), kind: .willEndWarning, now: { breakEnd.addingTimeInterval(1) }, authorized: { true }, sleep: { _ in })
+        try engine.handleCallbackRetryingLock(activityName: session.breakActivityName(index: 1), kind: .willEndWarning, now: { breakEnd.addingTimeInterval(1) }, authorized: { .approved }, sleep: { _ in })
         XCTAssertEqual(store.envelope.session?.phase, .breakOver)
     }
     func testWarningThatGivesUpAfterAnEverydayStopLeavesTheReBlockToTheBreakEnd() throws {
@@ -423,12 +423,12 @@ final class RegistrationMarkerTests: XCTestCase {
         let breakEnd = try XCTUnwrap(store.envelope.session?.breakEndsAt)
         store.lockFailures = Array(repeating: ControlIssue.lockTimeout, count: 6)
         XCTAssertThrowsError(try engine.handleCallbackRetryingLock(activityName: session.breakActivityName(index: 1), kind: .willEndWarning, now: { breakEnd.addingTimeInterval(1) },
-                                                                   authorized: { true }, sleep: { _ in })) { XCTAssertEqual($0 as? ControlIssue, .lockTimeout) }
+                                                                   authorized: { .approved }, sleep: { _ in })) { XCTAssertEqual($0 as? ControlIssue, .lockTimeout) }
         XCTAssertEqual(store.envelope.session?.phase, .onBreak)
         // No app reconcile: the break activity's didEnd at +15 min is the last backstop.
         let breakStart = breakEnd.addingTimeInterval(-BreakTiming.standard.breakLength)
         try engine.handleCallbackRetryingLock(activityName: session.breakActivityName(index: 1), kind: .didEnd, now: { breakStart.addingTimeInterval(BreakTiming.breakActivityLength) },
-                                              authorized: { true }, sleep: { _ in })
+                                              authorized: { .approved }, sleep: { _ in })
         XCTAssertEqual(store.envelope.session?.phase, .breakOver)
     }
 
@@ -445,9 +445,9 @@ final class RegistrationMarkerTests: XCTestCase {
         let holders: [(String, () throws -> Void)] = [
             ("snapshot", { _ = try engine.snapshot() }),
             ("activitySnapshot", { _ = try engine.activitySnapshot() }),
-            ("everydayStatus", { _ = try engine.everydayStatus(now: self.t0, authorized: true) }),
-            ("reconcile", { try engine.reconcile(now: self.t0, authorized: true) }),
-            ("callback", { try engine.handleCallback(activityName: "focus.\(UUID().uuidString)", kind: .didEnd, now: self.t0, authorized: true) })
+            ("everydayStatus", { _ = try engine.everydayStatus(now: self.t0, authorized: .approved) }),
+            ("reconcile", { try engine.reconcile(now: self.t0, authorized: .approved) }),
+            ("callback", { try engine.handleCallback(activityName: "focus.\(UUID().uuidString)", kind: .didEnd, now: self.t0, authorized: .approved) })
         ]
         for (label, holder) in holders {
             try writeLeftover()

@@ -824,6 +824,23 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertFalse(app.buttons["authorize"].exists); XCTAssertFalse(app.buttons["start"].exists)
         captureReport(app, name: "permission-settings-guide")
     }
+    /// Access that is not known yet keeps the timer screen; the start tap requests access and starts only after the value reads approved.
+    func testCheckingAccessKeepsTheStartControlAsTheRecovery() {
+        let app = app("checking")
+        XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: 8)); XCTAssertTrue(app.buttons["start"].isEnabled)
+        XCTAssertTrue(app.staticTexts["startBlocker"].exists); XCTAssertFalse(app.buttons["authorize"].exists)
+        captureReport(app, name: "access-checking")
+        app.buttons["start"].tap()
+        XCTAssertTrue(app.buttons["end"].waitForExistence(timeout: 8))
+    }
+    func testCheckingAccessAtLargestTextSizeKeepsTheStartControlReachable() {
+        let app = app("checking", extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        let start = app.buttons["start"]
+        XCTAssertTrue(start.waitForExistence(timeout: 8))
+        for _ in 0..<4 where !start.isHittable { app.swipeUp() }
+        XCTAssertTrue(start.isHittable); XCTAssertTrue(start.isEnabled)
+        captureReport(app, name: "access-checking-largest-text")
+    }
     func testActiveSessionLocksSelectionAndEarlyExitCreatesHistory() {
         let app = app(); app.buttons["start"].tap()
         XCTAssertTrue(app.buttons["end"].waitForExistence(timeout: 5))

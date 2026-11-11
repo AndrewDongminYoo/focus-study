@@ -21,12 +21,12 @@ final class SessionControl {
         self.store = store; self.baseMonitoring = monitoring; self.shield = shield; self.breakSelection = breakSelection
         self.everyday = everyday; self.timing = timing; self.calendar = calendar
     }
-    func start(now: Date, length: TimeInterval = 1500, authorized: () -> Bool, apply: () -> Void, matches: () -> Bool) throws -> ControlSession {
+    func start(now: Date, length: TimeInterval = 1500, authorized: () -> AccessState, apply: () -> Void, matches: () -> Bool) throws -> ControlSession {
         try section(now: now) { locked in
             var envelope = try read(locked)
             try cleanup(&envelope, locked: locked, now: now)
             locked.access = authorized()
-            guard locked.access == true else { throw ControlIssue.unauthorized }
+            guard locked.access == .approved else { throw ControlIssue.unauthorized }
             if let prior = envelope.session {
                 throw prior.phase == .terminal ? ControlIssue.pendingHistory : ControlIssue.busy
             }
@@ -37,7 +37,7 @@ final class SessionControl {
     // MARK: Focus filter
 
     /// The spec "Filter start", step 3. One activation starts at most one session: a refusal also stores the marker.
-    func startFromFocusFilter(now: Date, length: TimeInterval, authorized: () -> Bool, selectionReady: Bool, apply: () -> Void, matches: () -> Bool) throws -> FocusFilterStart {
+    func startFromFocusFilter(now: Date, length: TimeInterval, authorized: () -> AccessState, selectionReady: Bool, apply: () -> Void, matches: () -> Bool) throws -> FocusFilterStart {
         try section(now: now) { locked in
             var envelope = try read(locked)
             try cleanup(&envelope, locked: locked, now: now)
@@ -46,7 +46,7 @@ final class SessionControl {
             envelope.filterActivation = UUID()
             locked.access = authorized()
             let refusal: FocusFilterRefusal?
-            if locked.access != true { refusal = .access }
+            if locked.access != .approved { refusal = .access }
             else if !selectionReady { refusal = .selection }
             else if let prior = envelope.session { refusal = prior.phase == .terminal ? .history : .busy }
             else { refusal = nil }
@@ -56,7 +56,7 @@ final class SessionControl {
         }
     }
     /// The spec "Filter end". The Focus-off rule ends only a `focusFilter` session; a manual one ends only for the reasons of any reconcile.
-    func endFromFocusFilter(now: Date, authorized: Bool) throws {
+    func endFromFocusFilter(now: Date, authorized: AccessState) throws {
         try section(now: now, access: authorized) { locked in
             var envelope = try read(locked)
             // Turning the Focus off is the person's end, so it must still lift the restrictions of a filter-started session when the cleanup or the reconcile cannot save (#53).
@@ -69,8 +69,8 @@ final class SessionControl {
             }
             // An `end` inside the cleanup or the reconcile sets `terminal` in memory before its last save, so its own error never causes a second end.
             if let session = envelope.session, session.phase != .terminal, session.isFilterStarted {
-                // The reconcile order after a caught error: access, then the timed end, else the person's end.
-                let reason: EndReason = caught == nil ? .earlyExit : !authorized ? .authorizationRevoked : session.timedEnd(at: now, timing: timing) ?? .earlyExit
+                // The reconcile order after a caught error: access `denied`, then the timed end, else the person's end. `unknown` is not a revocation.
+                let reason: EndReason = caught == nil ? .earlyExit : authorized == .denied ? .authorizationRevoked : session.timedEnd(at: now, timing: timing) ?? .earlyExit
                 try end(&envelope, locked: locked, reason: reason, now: now)
             } else if let caught { throw caught }
             if var stored = locked.stored, stored.filterActivation != nil {
@@ -114,7 +114,7 @@ final class SessionControl {
         }
     }
     @discardableResult
-    func reconcile(now: Date, authorized: Bool, clockChanged: Bool = false) throws -> ControlEnvelope {
+    func reconcile(now: Date, authorized: AccessState, clockChanged: Bool = false) throws -> ControlEnvelope {
         try section(now: now, access: authorized) { locked in
             var envelope = try read(locked)
             try cleanup(&envelope, locked: locked, now: now)
@@ -123,7 +123,7 @@ final class SessionControl {
         }
     }
     /// `lockTimeout` `0` is the attempt of `handleCallbackRetryingLock` that does not wait; `nil` waits for the store's own timeout.
-    func handleCallback(activityName: String, kind: CallbackKind, now: Date, authorized: Bool, lockTimeout: TimeInterval? = nil) throws {
+    func handleCallback(activityName: String, kind: CallbackKind, now: Date, authorized: AccessState, lockTimeout: TimeInterval? = nil) throws {
         // A section that `intervalDidStart(for:)` started never registers an everyday activity, so a registration cannot loop through its own callback.
         try section(now: now, access: authorized, mayRegister: kind != .didStart, lockTimeout: lockTimeout) { locked in
             var envelope = try read(locked)
@@ -155,7 +155,7 @@ final class SessionControl {
     /// The store throws `lockTimeout` before the section runs, so a failed attempt changed nothing. Worst case with the defaults: attempt 0, then 5 lock waits of 0.25 s and 4 pauses of 0.25 s, about 2.25 s.
     /// After every `lockTimeout`, a fresh marker of the lock holder that decides this callback ends the callback: the holder's section decides that activity.
     /// A `register` marker decides `didStart` and `didEnd` before its `validUntil`; a `stop` marker decides only `didEnd`.
-    func handleCallbackRetryingLock(activityName: String, kind: CallbackKind, now: () -> Date, authorized: () -> Bool, retries: Int = 4, pause: TimeInterval = 0.25,
+    func handleCallbackRetryingLock(activityName: String, kind: CallbackKind, now: () -> Date, authorized: () -> AccessState, retries: Int = 4, pause: TimeInterval = 0.25,
                                     sleep: (TimeInterval) -> Void = { Thread.sleep(forTimeInterval: $0) }) throws {
         // Attempt 0: one lock call that does not wait, with no pause after it.
         let first = now()
@@ -251,14 +251,14 @@ final class SessionControl {
 
     /// Turn on, edit or turn off, in the order of the spec "Save": check, register, write (the commit point), stop the other revisions, converge.
     /// `write` gets the schedule to store: the new schedule with the `offDay` that the section sets, never one that the app passes.
-    func saveEveryday(_ schedule: EverydaySchedule, now: Date, authorized: () -> Bool, containsStoredSelection: () throws -> Bool,
+    func saveEveryday(_ schedule: EverydaySchedule, now: Date, authorized: () -> AccessState, containsStoredSelection: () throws -> Bool,
                       write: (EverydaySchedule) throws -> Void) throws {
         try section(now: now) { locked in
             var envelope = try read(locked)
             try cleanup(&envelope, locked: locked, now: now)
-            // A refusal for access registers and writes nothing; the convergence of this section then stops every everyday activity.
+            // A refusal for access registers and writes nothing; after a `denied` read the convergence of this section then stops every everyday activity.
             locked.access = authorized()
-            guard locked.access == true else { throw ControlIssue.unauthorized }
+            guard locked.access == .approved else { throw ControlIssue.unauthorized }
             if let session = envelope.session, session.phase != .terminal { throw ControlIssue.busy }
             guard schedule.isValid else { throw ControlIssue.invalidState }
             // An unreadable file counts as no stored layer, so that the person can set the layer up again.
@@ -289,13 +289,13 @@ final class SessionControl {
     }
     /// The spec "The off-for-today section": check, write the stored file again with today's `offDay` (the commit point), converge.
     /// `revision` is the stored revision that the waiting screen was shown for; `write` replaces the file with the same revision, schedule and tokens.
-    func turnEverydayOffForToday(revision: UUID, now: Date, authorized: () -> Bool, write: (EverydaySchedule) throws -> Void) throws {
+    func turnEverydayOffForToday(revision: UUID, now: Date, authorized: () -> AccessState, write: (EverydaySchedule) throws -> Void) throws {
         try section(now: now) { locked in
             var envelope = try read(locked)
             try cleanup(&envelope, locked: locked, now: now)
-            // A refusal for access writes nothing; the convergence of this section then stops every everyday activity.
+            // A refusal for access writes nothing; after a `denied` read the convergence of this section then stops every everyday activity.
             locked.access = authorized()
-            guard locked.access == true else { throw ControlIssue.unauthorized }
+            guard locked.access == .approved else { throw ControlIssue.unauthorized }
             // A Focus filter can start a session during the wait.
             if let session = envelope.session, session.phase != .terminal { throw ControlIssue.busy }
             let stored: EverydaySchedule?
@@ -310,21 +310,22 @@ final class SessionControl {
         }
     }
     /// No convergence step; unreadable control metadata still invokes the recovery reader.
-    func everydayStatus(now: Date, authorized: Bool) throws -> EverydayStatus {
+    /// `unknown` access reads as approved here, so that the settings show no access issue until a `denied` read.
+    func everydayStatus(now: Date, authorized: AccessState) throws -> EverydayStatus {
         try holding { locked in
             let envelope = try read(locked)
             let schedule: EverydaySchedule?
             do { schedule = try everyday.load() } catch { return EverydayStatus(schedule: nil, blocksNow: false, nextChange: nil, issue: .unreadable) }
             let blocksNow = EverydayRules.blocks(schedule: schedule, session: envelope.session, authorized: authorized, now: now, calendar: calendar)
             var issue: EverydayIssue?
-            if authorized, let schedule, schedule.enabled {
+            if authorized != .denied, let schedule, schedule.enabled {
                 let present = Set(monitoring.registeredEveryday.filter { $0.revision == schedule.revision }.map(\.part))
                 if !Self.everydayActivities(schedule).allSatisfy({ present.contains($0.part) }) { issue = .registrationFailed }
             }
             if issue == nil, blocksNow, !everyday.storeMatches() { issue = .notApplied }
             // A window-start or range-end callback that came late or never came leaves the store applied.
             // Without access the shield is not in force, and the app's next lock section clears it.
-            if issue == nil, authorized, !blocksNow, everyday.hasShield { issue = .notCleared }
+            if issue == nil, authorized != .denied, !blocksNow, everyday.hasShield { issue = .notCleared }
             let nextChange = EverydayRules.nextChange(schedule: schedule, session: envelope.session, authorized: authorized, now: now, calendar: calendar)
             let offForToday = schedule.map { $0.enabled && $0.isOff(at: now, calendar: calendar) } ?? false
             return EverydayStatus(schedule: schedule, blocksNow: blocksNow, nextChange: nextChange, issue: issue, offForToday: offForToday)
@@ -350,16 +351,16 @@ final class SessionControl {
     }
     /// The M1 start steps after the start checks: save `preparing`, register, verify, apply, verify, save `active`, or the rollback.
     private func begin(_ envelope: inout ControlEnvelope, locked: LockedControl, now: Date, length: TimeInterval, origin: SessionOrigin,
-                       authorized: () -> Bool, apply: () -> Void, matches: () -> Bool) throws -> ControlSession {
+                       authorized: () -> AccessState, apply: () -> Void, matches: () -> Bool) throws -> ControlSession {
         var session = ControlSession(startedAt: now, length: length)
         session.origin = origin
         do {
             envelope.session = session
             try locked.save(envelope)
             try monitoring.register(id: session.id, start: session.startedAt, end: session.expiresAt)
-            guard monitoring.isRegistered(id: session.id), authorized() else { throw ControlIssue.verificationFailed }
+            guard monitoring.isRegistered(id: session.id), authorized() == .approved else { throw ControlIssue.verificationFailed }
             apply()
-            guard matches(), authorized() else { throw ControlIssue.verificationFailed }
+            guard matches(), authorized() == .approved else { throw ControlIssue.verificationFailed }
             session.phase = .active; envelope.session = session
             try locked.save(envelope)
             return session
@@ -386,10 +387,11 @@ final class SessionControl {
         // The copy goes last, because in `waiting` it is the only sign that the end must be registered again.
         breakSelection.removeAll(except: allowed?.id)
     }
-    private func reconcile(_ envelope: inout ControlEnvelope, locked: LockedControl, now: Date, authorized: Bool, clockChanged: Bool, reBlockEarly: Bool = false) throws {
+    private func reconcile(_ envelope: inout ControlEnvelope, locked: LockedControl, now: Date, authorized: AccessState, clockChanged: Bool, reBlockEarly: Bool = false) throws {
         guard let s = envelope.session, s.phase != .terminal else { return }
         if s.phase == .ending { try end(&envelope, locked: locked, reason: s.reason ?? .recoveryInterrupted, now: s.observedAt ?? now); return }
-        if !authorized { try end(&envelope, locked: locked, reason: .authorizationRevoked, now: now); return }
+        // Step 2. Only a `denied` read is a revocation; `unknown` skips this step and runs every other one.
+        if authorized == .denied { try end(&envelope, locked: locked, reason: .authorizationRevoked, now: now); return }
         if s.phase == .preparing { try end(&envelope, locked: locked, reason: .recoveryInterrupted, now: now); return }
         if clockChanged { try end(&envelope, locked: locked, reason: .clockChanged, now: now); return }
         if !monitoring.isRegistered(id: s.id) { try end(&envelope, locked: locked, reason: .recoveryInterrupted, now: now); return }
@@ -416,7 +418,7 @@ final class SessionControl {
         if let reason = session.timedEnd(at: now, timing: timing) { try end(&envelope, locked: locked, reason: reason, now: now); return }
         guard breakSelection.restoreShield(id: session.id) else { try end(&envelope, locked: locked, reason: .recoveryInterrupted, now: now); return }
         // Both layers come back before the save of `breakOver`: the blocking rule without its break line. A failure here changes no M2 step.
-        if let schedule = try? everyday.load(), EverydayRules.blocks(schedule: schedule, session: nil, authorized: nil, now: now, calendar: calendar),
+        if let schedule = try? everyday.load(), EverydayRules.blocks(schedule: schedule, session: nil, authorized: .unknown, now: now, calendar: calendar),
            !everyday.storeMatches() {
             let applied = everyday.applyStored()
             if endingEarly && !applied { throw ControlIssue.verificationFailed }
@@ -511,7 +513,7 @@ final class SessionControl {
     }
     /// Engine mutation sections end with everyday convergence, also when their focus part threw.
     /// When the read of `control.json` threw, the section has no envelope, and no convergence step runs.
-    private func section<T>(now: Date, access: Bool? = nil, mayRegister: Bool = true, lockTimeout: TimeInterval? = nil, _ body: (TrackedControl) throws -> T) throws -> T {
+    private func section<T>(now: Date, access: AccessState = .unknown, mayRegister: Bool = true, lockTimeout: TimeInterval? = nil, _ body: (TrackedControl) throws -> T) throws -> T {
         try store.withExclusiveAccess(timeout: lockTimeout) { base in
             let locked = TrackedControl(base, access: access, now: now)
             // Set after the lock is held. This reset runs after the convergence below, so the convergence registers through the wrapper too.
@@ -522,13 +524,13 @@ final class SessionControl {
         }
     }
     /// The spec "Everyday convergence". It never throws, so it can never stop a focus step.
-    private func converge(_ envelope: ControlEnvelope, access: Bool?, mayRegister: Bool, now: Date) {
+    private func converge(_ envelope: ControlEnvelope, access: AccessState, mayRegister: Bool, now: Date) {
         // Step 1.
         let schedule: EverydaySchedule?
         do { schedule = try everyday.load() } catch { everyday.clearShield(); return }
         // Step 2. Every stop names its activity: an empty list would stop the focus and break activities too.
         let expected = schedule.map { $0.enabled ? Self.everydayActivities($0) : [] } ?? []
-        if access == false {
+        if access == .denied {
             for registered in monitoring.registeredEveryday { monitoring.stopEveryday(revision: registered.revision, part: registered.part) }
         } else {
             var complete = true
@@ -552,12 +554,12 @@ final class SessionControl {
         setEverydayStore(schedule, envelope: envelope, access: access, now: now)
     }
     /// Convergence steps 1 and 3, for the end of a session.
-    private func convergeStore(_ envelope: ControlEnvelope, access: Bool?, now: Date) {
+    private func convergeStore(_ envelope: ControlEnvelope, access: AccessState, now: Date) {
         let schedule: EverydaySchedule?
         do { schedule = try everyday.load() } catch { everyday.clearShield(); return }
         setEverydayStore(schedule, envelope: envelope, access: access, now: now)
     }
-    private func setEverydayStore(_ schedule: EverydaySchedule?, envelope: ControlEnvelope, access: Bool?, now: Date) {
+    private func setEverydayStore(_ schedule: EverydaySchedule?, envelope: ControlEnvelope, access: AccessState, now: Date) {
         if EverydayRules.blocks(schedule: schedule, session: envelope.session, authorized: access, now: now, calendar: calendar) {
             // A store that still does not match keeps what was applied; the status reports it.
             if !everyday.storeMatches() { _ = everyday.applyStored() }
@@ -568,11 +570,11 @@ final class SessionControl {
 private final class TrackedControl: LockedControl {
     private let base: LockedControl
     private(set) var stored: ControlEnvelope?
-    /// The access value of the section, when it knows one.
-    var access: Bool?
+    /// The access value of the section; `unknown` when it does not know one.
+    var access: AccessState
     /// The wall clock of the section, which the everyday blocking rule uses also where a step ends a session at a recorded time.
     let now: Date
-    init(_ base: LockedControl, access: Bool?, now: Date) { self.base = base; self.access = access; self.now = now }
+    init(_ base: LockedControl, access: AccessState, now: Date) { self.base = base; self.access = access; self.now = now }
     func load() throws -> ControlEnvelope { let envelope = try base.load(); stored = envelope; return envelope }
     func save(_ envelope: ControlEnvelope) throws { try base.save(envelope); stored = envelope }
 }

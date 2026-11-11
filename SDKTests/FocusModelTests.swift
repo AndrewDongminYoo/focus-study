@@ -64,12 +64,71 @@ import SwiftData
     func testRevokedAccessAfterCompletionShowsPermissionThenTimer() throws {
         let (model, _, _, shield, engine) = fixture(); let (access, _) = doubles(model)
         model.completeOnboarding()
-        _ = try engine.start(now: Date(), authorized: { true }, apply: { shield.applied = true }, matches: { true })
+        _ = try engine.start(now: Date(), authorized: { .approved }, apply: { shield.applied = true }, matches: { true })
         model.refresh(); XCTAssertTrue(model.isActive)
         access.status = .denied; model.refresh()
         XCTAssertFalse(model.isActive); XCTAssertFalse(shield.applied)
         XCTAssertEqual(model.route, .onboarding(.permission))
         access.status = .approved; XCTAssertEqual(model.route, .timer)
+    }
+    /// The 2026-11-11 access-state design: `checking` reaches the engine as `unknown`, so a running session is kept and stays reachable.
+    func testCheckingKeepsTheRunningSessionOnTheTimerScreen() throws {
+        let (model, _, _, shield, engine) = fixture(); let (access, _) = doubles(model)
+        _ = try engine.start(now: Date(), authorized: { .approved }, apply: { shield.applied = true }, matches: { true })
+        for status in [AccessStatus.checking, .notRequested] {
+            access.status = status; model.refresh()
+            XCTAssertTrue(model.isActive, "\(status)"); XCTAssertTrue(shield.applied, "\(status)")
+            XCTAssertEqual(model.route, .timer, "\(status): the session comes before onboarding")
+            XCTAssertNil(model.startBlocker, "\(status)")
+        }
+        model.completeOnboarding(); access.status = .checking
+        XCTAssertEqual(model.route, .timer)
+        access.status = .denied; model.refresh()
+        XCTAssertFalse(model.isActive); XCTAssertFalse(shield.applied)
+        XCTAssertEqual(model.route, .onboarding(.permission))
+    }
+    func testCheckingWithoutASessionKeepsTheStartControlAsTheRecovery() {
+        let (model, _, _, _, _) = fixture(); let (access, selection) = doubles(model)
+        access.status = .checking
+        XCTAssertEqual(model.route, .onboarding(.permission), "an unfinished onboarding asks at its permission step")
+        model.completeOnboarding(); model.refresh()
+        XCTAssertEqual(model.route, .timer); XCTAssertEqual(model.startBlocker, .checking); XCTAssertTrue(model.canStart)
+        selection.counts = (0, 0, 0); XCTAssertEqual(model.route, .onboarding(.selection))
+        for status in [AccessStatus.denied, .notRequested] {
+            access.status = status; selection.counts = (1, 0, 0)
+            XCTAssertEqual(model.route, .onboarding(.permission), "\(status)"); XCTAssertEqual(model.startBlocker, .access, "\(status)")
+        }
+    }
+    func testRecoveryTapStartsOnlyAfterThePublishedValueReadsApproved() async throws {
+        let (model, _, _, shield, _) = fixture(); let (access, _) = doubles(model)
+        model.completeOnboarding(); access.status = .checking; model.refresh()
+        // A request that throws, or one whose value has not settled, keeps `checking` and starts nothing.
+        await model.recoverAccessAndStart()
+        XCTAssertEqual(access.requests, 1); XCTAssertEqual(model.access, .checking)
+        XCTAssertNil(model.current); XCTAssertNil(model.startRequestID); XCTAssertFalse(shield.applied); XCTAssertNotNil(model.errorMessage)
+        // The blocker agrees with the disabled start control: the error's retry comes first.
+        XCTAssertFalse(model.canStart); XCTAssertEqual(model.startBlocker, .error)
+        model.refresh(); XCTAssertNil(model.errorMessage)
+        XCTAssertTrue(model.canStart); XCTAssertEqual(model.startBlocker, .checking)
+        access.statusAfterRequest = .approved
+        await model.recoverAccessAndStart()
+        XCTAssertEqual(access.requests, 2)
+        let request = try XCTUnwrap(model.startRequestID)
+        model.performPendingStart(request)
+        XCTAssertTrue(model.isActive); XCTAssertTrue(shield.applied)
+        await model.recoverAccessAndStart()
+        XCTAssertEqual(access.requests, 2, "no request outside `checking`")
+    }
+    func testLeavingForegroundDuringTheRecoveryRequestReservesNoStart() async throws {
+        let (model, _, _, shield, engine) = fixture(); let (access, _) = doubles(model)
+        model.completeOnboarding(); access.status = .checking; model.refresh()
+        access.statusAfterRequest = .approved
+        access.duringRequest = { [unowned model] in model.sceneDidLeaveForeground() }
+        await model.recoverAccessAndStart()
+        XCTAssertEqual(access.requests, 1); XCTAssertEqual(model.access, .approved)
+        XCTAssertNil(model.startRequestID, "the person left during the request, so no start waits for the return")
+        XCTAssertFalse(model.isStarting); XCTAssertTrue(model.canStart)
+        XCTAssertNil(try engine.snapshot().session); XCTAssertFalse(shield.applied)
     }
     func testStartUsesConfiguredLength() {
         let (model, _, _, _, _) = fixture(); model.services.settings.lengthMinutes = 40; model.completeOnboarding()
@@ -124,7 +183,7 @@ import SwiftData
     func testPendingStartDoesNotReplaceAnotherSession() throws {
         let (model, _, _, shield, engine) = fixture()
         let request = try XCTUnwrap(model.requestStart())
-        let existing = try engine.start(now: Date(), authorized: { true }, apply: { shield.applied = true }, matches: { true })
+        let existing = try engine.start(now: Date(), authorized: { .approved }, apply: { shield.applied = true }, matches: { true })
         model.performPendingStart(request)
         XCTAssertFalse(model.isStarting); XCTAssertNil(model.errorMessage)
         XCTAssertEqual(model.current?.id, existing.id)
@@ -133,7 +192,7 @@ import SwiftData
     func testPendingStartDoesNotReplaceAFocusFilterSession() throws {
         let (model, _, _, shield, engine) = fixture()
         let request = try XCTUnwrap(model.requestStart())
-        _ = try engine.startFromFocusFilter(now: Date(), length: 1500, authorized: { true }, selectionReady: true,
+        _ = try engine.startFromFocusFilter(now: Date(), length: 1500, authorized: { .approved }, selectionReady: true,
                                            apply: { shield.applied = true }, matches: { true })
         let existing = try XCTUnwrap(try engine.snapshot().session)
         XCTAssertEqual(existing.origin, .focusFilter)
@@ -228,7 +287,7 @@ import SwiftData
     }
     func testHistoryFetchFailurePreservesActiveControlsAndCanEndRestrictions() throws {
         let (model, history, _, shield, engine) = fixture()
-        let session = try engine.start(now: Date(), authorized: { true }, apply: { shield.applied = true }, matches: { true })
+        let session = try engine.start(now: Date(), authorized: { .approved }, apply: { shield.applied = true }, matches: { true })
         history.failFetch = true
         model.refresh()
         XCTAssertEqual(model.current?.id, session.id)
@@ -255,7 +314,7 @@ import SwiftData
     }
     func testControlReadFailureStillInvalidatesPreviouslyConfirmedSession() throws {
         let (model, _, store, shield, engine) = fixture()
-        _ = try engine.start(now: Date(), authorized: { true }, apply: { shield.applied = true }, matches: { true })
+        _ = try engine.start(now: Date(), authorized: { .approved }, apply: { shield.applied = true }, matches: { true })
         model.refresh(); XCTAssertTrue(model.isActive)
         store.failRead = true
         model.refresh()
@@ -264,7 +323,7 @@ import SwiftData
     }
     func testOnlyAFullSessionIsMarkedCompletedUntilDismissed() throws {
         let (model, _, _, shield, engine) = fixture()
-        let session = try engine.start(now: Date().addingTimeInterval(-1500), authorized: { true }, apply: { shield.applied = true }, matches: { true })
+        let session = try engine.start(now: Date().addingTimeInterval(-1500), authorized: { .approved }, apply: { shield.applied = true }, matches: { true })
         model.refresh()
         XCTAssertEqual(model.completedSessionID, session.id); XCTAssertNil(model.current)
         model.dismissCompletion()
@@ -275,7 +334,7 @@ import SwiftData
     }
     func testCompletionKeepsTheSessionsOwnLengthAfterTheSettingChanges() throws {
         let (model, _, _, shield, engine) = fixture()
-        _ = try engine.start(now: Date().addingTimeInterval(-2400), length: 2400, authorized: { true }, apply: { shield.applied = true }, matches: { true })
+        _ = try engine.start(now: Date().addingTimeInterval(-2400), length: 2400, authorized: { .approved }, apply: { shield.applied = true }, matches: { true })
         model.services.settings.lengthMinutes = 25
         model.refresh()
         XCTAssertEqual(model.completedLength, 2400)
@@ -290,12 +349,12 @@ import SwiftData
         history.failFetch = true; model.refresh()
         XCTAssertEqual(model.startBlocker, .error)
         history.failFetch = false; selection.counts = (1, 0, 0); model.refresh()
-        _ = try engine.start(now: Date(), authorized: { true }, apply: { shield.applied = true }, matches: { true })
+        _ = try engine.start(now: Date(), authorized: { .approved }, apply: { shield.applied = true }, matches: { true })
         model.refresh(); XCTAssertNil(model.startBlocker)
     }
     func testRequestBreakPausesRemaining() throws {
         let (model, _, store, shield, engine) = fixture()
-        let session = try engine.start(now: Date().addingTimeInterval(-300), authorized: { true }, apply: { shield.applied = true }, matches: { true })
+        let session = try engine.start(now: Date().addingTimeInterval(-300), authorized: { .approved }, apply: { shield.applied = true }, matches: { true })
         model.refresh(); XCTAssertEqual(model.remaining, 1200)
         model.requestBreak()
         XCTAssertEqual(store.envelope.session?.phase, .waiting); XCTAssertTrue(model.isInSession); XCTAssertFalse(model.isActive)
@@ -393,7 +452,7 @@ import SwiftData
     }
     func testFilterChangeRefreshesTheModel() async throws {
         let (model, history, _, shield, engine) = fixture()
-        let earlier = try engine.start(now: Date().addingTimeInterval(-1500), authorized: { true }, apply: { shield.applied = true }, matches: { true })
+        let earlier = try engine.start(now: Date().addingTimeInterval(-1500), authorized: { .approved }, apply: { shield.applied = true }, matches: { true })
         model.refresh(); XCTAssertEqual(model.completedSessionID, earlier.id)
         await filterHandler(model, history: history, refresh: { model.refresh() }).focusDidChange(startsSession: true)
         XCTAssertEqual(model.current?.origin, .focusFilter); XCTAssertEqual(model.current?.phase, .active)
@@ -403,7 +462,7 @@ import SwiftData
         for starts in [false, true] {
             let (model, history, _, shield, engine) = fixture()
             let (_, selection) = doubles(model)
-            let earlier = try engine.start(now: Date().addingTimeInterval(-1500), authorized: { true }, apply: { shield.applied = true }, matches: { true })
+            let earlier = try engine.start(now: Date().addingTimeInterval(-1500), authorized: { .approved }, apply: { shield.applied = true }, matches: { true })
             if !starts { selection.counts = (0, 0, 0) }
             await filterHandler(model, history: history, refresh: { model.refresh() }).focusDidChange(startsSession: true)
             XCTAssertEqual(model.services.settings.lastFilterRefusal?.reason, starts ? nil : .selection, "\(starts)")
@@ -414,13 +473,13 @@ import SwiftData
     }
     func testExpiredCardSurvivesRefreshesWithoutASession() throws {
         let (model, _, _, shield, engine) = fixture()
-        let earlier = try engine.start(now: Date().addingTimeInterval(-1500), authorized: { true }, apply: { shield.applied = true }, matches: { true })
+        let earlier = try engine.start(now: Date().addingTimeInterval(-1500), authorized: { .approved }, apply: { shield.applied = true }, matches: { true })
         model.refresh(); model.refresh()
         XCTAssertNil(model.current); XCTAssertEqual(model.completedSessionID, earlier.id); XCTAssertEqual(model.completedLength, 1500)
     }
     func testNewerExpiredSessionOverridesThePendingCard() async throws {
         let (model, history, _, shield, engine) = fixture()
-        let s1 = try engine.start(now: Date().addingTimeInterval(-4000), authorized: { true }, apply: { shield.applied = true }, matches: { true })
+        let s1 = try engine.start(now: Date().addingTimeInterval(-4000), authorized: { .approved }, apply: { shield.applied = true }, matches: { true })
         // The filter path starts S2 long enough ago that it is past its focus end at the off call.
         model.services.settings.lengthMinutes = 30
         var clock = Date().addingTimeInterval(-1900)
@@ -655,9 +714,15 @@ final class ModelTestShield: ShieldClient {
 }
 @MainActor final class ModelTestAuthorization: AuthorizationProviding {
     var status: AccessStatus = .approved
-    func requestIndividual() async {}
+    /// The status that a request publishes; `nil` keeps the status, as a request that throws does.
+    var statusAfterRequest: AccessStatus?
+    /// Runs while the request is in flight, before its status is published, such as a scene change during the system prompt.
+    var duringRequest: (() -> Void)?
+    private(set) var requests = 0
+    func requestIndividual() async { requests += 1; duringRequest?(); if let statusAfterRequest { status = statusAfterRequest } }
     func refresh() {}
-    func hasAccessNow() -> Bool { status == .approved }
+    /// `checking` and `notRequested` are `.notDetermined`, which the engine reads as `unknown`.
+    func accessState() -> AccessState { status == .approved ? .approved : status == .denied ? .denied : .unknown }
 }
 @MainActor final class ModelTestSelection: SelectionStoring {
     var selection = FamilyActivitySelection()

@@ -45,7 +45,8 @@ struct OnboardingView: View {
         .task { model.refresh() }
         .onChange(of: scenePhase) { _, value in if value == .active { model.refresh() } }
         // Forward moves stay with the person; losing access moves back so the person is not left past the permission step.
-        .onChange(of: model.access) { _, access in if access != .approved && step.rawValue > OnboardingStep.permission.rawValue { step = .permission } }
+        // `checking` is not a loss of access, so it keeps the step.
+        .onChange(of: model.access) { _, access in if (access == .denied || access == .notRequested) && step.rawValue > OnboardingStep.permission.rawValue { step = .permission } }
     }
     private var canAdvance: Bool {
         switch step {
@@ -67,7 +68,7 @@ struct OnboardingView: View {
             case .approved:
                 Text("스크린 타임 권한을 허용했어요").font(.title.weight(.bold))
                 Text("다음 단계에서 집중하는 동안 제한할 앱을 골라요.").foregroundStyle(FocusTheme.Palette.secondaryText)
-            case .notRequested:
+            case .notRequested, .checking:
                 Text("스크린 타임 권한이 필요해요").font(.title.weight(.bold))
                 Text("집중하는 동안 고른 앱을 제한하려면 권한을 허용해 주세요.").foregroundStyle(FocusTheme.Palette.secondaryText)
                 Button("권한 허용하기") { Task { await model.services.authorization.requestIndividual(); model.refresh() } }

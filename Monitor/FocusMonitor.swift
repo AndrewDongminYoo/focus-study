@@ -19,7 +19,7 @@ final class FocusMonitor: DeviceActivityMonitor {
             // The callback's process lock has been released before this task reads/publishes.
             defer { Self.synchronizeActivity(engine: engine) }
             try engine.handleCallbackRetryingLock(activityName: activity.rawValue, kind: kind, now: Date.init,
-                                                  authorized: { ScreenTimeAccess.isApproved(AuthorizationCenter.shared.authorizationStatus) })
+                                                  authorized: { ScreenTimeAccess.current() })
         } catch {
             // No sensitive logging; a lock timeout was already retried a few times, and other failures wait for a later lifecycle event or an app reconcile.
         }
