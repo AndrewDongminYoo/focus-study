@@ -108,6 +108,7 @@ Leaving `checking` after a cold launch:
 - Observed on 2026-11-11, against the documentation's wording: in the app process the published value settled to approved without a new request. At the 07:42:47 launch the section right after the first one registered with access, and a start that requires `approved` passed at 07:43:53. `[UNCERTAIN]` Whether that holds on every launch and in the extension.
 - If the value stays `.notDetermined`, the person's tap on the enabled start control is the recovery: the app first runs `requestIndividual()`, which now runs the documented request also in `checking` (today only in `notRequested`), and calls the engine's `start` only after the published value reads approved; the engine's `start` still requires `approved` inside the lock. A request is never made without a person's tap, because it can show system UI. `[UNCERTAIN]` Whether a request after an earlier approval shows any UI.
 - A request that throws is not a revocation: the UI shows its error and stays in `checking`, and nothing reaches the engine. A revocation reaches the engine only as a published `.denied` read; until the value settles to `.denied`, revocation cleanup waits, which is the accepted cost in [A real revocation](#a-real-revocation).
+  - Reconciliation (2026-11-13, #118): on iOS 27.0.1 a revocation in Settings read `.notDetermined`, not `.denied`, in a running app process and in a cold launch, so it reaches the engine as `unknown`, and no revocation cleanup waits for a `.denied` read that does not come; [A real revocation](#a-real-revocation) states the accepted result.
 
 ### A real revocation
 
@@ -118,8 +119,20 @@ Leaving `checking` after a cold launch:
 | App not running                            | launch reads `unknown` until the value is set; the subscription then fires      | the first app section after the value reads `denied` ends the session; a session whose time ended first ends with its timed reason   |
 
 `[UNCERTAIN]` Whether iOS keeps a `ManagedSettingsStore` shield after the person revokes access; the device check records it.
+Reconciliation (2026-11-13, #118): iOS 27.0.1 lifted the restrictions without the app; a blocked app opened right after each of the two revocations of step 7 in the [device run of 2026-11-11](../notes/screen-time-device-matrix.md#access-state-2026-11-11).
 The looser outcome that this design accepts: after a revocation with the app in the background, the session's record can end with its timed reason instead of `.authorizationRevoked` when no app section runs before its end.
 The restrictions themselves are not this app's to keep after a revocation; the record's reason is the only difference.
+
+Reconciliation (2026-11-13, #118): the device run of 2026-11-11 did not show the `denied` read that the table above expects.
+On iOS 27.0.1 a revocation in Settings read `.notDetermined`, not `.denied`, in a running app process and in a cold launch, so it reaches the engine as `unknown`.
+The accepted result: a revocation that reads `.notDetermined` is not observed as a revocation.
+The session then ends by the first other step of the [reconcile order](2026-11-01-m2-break-pass-design.md#reconcile-order) that applies, or by its timed reason.
+Both runs of step 7 (a revocation during a break with the app in the background) ended as `.recoveryInterrupted` (history row "중단된 세션 정리"), and a process other than the app ended them.
+`.authorizationRevoked` is recorded only when a section reads `denied`.
+`[UNCERTAIN]` Which reconcile step ended the two sessions: `!monitoring.isRegistered` or a failed `restoreShield`.
+No signal that separates a revocation from an access read that has not settled was observed, so the rule of [Contract](#contract) item 2 stays: an `unknown` read never ends a session and never stops the everyday layer by itself.
+After such a revocation the app shows `checking`, and a tap on the start control runs the recovery request of [The app's access value](#the-apps-access-value); in step 6 the session started only after access was granted again.
+After access was granted again in Settings, the focus and everyday selections were still valid, and the everyday apps locked again with no app console line.
 
 ### Stored states and side artifacts
 
@@ -199,7 +212,9 @@ Acceptance:
 - Steps 2 and 3: the shield returns at the end of every break, and no session ends as `.authorizationRevoked`.
 - Steps 4 and 5: no everyday stop for access appears while access is on, and a running session stays reachable on every screen.
 - Step 6: no session starts; the session is never started on a request result alone, and the screen leaves `checking` only on a published value.
+  - Reconciliation (2026-11-13, #118): no session starts unless the person grants access again in the recovery request, and the screen leaves `checking` only on a published value; in the 2026-11-11 run the screen stayed in `checking`, a tap on the start control ran the recovery request, access was granted again, and only then the session started.
 - Step 7: the session ends as `.authorizationRevoked` at the latest when the app comes to the front, unless its timed end came first.
+  - Reconciliation (2026-11-13, #118): accepted when the session ends as `.authorizationRevoked`, as `.recoveryInterrupted` or by its timed reason, and the restrictions are lifted; the 2026-11-11 runs recorded `.recoveryInterrupted` twice, as [A real revocation](#a-real-revocation) says.
 
 ## Verification for the implementation
 

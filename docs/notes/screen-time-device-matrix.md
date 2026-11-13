@@ -278,5 +278,6 @@ The history rows show the session start time, not the end time.
 | 7. Revocation during a break with the app in the background | Failed twice: a blocked app opened at once, and both sessions ended as `.recoveryInterrupted` ("중단된 세션 정리"); the Live Activity disappeared in one run and stayed in the other |
 
 On iOS 27.0.1 a revocation in Settings reads `.notDetermined`, not `.denied`, in a running app process and in a cold launch, so step 7 cannot pass with the current design; #118 takes it up, and #115 stays open.
+Reconciliation (2026-11-13, #118): the access-state design now accepts this result of step 7, a session that ends as `.recoveryInterrupted` after a revocation that reads `.notDetermined`, in [A real revocation](../specs/2026-11-11-access-state-design.md#a-real-revocation) and in the acceptance lines of its [physical-device verification](../specs/2026-11-11-access-state-design.md#physical-device-verification).
 Every focus registration that overwrote a registered focus activity took 289.9 to 300.3 ms or 508.3 to 510.1 ms, while the first registration of a session took 19.6 and 36.7 ms; #119 takes it up.
 The per-step evidence is in the #115 comments of 2026-11-11.
