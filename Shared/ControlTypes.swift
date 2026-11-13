@@ -71,6 +71,8 @@ enum EverydayOffRefusal: Error, CaseIterable, Equatable {
     case notOn
     /// The stored revision is not the one that the waiting screen was shown for.
     case revisionChanged
+    /// The local day of `now` is not one of the stored weekdays.
+    case dayIsOff
     /// `now` is outside the stored range.
     case outsideRange
     /// The stored `offDay` is already today's key.
@@ -157,6 +159,8 @@ struct EverydayStatus: Equatable {
     var issue: EverydayIssue?
     /// The stored layer is on and off for the local day of the read.
     var offForToday = false
+    /// The stored layer is on and the local day of the read is not one of its weekdays. A day that is off is reported as such also when it is off for today.
+    var dayIsOff = false
 }
 /// `notCleared`: the store keeps a shield while the layer does not block. `unchecked`: the app could not take the lock for the status, so it keeps the last status it read.
 enum EverydayIssue: Equatable { case unreadable, registrationFailed, notApplied, notCleared, unchecked }

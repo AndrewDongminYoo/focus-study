@@ -59,6 +59,8 @@ final class ScreenTimeAdapterTests: XCTestCase {
         XCTAssertTrue(schedule.repeats); XCTAssertNil(schedule.warningTime)
         for components in [schedule.intervalStart, schedule.intervalEnd] {
             XCTAssertNil(components.era); XCTAssertNil(components.year); XCTAssertNil(components.month); XCTAssertNil(components.day)
+            // The weekdays of the everyday layer live in the blocking rule, not in the registered schedules.
+            XCTAssertNil(components.weekday)
             XCTAssertNil(components.calendar); XCTAssertNil(components.timeZone); XCTAssertEqual(components.second, 0)
         }
         XCTAssertEqual(schedule.intervalStart.hour, 8); XCTAssertEqual(schedule.intervalStart.minute, 0)

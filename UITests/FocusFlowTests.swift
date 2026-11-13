@@ -148,7 +148,10 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["settingsButton"].waitForExistence(timeout: 5))
         _ = openEveryday(app)
         XCTAssertFalse(app.otherElements["everydayWindow.1"].exists)
-        app.buttons["everydayAddWindow"].tap(); app.buttons["직접 정하기"].tap()
+        // The weekday row pushes the button down, where it can sit behind the save area, which takes the tap.
+        let custom = app.buttons["직접 정하기"]
+        scrollEveryday(app, to: add); add.tap()
+        XCTAssertTrue(custom.waitForExistence(timeout: ready)); custom.tap()
         XCTAssertTrue(app.buttons["everydayBack"].waitForExistence(timeout: 5))
         app.buttons["everydayBack"].tap()
         XCTAssertTrue(keepEditing.waitForExistence(timeout: 5))
@@ -333,8 +336,11 @@ final class FocusFlowTests: XCTestCase {
     /// The everyday layer opens from its row in the settings sheet.
     private func openEveryday(_ app: XCUIApplication) -> XCUIElement {
         XCTAssertTrue(app.buttons["settingsButton"].waitForExistence(timeout: ready)); app.buttons["settingsButton"].tap()
-        XCTAssertTrue(app.buttons["everydayRow"].waitForExistence(timeout: ready)); app.buttons["everydayRow"].tap()
-        let status = app.staticTexts["everydayStatus"]
+        let row = app.buttons["everydayRow"], status = app.staticTexts["everydayStatus"]
+        XCTAssertTrue(row.waitForExistence(timeout: ready)); waitHittable(row)
+        row.tap()
+        // A tap while the settings sheet still slides in can miss; tap again only while the row still takes a tap and the screen has not opened.
+        if !status.waitForExistence(timeout: 3), row.isHittable { row.tap() }
         XCTAssertTrue(status.waitForExistence(timeout: ready))
         return status
     }
@@ -375,9 +381,11 @@ final class FocusFlowTests: XCTestCase {
         captureReport(app, name: "everyday-preview-stored")
         let hierarchy = XCTAttachment(string: app.debugDescription)
         hierarchy.name = "everyday-preview-accessibility"; hierarchy.lifetime = .keepAlways; add(hierarchy)
-        // The two clock rows sit between the stored rows and the windows section; a button under the navigation bar is hittable but takes no tap.
+        // The two clock rows sit between the stored rows and the windows section; a button under the navigation bar or behind the save area
+        // is hittable but takes no tap, so scroll until it is between the two.
         let delete = app.buttons["삭제"].firstMatch, belowBar = app.navigationBars["매일 제한"].frame.maxY + 12
         for _ in 0..<8 where !(delete.isHittable && delete.frame.minY > belowBar) { app.swipeDown() }
+        scrollEveryday(app, to: delete)
         delete.tap()
         scrollEveryday(app, to: draft)
         XCTAssertEqual(draft.label, "08:00부터 18:00까지, 제한")
@@ -388,7 +396,9 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["everydaySaveSuccess"].waitForExistence(timeout: 5))
         XCTAssertEqual(storedFirst.label, "08:00부터 18:00까지, 제한")
         app.navigationBars.buttons.element(boundBy: 0).tap()
-        app.buttons["everydayRow"].tap()
+        let row = app.buttons["everydayRow"]
+        XCTAssertTrue(row.waitForExistence(timeout: ready)); waitHittable(row)
+        row.tap()
         scrollEveryday(app, to: draft)
         XCTAssertEqual(draft.label, "08:00부터 18:00까지, 제한")
     }
@@ -491,7 +501,9 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertEqual(status.label, "꺼져 있어요")
         let selection = app.buttons["everydaySelection"], fixtureSelect = app.buttons["fixtureSelect"]
         // A tap while the everyday screen still slides in can miss; tap again only when the sheet did not open and the row still takes a tap.
+        // The row can sit behind the save area, which takes the tap, so bring it between the navigation bar and the save area first.
         waitHittable(selection)
+        scrollEveryday(app, to: selection)
         selection.tap()
         // A late second tap only presents the same sheet again.
         if !fixtureSelect.waitForExistence(timeout: 3), selection.isHittable { selection.tap() }
@@ -578,6 +590,103 @@ final class FocusFlowTests: XCTestCase {
         status = openEveryday(app)
         XCTAssertTrue(status.label.hasPrefix("지금 제한하고 있어요"), status.label)
         XCTAssertTrue(action.waitForExistence(timeout: ready))
+    }
+    /// The day buttons are found by weekday number, 1 for Sunday, not by position.
+    private func weekdayButton(_ app: XCUIApplication, _ day: Int) -> XCUIElement { app.buttons["everydayWeekday.\(day)"] }
+    func testEverydayWeekdayButtonsToggleAndNameTheChosenDays() {
+        let app = app(extra: ["--everyday-fixture", "preview"])
+        _ = openEveryday(app)
+        let summary = app.staticTexts["everydayWeekdaysSummary"]
+        scrollEveryday(app, to: weekdayButton(app, 7))
+        XCTAssertEqual(summary.label, "매일")
+        let names = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"]
+        for day in 1...7 {
+            let button = weekdayButton(app, day)
+            XCTAssertTrue(button.exists, "\(day)"); XCTAssertTrue(button.isSelected, "\(day)"); XCTAssertEqual(button.label, names[day - 1])
+            XCTAssertGreaterThanOrEqual(button.frame.width.rounded(), 44, "\(day)"); XCTAssertGreaterThanOrEqual(button.frame.height.rounded(), 44, "\(day)")
+        }
+        captureReport(app, name: "everyday-weekdays-every-day")
+        // One tap changes only its own day.
+        weekdayButton(app, 1).tap()
+        XCTAssertFalse(weekdayButton(app, 1).isSelected)
+        for day in 2...7 { XCTAssertTrue(weekdayButton(app, day).isSelected, "\(day)") }
+        weekdayButton(app, 7).tap()
+        XCTAssertEqual(summary.label, "평일")
+        XCTAssertTrue(app.staticTexts["everydayUnsavedChanges"].exists)
+        captureReport(app, name: "everyday-weekdays-weekdays")
+        let draftWeekdays = app.staticTexts["everydayDraftWeekdays"]
+        scrollEveryday(app, to: draftWeekdays)
+        XCTAssertEqual(draftWeekdays.label, "제한 요일 · 평일")
+        let clock = app.descendants(matching: .any)["everydayDraftClock"]
+        XCTAssertTrue(clock.exists); XCTAssertLessThan(draftWeekdays.frame.midY, clock.frame.minY, "the weekday row sits above the clock")
+        captureReport(app, name: "everyday-weekdays-preview")
+        let stored = app.buttons["저장된 일정"]
+        scrollEveryday(app, to: stored); stored.tap()
+        let storedWeekdays = app.staticTexts["everydayStoredWeekdays"]
+        scrollEveryday(app, to: storedWeekdays)
+        XCTAssertEqual(storedWeekdays.label, "제한 요일 · 매일")
+    }
+    func testEverydayWithNoWeekdayShowsTheIssueInTheWeekdayRowOnly() {
+        let app = app()
+        _ = openEveryday(app)
+        scrollEveryday(app, to: weekdayButton(app, 7))
+        for day in 1...7 { weekdayButton(app, day).tap() }
+        XCTAssertEqual(app.staticTexts["everydayWeekdaysSummary"].label, "요일 없음")
+        let issue = app.staticTexts["everydayWeekdaysIssue"]
+        XCTAssertTrue(issue.waitForExistence(timeout: ready))
+        XCTAssertEqual(issue.label, "제한할 요일을 하나 이상 골라 주세요.")
+        XCTAssertFalse(app.buttons["everydaySave"].isEnabled)
+        captureReport(app, name: "everyday-weekdays-none")
+        XCTAssertFalse(app.staticTexts["everydayWindowsIssue"].exists); XCTAssertFalse(app.staticTexts["everydayRangeIssue"].exists)
+        let invalid = app.staticTexts["everydayDraftInvalid"]
+        scrollEveryday(app, to: invalid)
+        XCTAssertEqual(invalid.label, "요일을 고르면 미리보기를 볼 수 있어요.")
+        captureReport(app, name: "everyday-weekdays-none-preview")
+    }
+    func testRemovingAWeekdayInsideTheRangeIsRefused() {
+        let app = app(extra: ["--everyday-fixture", "blocking"])
+        let status = openEveryday(app)
+        XCTAssertTrue(status.label.hasPrefix("지금 제한하고 있어요"), status.label)
+        let day = weekdayButton(app, 4)
+        scrollEveryday(app, to: day); day.tap()
+        XCTAssertFalse(day.isSelected)
+        app.buttons["everydaySave"].tap()
+        let refusal = app.staticTexts["everydayRefusal"]
+        XCTAssertTrue(refusal.waitForExistence(timeout: ready))
+        XCTAssertTrue(refusal.label.hasPrefix("제한 시간에는 요일을 뺄 수 없어요."), refusal.label)
+        XCTAssertTrue(status.label.hasPrefix("지금 제한하고 있어요"), status.label)
+        captureReport(app, name: "everyday-weekdays-refused")
+    }
+    func testLaunchOnADayThatIsOffShowsTheWeekdayLineAndNoTimerRow() {
+        // The fixture leaves out the launch day's weekday in its noon calendar, so the launch is on a day that is off at any wall-clock time.
+        let app = app(extra: ["--everyday-fixture", "weekday-off"])
+        let line = "오늘은 제한하지 않는 요일이에요 · 내일 08:00부터 제한해요"
+        XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: ready))
+        XCTAssertFalse(app.descendants(matching: .any)["everydayStatusRow"].exists, "no timer row on a day that is off")
+        let status = openEveryday(app)
+        XCTAssertEqual(status.label, line)
+        XCTAssertFalse(app.staticTexts["everydayStrictOnly"].exists)
+        XCTAssertFalse(app.buttons["everydayOffToday"].exists)
+        captureReport(app, name: "everyday-weekday-off-status")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        let settingsRow = app.buttons["everydayRow"]
+        XCTAssertTrue(settingsRow.waitForExistence(timeout: ready))
+        XCTAssertTrue(settingsRow.label.contains(line), settingsRow.label)
+    }
+    func testEverydayWeekdaysAtLargestText() {
+        let app = app(extra: ["--everyday-fixture", "weekday-off", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        let status = openEveryday(app)
+        XCTAssertTrue(status.label.hasPrefix("오늘은 제한하지 않는 요일이에요"), status.label)
+        captureReport(app, name: "everyday-weekday-off-status-largest-text")
+        let window = app.windows.firstMatch.frame
+        for day in [1, 7] { scrollEveryday(app, to: weekdayButton(app, day)) }
+        for day in 1...7 {
+            let button = weekdayButton(app, day)
+            XCTAssertTrue(button.exists, "\(day)")
+            XCTAssertGreaterThanOrEqual(button.frame.minX, window.minX, "\(day)"); XCTAssertLessThanOrEqual(button.frame.maxX, window.maxX, "\(day)")
+            XCTAssertGreaterThanOrEqual(button.frame.width.rounded(), 44, "\(day)"); XCTAssertGreaterThanOrEqual(button.frame.height.rounded(), 44, "\(day)")
+        }
+        captureReport(app, name: "everyday-weekdays-largest-text")
     }
     func testThreeWindowsAreTheLimit() {
         let app = app()

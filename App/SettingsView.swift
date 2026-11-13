@@ -25,7 +25,7 @@ struct SettingsView: View {
                     } label: {
                         VStack(alignment: .leading, spacing: FocusTheme.Layout.detailSpacing) {
                             Text("시간과 앱 정하기")
-                            Text(EverydaySettingsModel.statusLine(model.everydayStatus, calendar: model.services.engine.calendar)).font(.footnote).foregroundStyle(FocusTheme.Palette.secondaryText)
+                            Text(EverydaySettingsModel.statusLine(model.everydayStatus, at: model.everydayReadAt ?? Date(), calendar: model.services.engine.calendar)).font(.footnote).foregroundStyle(FocusTheme.Palette.secondaryText)
                         }
                     }.accessibilityIdentifier("everydayRow")
                 } header: { Text("매일 제한") } footer: { Text("정한 시간대에 매일 앱과 웹사이트를 제한해요.") }
@@ -42,9 +42,12 @@ struct SettingsView: View {
             .navigationTitle("설정").navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: SettingsRoute.self) { _ in everydayScreen }
             .onAppear { model.refreshEveryday() }
-            // The row's status changes at a range or window boundary while the sheet stays open, also with no focus tick.
+            // The row's status changes at a range or window boundary while the sheet stays open, also with no focus tick,
+            // and its day word changes at local midnight.
             .task(id: model.everydayStatus) {
-                await EverydaySettingsModel.followStatus({ model.everydayStatus }, now: Date.init) { model.refreshEveryday() }
+                await EverydaySettingsModel.followStatus({ model.everydayStatus }, now: Date.init, dayWordCalendar: model.services.engine.calendar) {
+                    model.refreshEveryday()
+                }
             }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

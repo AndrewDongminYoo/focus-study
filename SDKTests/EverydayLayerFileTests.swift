@@ -69,4 +69,37 @@ final class EverydayLayerFileTests: XCTestCase {
         try file.write(schedule, selection: stored)
         XCTAssertNil((try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]))["offDay"])
     }
+    func testWeekdaysAreOptionalToleratedOnLoadAndKeptByTheOffDayWrite() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = EverydayLayerFile(directory: directory, shield: ScreenTimeEverydayShield())
+        let url = directory.appendingPathComponent("everyday-layer.json")
+        func object() throws -> [String: Any] { try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]) }
+        let stored = try selection(apps: [1], sites: [])
+        // A save of all seven days writes no key; a file without the key is every day, as an earlier build wrote it.
+        var every = schedule; every.weekdays = [1, 2, 3, 4, 5, 6, 7]
+        try file.write(every, selection: stored)
+        XCTAssertNil(try object()["weekdays"]); XCTAssertEqual(try object()["schemaVersion"] as? Int, 1)
+        XCTAssertNil(try file.load()?.weekdays); XCTAssertEqual(try file.load(), schedule)
+        // A chosen set is stored sorted and loads back.
+        var weekdays = schedule; weekdays.weekdays = [2, 3, 4, 5, 6]
+        try file.write(weekdays, selection: stored)
+        XCTAssertEqual(try object()["weekdays"] as? [Int], [2, 3, 4, 5, 6])
+        XCTAssertEqual(try file.load(), weekdays)
+        // The off-for-today write keeps the weekdays.
+        var off = weekdays; off.offDay = "2026-11-02"
+        try file.writeOffDay(off)
+        XCTAssertEqual(try file.load(), off); XCTAssertEqual(try object()["weekdays"] as? [Int], [2, 3, 4, 5, 6])
+        // A malformed list is never a read failure: numbers outside 1 to 7 and repeats are dropped, and nothing left is every day.
+        let cases: [([Int], [Int]?)] = [([2, 2, 9, 0, 6], [2, 6]), ([0, 8], nil), ([], nil), ([7, 6, 5, 4, 3, 2, 1], nil), ([5], [5])]
+        for (raw, expected) in cases {
+            var malformed = try object(); malformed["weekdays"] = raw
+            try JSONSerialization.data(withJSONObject: malformed).write(to: url)
+            XCTAssertEqual(try file.load()?.weekdays, expected, "\(raw)")
+        }
+        // Another JSON type fails the decode, as any corrupt file does.
+        var wrongType = try object(); wrongType["weekdays"] = "weekdays"
+        try JSONSerialization.data(withJSONObject: wrongType).write(to: url)
+        XCTAssertThrowsError(try file.load())
+    }
 }

@@ -67,6 +67,8 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
     private(set) var completedLength: TimeInterval?
     /// The everyday layer for the settings row and for the timer screen's everyday status row, which the idle screen and the completion card show.
     private(set) var everydayStatus: EverydayStatus?
+    /// The time of the last everyday status read; the settings row computes its day word from it, and every read redraws the row.
+    private(set) var everydayReadAt: Date?
     /// The session of a thrown `finish`, which can leave the stored phase behind its stopped activities; until one reconcile succeeds, `tick` runs one with no session.
     private var failedEndID: UUID?
     private static let endFailure = "종료 상태를 저장하지 못했어요. 다시 확인해 주세요."
@@ -171,11 +173,13 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
     }
     /// Its own `do`/`catch`: a lock timeout against a Monitor everyday callback never changes `current` or `errorMessage`.
     func refreshEveryday() {
-        do { everydayStatus = try services.engine.everydayStatus(now: Date(), authorized: services.authorization.accessState()) }
+        let now = Date()
+        do { everydayStatus = try services.engine.everydayStatus(now: now, authorized: services.authorization.accessState()) }
         catch {
             var kept = everydayStatus ?? EverydayStatus(schedule: nil, blocksNow: false, nextChange: nil, issue: nil)
             kept.issue = .unchecked; everydayStatus = kept
         }
+        everydayReadAt = now
     }
 
     func start() {

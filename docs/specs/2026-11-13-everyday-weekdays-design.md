@@ -2,6 +2,7 @@
 
 Date: 2026-11-13.
 Status: design for approval.
+Reconciliation (2026-11-13, #126): implemented with the recommended answer of each open point and not yet run on a device; the code in `Shared/EverydaySchedule.swift`, `Shared/SessionControl.swift`, `Integration/EverydayLayerFile.swift` and `App/EverydaySettingsModel.swift` and the weekday tests in `CoreTests/`, `SDKTests/` and `UITests/FocusFlowTests.swift` are the authority. The names left to the builder are `EverydaySchedule.weekdays` (`[Int]?`) with `chosenWeekdays`, `EverydayScheduleIssue.noWeekdays`, `EverydayLockReason.removesWeekday`, `EverydayOffRefusal.dayIsOff` (checked after the revision and before the range) and `EverydayStatus.dayIsOff`, and the fixture value `--everyday-fixture weekday-off`.
 Source: [issue #126](https://github.com/AndrewDongminYoo/focus-study/issues/126) and the decision of 2026-11-13 in [issue #71](https://github.com/AndrewDongminYoo/focus-study/issues/71); parent issue #39.
 This document amends the [M3 design](2026-11-01-m3-schedule-layer-design.md) and its amendments only where it says so: [off for today](2026-11-08-everyday-off-today.md), [everyday status on the timer screen](2026-11-08-everyday-status-on-timer.md), [schedule preview](2026-11-06-everyday-schedule-preview.md) and [day clock](2026-11-09-everyday-day-clock.md).
 It reads the [registration marker](2026-11-10-registration-marker-design.md), [stop marker](2026-11-10-stop-marker-design.md) and [access-state](2026-11-11-access-state-design.md) designs and changes none of their rules.
@@ -391,6 +392,7 @@ The builder checks the copy with the `user-facing-copy` skill, in 해요체.
 
 - The section "제한 시간" of the everyday settings form gets one row below "제한 끝": the label "제한 요일", the summary of the chosen days at the trailing edge, and a row of seven day buttons below them.
 - The buttons are in the order of the calendar's first weekday (`firstWeekday` of the engine calendar). Their labels are 일, 월, 화, 수, 목, 금 and 토.
+- Reconciliation (2026-11-13, #126): the buttons fill one line at the standard text sizes and wrap into more lines at the accessibility sizes; their text and circles stop growing at the first accessibility size (`DynamicTypeSize.accessibility1`), because the summary next to the label carries the days at every size. A chosen day is filled and bold, a day that is not chosen is outlined.
 - Each button is a toggle with a tap target of at least `FocusTheme.Layout.minimumTapTarget`. A chosen day and a day that is not chosen differ by more than color, and each button has the selected trait when its day is chosen.
 - A new layer starts with all seven days chosen.
 - With no day chosen, the row shows the draft issue "제한할 요일을 하나 이상 골라 주세요.", and the save button is disabled, as for the other draft issues.

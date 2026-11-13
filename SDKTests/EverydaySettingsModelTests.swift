@@ -59,7 +59,7 @@ import ManagedSettings
         settings.refresh()
         XCTAssertFalse(settings.draft.enabled); XCTAssertEqual(settings.draft.rangeStart, 480); XCTAssertEqual(settings.draft.rangeEnd, 1080)
         XCTAssertTrue(settings.draft.windows.isEmpty); XCTAssertNil(settings.status?.schedule)
-        XCTAssertEqual(EverydaySettingsModel.statusLine(settings.status), "꺼져 있어요")
+        XCTAssertEqual(EverydaySettingsModel.statusLine(settings.status, at: tenAM), "꺼져 있어요")
         XCTAssertTrue(settings.canEdit)
     }
     func testPreviewPartitionsTheRangeAndSortsThreeWindows() {
@@ -244,6 +244,7 @@ import ManagedSettings
             "잠시 풀어 두는 시간은 제한 시간 안에서 정할 수 있어요.",
             "잠시 풀어 두는 시간이 서로 겹쳐요. 겹치지 않게 바꿔 주세요.",
             "잠시 풀어 두는 시간이 제한 시간을 모두 채우고 있어요. 제한할 시간을 남겨 주세요.",
+            "제한할 요일을 하나 이상 골라 주세요.",
         ])
         XCTAssertEqual(Set(messages).count, messages.count)
     }
@@ -279,14 +280,14 @@ import ManagedSettings
         let status = settings.status
         XCTAssertEqual(status?.blocksNow, true)
         XCTAssertEqual(status?.nextChange, calendar.date(from: DateComponents(year: 2026, month: 11, day: 2, hour: 12)))
-        XCTAssertEqual(EverydaySettingsModel.statusLine(status, calendar: calendar), "지금 제한하고 있어요 · 12:00까지")
+        XCTAssertEqual(EverydaySettingsModel.statusLine(status, at: tenAM, calendar: calendar), "지금 제한하고 있어요 · 12:00까지")
         XCTAssertTrue(settings.draft.enabled); XCTAssertEqual(settings.counts.apps, 1)
         let evening = tenAM.addingTimeInterval(9 * 3600)
         settings.clock = { evening }
         // The range-end callback of the Monitor clears the store.
         _ = try? settings.focus.services.engine.reconcile(now: evening, authorized: .approved)
         settings.refresh()
-        XCTAssertEqual(EverydaySettingsModel.statusLine(settings.status, calendar: calendar), "켜져 있어요 · 08:00부터 제한해요")
+        XCTAssertEqual(EverydaySettingsModel.statusLine(settings.status, at: evening, calendar: calendar), "켜져 있어요 · 08:00부터 제한해요")
     }
     func testStatusReadAfterABoundaryKeepsTheDraft() {
         let (settings, layer, _, _) = fixture()
@@ -302,7 +303,7 @@ import ManagedSettings
         XCTAssertEqual(settings.status?.issue, .notCleared)
         _ = try? settings.focus.services.engine.reconcile(now: read, authorized: .approved)
         settings.refreshStatus()
-        XCTAssertEqual(EverydaySettingsModel.statusLine(settings.status, calendar: calendar), "켜져 있어요 · 13:00부터 제한해요")
+        XCTAssertEqual(EverydaySettingsModel.statusLine(settings.status, at: read, calendar: calendar), "켜져 있어요 · 13:00부터 제한해요")
         XCTAssertEqual(settings.draft.windows, [])
     }
     func testStatusReadDelayRetriesAnIssueOnceAndSkipsAPassedBoundary() {
@@ -315,7 +316,7 @@ import ManagedSettings
         XCTAssertEqual(EverydaySettingsModel.statusReadDelay(status(.registrationFailed, next: next), now: tenAM, retried: false), 3600 + EverydaySettingsModel.boundaryGrace)
         // A late window-start or range-end callback can still clear a shield left on.
         XCTAssertEqual(EverydaySettingsModel.statusReadDelay(status(.notCleared, next: next), now: tenAM, retried: false), EverydaySettingsModel.issueRetry)
-        XCTAssertEqual(EverydaySettingsModel.statusLine(status(.notCleared, next: next)), "제한이 아직 풀리지 않았어요. 앱을 다시 열면 풀어요.")
+        XCTAssertEqual(EverydaySettingsModel.statusLine(status(.notCleared, next: next), at: tenAM), "제한이 아직 풀리지 않았어요. 앱을 다시 열면 풀어요.")
         // A lock timeout keeps the passed boundary: one retry, then no reads until a lock section of the app.
         let passed = tenAM.addingTimeInterval(-5)
         XCTAssertEqual(EverydaySettingsModel.statusReadDelay(status(.unchecked, next: passed), now: tenAM, retried: false), EverydaySettingsModel.issueRetry)
@@ -342,7 +343,7 @@ import ManagedSettings
         storedLayer(layer, settings); layer.unreadable = true
         settings.refresh()
         XCTAssertEqual(settings.status?.issue, .unreadable)
-        XCTAssertEqual(EverydaySettingsModel.statusLine(settings.status), "설정을 불러오지 못했어요. 다시 설정해 주세요.")
+        XCTAssertEqual(EverydaySettingsModel.statusLine(settings.status, at: tenAM), "설정을 불러오지 못했어요. 다시 설정해 주세요.")
         XCTAssertEqual(settings.draft.rangeStart, EverydaySchedule.standard.rangeStart); XCTAssertFalse(settings.draft.enabled)
         settings.draft.enabled = true; settings.draftSelection = apps(5..<6)
         settings.save()
@@ -429,7 +430,7 @@ import ManagedSettings
         XCTAssertEqual(layer.schedule?.offDay, "2026-11-02"); XCTAssertEqual(layer.writes, 2)
         XCTAssertNil(settings.offWait); XCTAssertNil(settings.refusalMessage)
         XCTAssertEqual(settings.status?.offForToday, true); XCTAssertEqual(settings.status?.blocksNow, false)
-        XCTAssertEqual(EverydaySettingsModel.statusLine(settings.status, calendar: calendar), "오늘은 꺼 두었어요 · 내일 08:00부터 다시 제한해요")
+        XCTAssertEqual(EverydaySettingsModel.statusLine(settings.status, at: tenAM.addingTimeInterval(30), calendar: calendar), "오늘은 꺼 두었어요 · 내일 08:00부터 다시 제한해요")
         XCTAssertFalse(settings.offersOffForToday, "once a day")
         XCTAssertEqual(settings.draft.windows, [], "the action does not save or reset the draft"); XCTAssertTrue(settings.hasChanges)
         // The strict-only message stays inside the range, because the five conditions still apply.
@@ -547,6 +548,7 @@ import ManagedSettings
             (EverydayOffRefusal.unreadable, "설정을 불러오지 못해서 끄지 않았어요. 다시 설정해 주세요."),
             (EverydayOffRefusal.notOn, "매일 제한이 이미 꺼져 있어요."),
             (EverydayOffRefusal.revisionChanged, "매일 제한이 바뀌어서 끄지 않았어요. 다시 시도해 주세요."),
+            (EverydayOffRefusal.dayIsOff, "오늘은 제한하지 않는 요일이에요."),
             (EverydayOffRefusal.outsideRange, "제한 시간이 끝났어요. 지금은 자유롭게 바꿀 수 있어요."),
             (EverydayOffRefusal.alreadyOff, "오늘은 이미 꺼 두었어요."),
             (ControlIssue.lockTimeout, "오늘만 끄지 못했어요. 제한은 그대로예요. 다시 시도해 주세요."),
@@ -568,6 +570,7 @@ import ManagedSettings
             "제한 시간에는 매일 제한을 끌 수 없어요. 18:00부터 자유롭게 바꿀 수 있어요.",
             "제한 시간에는 지금 시각이 빠지게 제한 시간을 바꿀 수 없어요. 18:00부터 자유롭게 바꿀 수 있어요.",
             "제한 시간에는 제한 끝을 앞당길 수 없어요. 18:00부터 자유롭게 바꿀 수 있어요.",
+            "제한 시간에는 요일을 뺄 수 없어요. 18:00부터 자유롭게 바꿀 수 있어요.",
             "제한 시간에는 풀어 두는 시간을 더하거나 늘리거나 옮길 수 없어요. 18:00부터 자유롭게 바꿀 수 있어요.",
             "제한 시간에는 고른 앱과 웹사이트를 뺄 수 없어요. 18:00부터 자유롭게 바꿀 수 있어요.",
         ])
@@ -592,5 +595,143 @@ import ManagedSettings
         XCTAssertEqual(EverydaySettingsModel.statusReadDelay(off, now: at(10, 0), retried: false, rangeCalendar: calendar), 8 * 3600 + EverydaySettingsModel.boundaryGrace)
         XCTAssertEqual(EverydaySettingsModel.statusReadDelay(off, now: at(18, 0), retried: false, rangeCalendar: calendar),
                        at(8, 30, day: 3).timeIntervalSince(at(18, 0)) + EverydaySettingsModel.boundaryGrace, "edges that have passed are skipped")
+    }
+
+    // MARK: Weekdays
+
+    private func gregorian(firstWeekday: Int) -> Calendar { var other = calendar; other.firstWeekday = firstWeekday; return other }
+    /// The stored layer 08:00-18:00 with lunch on the given weekdays, converged at `now`.
+    private func weekdayLayer(_ layer: ModelTestEverydayLayer, _ settings: EverydaySettingsModel, _ days: [Int]?, now: Date) {
+        layer.write(EverydaySchedule(revision: UUID(), enabled: true, rangeStart: 480, rangeEnd: 1080, windows: [EverydaySchedule.template(.lunch)!], weekdays: days), apps(0..<1))
+        _ = try? settings.focus.services.engine.reconcile(now: now, authorized: .approved)
+        settings.clock = { now }; settings.refresh()
+    }
+    func testWeekdaySummaryInEachFirstWeekday() {
+        for first in [1, 2] {
+            let calendar = gregorian(firstWeekday: first)
+            XCTAssertEqual(EverydaySettingsModel.weekdaySummary(EverydaySchedule.allWeekdays, calendar: calendar), "매일")
+            XCTAssertEqual(EverydaySettingsModel.weekdaySummary(Set(2...6), calendar: calendar), "평일")
+            XCTAssertEqual(EverydaySettingsModel.weekdaySummary([1, 7], calendar: calendar), "주말")
+            XCTAssertEqual(EverydaySettingsModel.weekdaySummary([], calendar: calendar), "요일 없음")
+            XCTAssertEqual(EverydaySettingsModel.weekdaySummary([2, 4, 6], calendar: calendar), "월, 수, 금")
+        }
+        XCTAssertEqual(EverydaySettingsModel.weekdaySummary([1, 2, 7], calendar: gregorian(firstWeekday: 1)), "일, 월, 토")
+        XCTAssertEqual(EverydaySettingsModel.weekdaySummary([1, 2, 7], calendar: gregorian(firstWeekday: 2)), "월, 토, 일")
+        XCTAssertEqual(EverydaySettingsModel.weekdayOrder(calendar: gregorian(firstWeekday: 1)), [1, 2, 3, 4, 5, 6, 7])
+        XCTAssertEqual(EverydaySettingsModel.weekdayOrder(calendar: gregorian(firstWeekday: 2)), [2, 3, 4, 5, 6, 7, 1])
+        XCTAssertEqual((1...7).map(EverydaySettingsModel.weekdayName), ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"])
+    }
+    func testTheWeekdayDraftIssueShowsOnlyInTheWeekdayRow() {
+        let (settings, _, _, _) = fixture()
+        settings.refresh()
+        XCTAssertEqual(settings.draft.chosenWeekdays, EverydaySchedule.allWeekdays, "a new layer starts with all seven")
+        for day in 1...7 { settings.toggleWeekday(day) }
+        XCTAssertEqual(settings.draft.weekdays, [])
+        XCTAssertEqual(settings.weekdaysIssue, "제한할 요일을 하나 이상 골라 주세요.")
+        XCTAssertNil(settings.windowsIssue); XCTAssertNil(settings.rangeIssue)
+        XCTAssertEqual(settings.draftIssue, settings.weekdaysIssue); XCTAssertFalse(settings.canSave)
+        XCTAssertNil(EverydaySettingsModel.previewSegments(for: settings.draft))
+        XCTAssertEqual(EverydaySettingsModel.invalidPreviewLine(settings.draft), "요일을 고르면 미리보기를 볼 수 있어요.")
+        // A time problem comes first and keeps its line.
+        settings.draft.rangeEnd = 510
+        XCTAssertNil(settings.weekdaysIssue); XCTAssertNotNil(settings.rangeIssue)
+        XCTAssertEqual(EverydaySettingsModel.invalidPreviewLine(settings.draft), "시간을 확인하면 미리보기를 볼 수 있어요.")
+        settings.draft.rangeEnd = 1080; settings.toggleWeekday(2)
+        XCTAssertNil(settings.weekdaysIssue); XCTAssertEqual(settings.draft.weekdays, [2])
+        for day in 1...7 where day != 2 { settings.toggleWeekday(day) }
+        XCTAssertNil(settings.draft.weekdays, "all seven again is the stored form of every day")
+    }
+    func testAWeekdayChangeIsAnUnsavedChangeComparedAsSets() {
+        let (settings, layer, _, _) = fixture()
+        storedLayer(layer, settings); settings.refresh()
+        XCTAssertFalse(settings.hasChanges)
+        settings.toggleWeekday(1)
+        XCTAssertTrue(settings.hasChanges)
+        settings.toggleWeekday(1)
+        XCTAssertFalse(settings.hasChanges)
+        settings.draft.weekdays = [1, 2, 3, 4, 5, 6, 7]
+        XCTAssertFalse(settings.hasChanges, "all seven equal a missing value")
+        weekdayLayer(layer, settings, [2, 4], now: tenAM)
+        settings.draft.weekdays = [4, 2]
+        XCTAssertFalse(settings.hasChanges, "order does not matter")
+    }
+    func testStatusLineDayWordsForEachState() {
+        let (settings, layer, _, _) = fixture()
+        // Monday to Friday. Saturday 2026-11-07, a day that is off: tomorrow is off too, so the line names Monday.
+        weekdayLayer(layer, settings, [2, 3, 4, 5, 6], now: at(10, day: 7))
+        XCTAssertEqual(settings.status?.dayIsOff, true)
+        XCTAssertEqual(EverydaySettingsModel.statusLine(settings.status, at: at(10, day: 7), calendar: calendar), "오늘은 제한하지 않는 요일이에요 · 월요일 08:00부터 제한해요")
+        // Sunday: tomorrow is Monday.
+        settings.clock = { self.at(10, day: 8) }; settings.refreshStatus()
+        XCTAssertEqual(EverydaySettingsModel.statusLine(settings.status, at: at(10, day: 8), calendar: calendar), "오늘은 제한하지 않는 요일이에요 · 내일 08:00부터 제한해요")
+        // Friday after the range end: tomorrow is off.
+        settings.clock = { self.at(19, day: 6) }; settings.refreshStatus()
+        XCTAssertEqual(EverydaySettingsModel.statusLine(settings.status, at: at(19, day: 6), calendar: calendar), "켜져 있어요 · 월요일 08:00부터 제한해요")
+        // Monday after the range end: tomorrow is on, so no day word.
+        settings.clock = { self.at(19) }; settings.refreshStatus()
+        XCTAssertEqual(EverydaySettingsModel.statusLine(settings.status, at: at(19), calendar: calendar), "켜져 있어요 · 08:00부터 제한해요")
+        // Off for today on Friday: the next block is Monday.
+        weekdayLayer(layer, settings, [2, 3, 4, 5, 6], now: at(10, day: 6))
+        settings.startOffWait(); tick(settings, at: at(10, 0, 30, day: 6))
+        XCTAssertEqual(settings.status?.offForToday, true)
+        XCTAssertEqual(EverydaySettingsModel.statusLine(settings.status, at: at(10, 0, 30, day: 6), calendar: calendar), "오늘은 꺼 두었어요 · 월요일 08:00부터 다시 제한해요")
+        // A day that is off reports first, also when it is off for today.
+        let both = EverydayStatus(schedule: layer.schedule, blocksNow: false, nextChange: at(8, day: 9), issue: nil, offForToday: true, dayIsOff: true)
+        XCTAssertEqual(EverydaySettingsModel.statusLine(both, at: at(19, day: 6), calendar: calendar), "오늘은 제한하지 않는 요일이에요 · 월요일 08:00부터 제한해요")
+        // An issue keeps its line on every day.
+        var unchecked = both; unchecked.issue = .unchecked
+        XCTAssertEqual(EverydaySettingsModel.statusLine(unchecked, at: at(10, day: 7), calendar: calendar), "상태를 확인하지 못했어요. 잠시 후 다시 확인해 주세요.")
+        XCTAssertEqual(EverydaySettingsModel.timerLine(unchecked, calendar: calendar), "매일 제한을 확인해 주세요")
+    }
+    func testStatusLineAcrossAMidnightBetweenTwoDaysThatAreOff() {
+        let (settings, layer, _, _) = fixture()
+        weekdayLayer(layer, settings, [2, 3, 4, 5, 6], now: at(23, 59, 59, day: 7))
+        let before = settings.status
+        XCTAssertEqual(EverydaySettingsModel.statusLine(before, at: at(23, 59, 59, day: 7), calendar: calendar), "오늘은 제한하지 않는 요일이에요 · 월요일 08:00부터 제한해요")
+        settings.clock = { self.at(0, 0, 0, day: 8) }; settings.refreshStatus()
+        XCTAssertEqual(settings.status, before, "the status value does not change at this midnight")
+        XCTAssertEqual(settings.statusReadAt, at(0, 0, 0, day: 8), "the read time changes, so the row redraws")
+        XCTAssertEqual(EverydaySettingsModel.statusLine(settings.status, at: settings.statusReadAt!, calendar: calendar), "오늘은 제한하지 않는 요일이에요 · 내일 08:00부터 제한해요")
+    }
+    func testStatusReadDelayAddsTheNextMidnightWhileTheLineHasADayWord() {
+        let schedule = EverydaySchedule(revision: UUID(), enabled: true, rangeStart: 480, rangeEnd: 1080, windows: [], weekdays: [2, 3, 4, 5, 6])
+        let saturday = EverydayStatus(schedule: schedule, blocksNow: false, nextChange: at(8, day: 9), issue: nil, dayIsOff: true)
+        let toMidnight = at(0, day: 8).timeIntervalSince(at(19, day: 7)) + EverydaySettingsModel.boundaryGrace
+        XCTAssertEqual(EverydaySettingsModel.statusReadDelay(saturday, now: at(19, day: 7), retried: false, dayWordCalendar: calendar), toMidnight)
+        XCTAssertEqual(EverydaySettingsModel.statusReadDelay(saturday, now: at(19, day: 7), retried: false), at(8, day: 9).timeIntervalSince(at(19, day: 7)) + EverydaySettingsModel.boundaryGrace,
+                       "the timer screen reads no midnight")
+        // Monday evening, tomorrow is on: the line has no day word, so no midnight read.
+        let monday = EverydayStatus(schedule: schedule, blocksNow: false, nextChange: at(8, day: 3), issue: nil)
+        XCTAssertEqual(EverydaySettingsModel.statusReadDelay(monday, now: at(19), retried: false, dayWordCalendar: calendar),
+                       at(8, day: 3).timeIntervalSince(at(19)) + EverydaySettingsModel.boundaryGrace)
+        // A layer without weekdays never shows a day word after the range end.
+        XCTAssertNil(EverydaySettingsModel.dayWord(EverydayStatus(schedule: layerEveryDay, blocksNow: false, nextChange: at(8, day: 3), issue: nil), at: at(19), calendar: calendar))
+    }
+    private var layerEveryDay: EverydaySchedule { EverydaySchedule(revision: UUID(), enabled: true, rangeStart: 480, rangeEnd: 1080, windows: []) }
+    func testOnADayThatIsOffTheScreenOffersNoActionAndNoStrictOnlyMessage() {
+        let (settings, layer, _, _) = fixture()
+        weekdayLayer(layer, settings, [2, 3, 4, 5, 6], now: at(10, day: 7))
+        XCTAssertEqual(settings.status?.blocksNow, false)
+        XCTAssertFalse(settings.offersOffForToday); XCTAssertNil(settings.strictOnlyMessage)
+        XCTAssertNil(EverydaySettingsModel.timerLine(settings.status, calendar: calendar), "no timer row on a day that is off")
+        // Every edit is accepted, also removing an app.
+        settings.draftSelection = FamilyActivitySelection(includeEntireCategory: true); settings.draft.enabled = false
+        settings.save()
+        XCTAssertNil(settings.refusalMessage)
+        // On Monday inside the range, the gate holds again.
+        weekdayLayer(layer, settings, [2, 3, 4, 5, 6], now: tenAM)
+        XCTAssertTrue(settings.offersOffForToday); XCTAssertNotNil(settings.strictOnlyMessage)
+    }
+    func testRemovingAWeekdayInsideTheRangeShowsTheWeekdayRefusal() {
+        let (settings, layer, _, _) = fixture()
+        storedLayer(layer, settings); settings.refresh()
+        let stored = layer.schedule
+        settings.toggleWeekday(4)
+        settings.save()
+        XCTAssertEqual(settings.refusalMessage, "제한 시간에는 요일을 뺄 수 없어요. 18:00부터 자유롭게 바꿀 수 있어요. ‘오늘만 끄기’를 누르면 오늘은 제한을 끌 수 있어요.")
+        XCTAssertEqual(layer.schedule, stored)
+        // Adding a day back is accepted.
+        settings.toggleWeekday(4); settings.toggleWeekday(4); settings.toggleWeekday(4)
+        XCTAssertFalse(settings.hasChanges)
     }
 }
