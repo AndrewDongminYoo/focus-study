@@ -103,3 +103,44 @@ Live Activity는 마지막으로 확인한 집중·휴식·복귀 계획을 보�
    저장한 콜백은 같은 세션에 다시 전달할 수 없습니다.
 3. 관측 결과를 [실기기 검증 기록](screen-time-device-matrix.md)에 남깁니다.
    이 절차는 공용 콜백 엔진을 직접 호출하므로, OS가 확장에 콜백을 전달하는 실제 지연은 증명하지 않습니다.
+
+## Monitor 콜백 시간 측정
+
+Monitor 확장은 실행 인자를 받지 못하므로, 앱이 App Group의 `SessionControl/monitor-timing.json` 파일로 확장의 시간 측정을 켭니다.
+설계와 줄의 뜻은 [Monitor timing 설계](../specs/2026-11-13-monitor-timing-design.md)에 있고, 이 기능은 Debug 빌드에만 들어 있습니다.
+
+- 앱을 `--screen-time-diagnostics`와 함께 실행하면 실행할 때마다 이 파일을 새로 씁니다. 파일에는 `schemaVersion`과 쓴 시각 `writtenAt`만 들어 있습니다.
+- 인자 없이 실제 런타임으로 실행하면 파일을 지웁니다. 실행 인자가 없는 집중 모드 필터의 백그라운드 실행도 여기에 해당하므로, 그 뒤에는 인자와 함께 다시 실행해야 측정이 켜집니다.
+- `--ui-testing` 실행은 이 파일을 쓰지도, 읽지도, 지우지도 않습니다.
+- 쓰기나 삭제가 실패해도 앱은 그대로 실행됩니다. 쓴 지 24시간이 지난 파일과 미래 시각의 파일은 꺼진 것으로 읽습니다.
+
+파일이 유효하면 Monitor 콜백 하나가 아래 줄을 통합 로그(subsystem `kr.donminzzi.focusStudy.monitor`, category `timing`, notice 수준)에 남깁니다.
+Xcode 콘솔의 앱 로그(`SCREEN_TIME_TIMING` 등)는 그대로입니다.
+
+```plaintext
+MONITOR_TIMING cb=<n> kind=<kind> activity=<activity> step=begin flag_ms=<ms>
+MONITOR_TIMING cb=<n> kind=<kind> activity=<activity> step=access ms=<ms> state=<approved|denied|unknown>
+MONITOR_TIMING cb=<n> kind=<kind> activity=<activity> step=lock attempt=<0-5> wait_ms=<ms> result=<acquired|busy>
+MONITOR_TIMING cb=<n> kind=<kind> activity=<activity> step=marker ms=<ms> marker=<none|register|stop> result=<skip|continue>
+MONITOR_TIMING cb=<n> kind=<kind> activity=<activity> step=call op=<op> ms=<ms>
+MONITOR_TIMING cb=<n> kind=<kind> activity=<activity> step=section hold_ms=<ms>
+MONITOR_TIMING cb=<n> kind=<kind> activity=<activity> step=end total_ms=<ms> result=<ran|skipped|lock_timeout|error>
+```
+
+- `cb`는 그 확장 프로세스에서 측정한 콜백의 번호이고, 로그 도구가 보여 주는 프로세스 id와 함께 한 콜백의 줄을 묶습니다.
+- `kind`는 `didStart`, `didEnd`, `willEndWarning` 중 하나이고, `activity`는 `focus`, `break`, `everyday`, `other` 중 하나입니다. 활동 이름, UUID, 토큰, 앱 이름, 도메인은 어느 줄에도 없습니다.
+- `op`는 `register`, `register_break`, `register_everyday`, `stop`, `stop_break`, `stop_everyday`, `apply_shield`, `clear_shield`, `apply_everyday`, `clear_everyday` 중 하나입니다.
+- `hold_ms`는 잠금 구간 본문이 걸린 시간입니다. 잠금을 잡은 시도의 `lock`, `call`, `section` 줄은 잠금을 푼 뒤에 한꺼번에 남으므로, 로그를 남기는 시간은 `hold_ms`에 들어가지 않습니다.
+- 잠금 구간 안에서 프로세스가 끝난 콜백은 `begin`만 있고 `end`가 없습니다. 반대로 `end`가 없다는 것만으로는 어느 단계였는지 알 수 없습니다. 접근 상태 읽기, 잠금 대기, 재시도 사이의 0.25초 대기 중에 끝나도 `end`가 없으므로, 마지막으로 남은 줄로 단계를 좁힙니다.
+
+기기를 Mac에 연결한 상태에서 실행이 끝난 뒤에 줄을 읽습니다.
+
+```bash
+log collect --device-udid <UDID> --last 30m --output monitor-timing.logarchive
+log show --archive monitor-timing.logarchive --predicate 'subsystem == "kr.donminzzi.focusStudy.monitor" && category == "timing"'
+```
+
+Mac의 `log stream`은 Mac 자신의 로그만 읽으므로 기기의 줄을 볼 수 없습니다.
+Mac의 Console 앱에서 기기를 고르고 같은 subsystem과 category로 걸러 실시간으로 볼 수 있는지는 아직 확인하지 않았습니다.
+`log collect`가 이 기기와 iOS 버전에서 동작하는지도 실기기에서 확인한 적이 없으며, 확인 절차는 설계 문서의 [실기기 검증](../specs/2026-11-13-monitor-timing-design.md#physical-device-verification)에 있습니다.
+`.logarchive`는 저장소에 넣지 않습니다.

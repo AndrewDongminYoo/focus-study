@@ -48,6 +48,10 @@ import SwiftData
         let monitoring = systemMonitoring
         #endif
         let group = try GroupConfiguration.directory()
+        #if DEBUG
+        // The Monitor gets no launch arguments, so this flag file turns its timing lines on; every launch of the real runtime without the argument removes it.
+        MonitorTimingFlag.set(launchArguments: ProcessInfo.processInfo.arguments, directory: group)
+        #endif
         // The app and the Monitor re-block from the same frozen copy in the App Group.
         let breakSelection = BreakSelectionFile(directory: group, shield: shield)
         // The everyday file and its named store; the Monitor reads the same file.
