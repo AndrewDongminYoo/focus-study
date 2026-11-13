@@ -281,3 +281,49 @@ On iOS 27.0.1 a revocation in Settings reads `.notDetermined`, not `.denied`, in
 Reconciliation (2026-11-13, #118): the access-state design now accepts this result of step 7, a session that ends as `.recoveryInterrupted` after a revocation that reads `.notDetermined`, in [A real revocation](../specs/2026-11-11-access-state-design.md#a-real-revocation) and in the acceptance lines of its [physical-device verification](../specs/2026-11-11-access-state-design.md#physical-device-verification).
 Every focus registration that overwrote a registered focus activity took 289.9 to 300.3 ms or 508.3 to 510.1 ms, while the first registration of a session took 19.6 and 36.7 ms; #119 takes it up.
 The per-step evidence is in the #115 comments of 2026-11-11.
+
+## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
+
+이슈 #17의 검토 결과다.
+코드 항목은 `76d5058`의 소스를 읽어 확인했고, 실행하거나 기기에서 관찰한 결과가 아니다.
+entitlement 신청이나 스토어 제출은 이 검토에 포함하지 않았다.
+
+### Report 확장의 데이터 반출 경로
+
+| 경로                | 결과                                                                                                                                                               |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| App Group           | 없음. `Configuration/Report.entitlements`에는 `com.apple.developer.family-controls`만 있고 `com.apple.security.application-groups`가 없다.                         |
+| SwiftData           | 없음. `Report/`의 두 파일은 SwiftData를 import하지 않는다. `ModelContainer`는 `App/FocusRuntime.swift`와 DEBUG fixture에만 있고 `cloudKitDatabase: .none`을 쓴다.  |
+| 파일·`UserDefaults` | 없음. `Report/`에는 `FileManager`, `UserDefaults`, `containerURL`, 파일 쓰기 호출이 없다.                                                                          |
+| 로그                | 없음. `Report/`에는 `NSLog`, `print`, `os_log`, `Logger` 호출이 없다.                                                                                              |
+| 네트워크            | 없음. `App`, `Shared`, `Integration`, `Monitor`, `Report`, `Presentation`, `Activity` 어디에도 `URLSession`이나 `URLRequest`가 없다.                               |
+| 화면                | `FocusReportScene`이 사용 시간과 앱·웹 토큰을 `UsageSummaryView`로 그리는 것이 유일한 출력이다. 이 값은 확장의 화면 안에서만 쓰이고 앱 프로세스로 전달되지 않는다. |
+
+### 선택 토큰의 저장 위치
+
+| 파일                                   | 위치                                                          | 읽는 타깃    |
+| -------------------------------------- | ------------------------------------------------------------- | ------------ |
+| `selection.json` (집중 선택)           | 앱 컨테이너의 Application Support `PrivateSelection/`         | App          |
+| 세션별 쉬는 시간 선택 사본             | App Group `group.kr.donminzzi.focusStudy`의 `SessionControl/` | App, Monitor |
+| `everyday-layer.json` (매일 제한 선택) | 같은 App Group 디렉터리                                       | App, Monitor |
+
+세 파일 모두 `.completeFileProtectionUntilFirstUserAuthentication`으로 쓴다.
+`control.json`과 `registration-marker.json`에는 토큰이 없다.
+Report와 Activity 확장은 App Group entitlement가 없어 이 파일들을 읽지 못한다.
+토큰이 기기 밖으로 나가는 경로는 찾지 못했다: 네트워크 호출이 없고, 앱의 `NSLog` 호출은 모두 `#if DEBUG` 안의 진단 줄이다.
+그중 `SCREEN_TIME_TIMING`, `SCREEN_TIME_PROBE`, `START_LATENCY`, `BREAK_LATENCY`, `END_LATENCY`는 작업 이름, 시간, 오류 설명만 기록한다.
+`LIVE_ACTIVITY_PROBE`가 받는 메시지의 내용은 이 검토에서 줄 단위로 확인하지 않았다.
+
+### 배포 entitlement 상태
+
+2026-11-13 기준이다.
+
+| App ID                                        | Family Controls 배포 entitlement | 근거                                                                                             |
+| --------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------ |
+| App (`kr.donminzzi.focusStudy`)               | 미신청                           | 2026-11-13에 신청한 적이 없음을 확인했다.                                                        |
+| Monitor                                       | 미신청                           | 위와 같다.                                                                                       |
+| Report                                        | 미신청                           | 위와 같다.                                                                                       |
+| Activity (`kr.donminzzi.focusStudy.activity`) | 해당 없음                        | `project.yml`의 `FocusActivity` 타깃에는 entitlements 파일이 없고 Family Controls를 쓰지 않는다. |
+
+개발 빌드는 가능하다: 세 타깃의 Family Controls 개발 entitlement와 개발 프로필로 서명한 Debug 빌드를 2026-10-26부터 실기기에 설치해 왔다([개발 프로비저닝과 설치 완료](#개발-프로비저닝과-설치-완료-2026-10-26)).
+이것은 배포 승인이 아니다: App Store나 TestFlight 배포에는 App, Monitor, Report 각 App ID의 배포 entitlement 승인이 따로 필요하며, 신청 절차는 [Apple 신청 안내](https://developer.apple.com/documentation/familycontrols/requesting-the-family-controls-entitlement)를 따른다.
