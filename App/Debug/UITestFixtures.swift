@@ -131,10 +131,17 @@ extension FocusServices {
         }
         // `--break-timing short` shortens waits, the break and the slack, but not the focus length or the stale-wait grace.
         // One accessibility query on a slow CI runner can take several seconds and delays the app's timer ticks:
-        // the standard grace still admits a late automatic break start, and the 15-second slack keeps the deadline notice counting.
+        // the standard grace admits a late automatic break start, and the 15-second slack keeps the deadline notice counting, only up to those lengths.
+        // `--break-timing short-lenient` is for a test that never reaches the deadline: the same waits and break with the standard slack
+        // and a 5-minute grace, so no single query can make the engine refuse the automatic start or stop the notice.
+        // The refusal rule keeps its host test, `BreakControlTests.testStartBreakAfterGraceThrowsBreakUnavailable`.
         var timing = BreakTiming.standard
-        if let index = arguments.firstIndex(of: "--break-timing"), index + 1 < arguments.count, arguments[index + 1] == "short" {
-            timing = BreakTiming(waits: [1, 2, 4], breakLength: 3, slack: 15, staleWaitGrace: BreakTiming.standard.staleWaitGrace)
+        if let index = arguments.firstIndex(of: "--break-timing"), index + 1 < arguments.count {
+            switch arguments[index + 1] {
+            case "short": timing = BreakTiming(waits: [1, 2, 4], breakLength: 3, slack: 15, staleWaitGrace: BreakTiming.standard.staleWaitGrace)
+            case "short-lenient": timing = BreakTiming(waits: [1, 2, 4], breakLength: 3, slack: BreakTiming.standard.slack, staleWaitGrace: 300)
+            default: break
+            }
         }
         // `--everyday-off-wait <seconds>` shortens the off-for-today wait, bounded to 1-30 seconds; the grace stays as the timing gives it.
         if let index = arguments.firstIndex(of: "--everyday-off-wait"), index + 1 < arguments.count,
