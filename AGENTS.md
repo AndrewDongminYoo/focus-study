@@ -32,7 +32,7 @@ Use these current documentation paths:
 - [Registration marker for Monitor callbacks](docs/specs/2026-11-10-registration-marker-design.md), which amends the 2026-10-26, M2 and M3 designs with an App Group marker file, so that a Monitor callback skips the lock wait while a lock section registers the same activity
 - [Registration marker for stops](docs/specs/2026-11-10-stop-marker-design.md), which extends that marker to the `stopMonitoring` calls inside lock sections
 - [Access state](docs/specs/2026-11-11-access-state-design.md), which amends the 2026-10-26, M2, M3 and M4 designs so that only a `denied` access read ends a session or stops the everyday layer, and an unknown read does not
-- [Monitor timing](docs/specs/2026-11-13-monitor-timing-design.md), a design for approval: DEBUG-only timing lines for Monitor callbacks, turned on by an App Group flag that `--screen-time-diagnostics` writes
+- [Monitor timing](docs/specs/2026-11-13-monitor-timing-design.md), implemented and not yet run on a device: DEBUG-only timing lines for Monitor callbacks, turned on by an App Group flag that `--screen-time-diagnostics` writes
 - [Implementation plan](docs/plans/2026-10-26-focus-study.md)
 - [M1 implementation plan](docs/plans/2026-10-31-m1-launch-flow.md)
 - [M2 implementation plan](docs/plans/2026-11-01-m2-break-pass.md)
@@ -70,6 +70,7 @@ Keep new plans, specs, and notes under `docs/plans/`, `docs/specs/`, and `docs/n
 | `Presentation/UsageSummarySection.swift`                                                                              | Shared total/unavailable rendering; the app uses synthetic values only in DEBUG fixtures                                                                                                                                                                                     |
 | `App/Debug/UITestFixtures.swift`                                                                                      | Synthetic authorization, selection, monitoring, storage failures, and report lifecycle/state probes                                                                                                                                                                          |
 | `Integration/DeviceDiagnostics.swift`, `App/Debug/DeviceDiagnosticsSection.swift`                                     | Opt-in DEBUG diagnostics around the real monitoring adapter and shared callback engine                                                                                                                                                                                       |
+| `Integration/MonitorTiming.swift`                                                                                     | DEBUG flag file `monitor-timing.json`, and the recorder and wrappers that build the `MONITOR_TIMING` lines of a Monitor callback; `FocusMonitor` owns the logger                                                                                                             |
 
 App and Monitor compile `Shared/` and `Integration/`; Report stays separate.
 `Presentation/` shares views between App and Report, never report data.

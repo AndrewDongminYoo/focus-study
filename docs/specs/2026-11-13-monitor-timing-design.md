@@ -2,6 +2,7 @@
 
 Date: 2026-11-13.
 Status: design for approval.
+Reconciliation (2026-11-13, #113): the design is implemented. `Integration/MonitorTiming.swift`, `Monitor/FocusMonitor.swift` and `App/FocusRuntime.swift` are the authority for the code, and `SDKTests/MonitorTimingTests.swift` pins the flag and the lines. The [physical-device verification](#physical-device-verification) is not done.
 Source: [issue #113](https://github.com/AndrewDongminYoo/focus-study/issues/113), and [issue #119](https://github.com/AndrewDongminYoo/focus-study/issues/119) for the slow focus overwrites.
 This document amends the [registration marker design](2026-11-10-registration-marker-design.md) and the [stop marker design](2026-11-10-stop-marker-design.md) only where [Superseded lines](#superseded-lines) says so.
 It keeps the process-lock rule: lock sections stay synchronous, with no `await`, UI wait or actor hop inside the lock.
@@ -73,6 +74,7 @@ The file holds nothing else.
 
 The timing uses DEBUG wrappers around the values that `FocusMonitor` already passes to the engine, so `Shared/` does not change.
 With a valid flag, the callback builds its engine with the wrappers; without one, it builds the engine of today and emits nothing.
+Reconciliation (2026-11-13, #113): `FocusMonitor.reconcile` is the authority. It always builds the engine of today, because the Live Activity read after the callback uses that engine and is not timed. With a valid flag it also builds a second engine with the wrappers around the same store and clients, and that engine alone handles the callback.
 Every duration is measured on `ProcessInfo.processInfo.systemUptime`, as `measureScreenTime` does.
 
 | Step      | What it times                                                                                                      | Wrapper                   |
@@ -103,6 +105,7 @@ The `section` time is the lock-hold time without two small parts that the store 
 
 The Monitor writes each line with `Logger(subsystem: "kr.donminzzi.focusStudy.monitor", category: "timing")` at the notice (default) level, so that the device keeps it and `log show` prints it without `--info`.
 Every interpolated string is one of the fixed values below and is marked public; no activity name reaches the logger.
+Reconciliation (2026-11-13, #113): `MonitorTimingRecorder` builds each line as one string from the fixed values and the numbers, so that the SDK tests can read the lines, and `FocusMonitor` passes that string to the logger as one public value, so the logger call has one dynamic string and not one interpolation for each fixed value. `FocusMonitor` turns the activity name into the activity kind before it builds the recorder; the recorder and its `begin` get that kind and never the activity name.
 
 ```plaintext
 MONITOR_TIMING cb=<n> kind=<kind> activity=<activity> step=begin flag_ms=<ms>
@@ -120,6 +123,7 @@ MONITOR_TIMING cb=<n> kind=<kind> activity=<activity> step=end total_ms=<ms> res
 - Every time is in milliseconds with 3 decimals, as in the app console lines.
 - `marker` is what the read returned before the freshness check. `result=skip` means that the callback returned after this read without a section; every other case is `continue`. The wrapper takes this from what the engine does next, and it does not evaluate the skip rule again.
 - `result` of `end`: `ran` when a section body ran, `skipped` when the callback returned without one, `lock_timeout` when the retries ran out, and `error` for every other throw.
+  - Reconciliation (2026-11-13, #113): a lock call that throws another error than `lockTimeout` before the section body starts has no `lock` line, because it is neither `acquired` nor `busy`; its callback ends with `result=error`. `TimedControlStore` in `Integration/MonitorTiming.swift` is the authority.
 - The `begin`, `access`, busy `lock` and `end` lines are emitted when their step ends, and a `marker` line when the engine's next step shows its result; all of them are outside the lock.
 - The lines of an acquired lock (`lock` with `acquired`, each `call`, and `section`) are kept in memory during the section and emitted right after the lock is released, so no log call runs inside the lock.
   A callback whose process ends inside a section shows `begin` and no `end`.
