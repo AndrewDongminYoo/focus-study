@@ -4,9 +4,13 @@ import DeviceActivity
 import FamilyControls
 import Observation
 
-/// A Screen Time operation timed under `--screen-time-diagnostics`; the raw value names it in the `SCREEN_TIME_TIMING` log.
+/// A Screen Time operation timed under `--screen-time-diagnostics`; the raw value names it in the `SCREEN_TIME_TIMING` log and in the `MONITOR_TIMING` call lines.
+/// Only the Monitor timing reports `applyEveryday`, `clearEveryday` and `clearShield`.
 enum ScreenTimeOperation: String {
+    case applyEveryday = "apply_everyday"
     case applyShield = "apply_shield"
+    case clearEveryday = "clear_everyday"
+    case clearShield = "clear_shield"
     case register
     case registerBreak = "register_break"
     case registerEveryday = "register_everyday"
