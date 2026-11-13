@@ -803,7 +803,7 @@ final class EverydayControlTests: XCTestCase {
         try check("range before already off", at: clock(19, 0), setup: { world, engine in try self.turnOff(engine, world, at: self.clock(9, 0)) }) {
             $0 as? EverydayOffRefusal == .outsideRange
         }
-        XCTAssertEqual(EverydayOffRefusal.allCases, [.unreadable, .notOn, .revisionChanged, .outsideRange, .alreadyOff])
+        XCTAssertEqual(EverydayOffRefusal.allCases, [.unreadable, .notOn, .revisionChanged, .dayIsOff, .outsideRange, .alreadyOff])
     }
     func testOffForTodayRefusalConvergesAsEveryAppSection() throws {
         // A refusal for access stops every everyday activity and clears the store (M3 row "Access revoked").
@@ -976,5 +976,197 @@ final class EverydayControlTests: XCTestCase {
         XCTAssertNil(world.state.store, "off again for that local date")
         try save(engine, world, layer(), s1, at: day(3, 19))
         XCTAssertNil(world.state.file?.schedule.offDay)
+    }
+
+    // MARK: Weekdays
+
+    /// The default layer with lunch, on the given weekdays; `nil` is every day.
+    private func weekdayLayer(_ days: [Int]?, _ start: Int = 8 * 60, _ end: Int = 18 * 60, windows: [EverydayWindow]? = nil, enabled: Bool = true) -> EverydaySchedule {
+        var schedule = layer(start, end, windows: windows, enabled: enabled); schedule.weekdays = days; return schedule
+    }
+    private let monToFri = [2, 3, 4, 5, 6]
+    /// Monday to Friday, 08:00-18:00 with lunch and `s1`, saved on Monday 2026-11-02 at 07:00 and applied at 10:00.
+    private func weekdayWorld() throws -> (EverydayWorld, SessionControl, EverydaySchedule) {
+        let world = EverydayWorld(), engine = engine(world), schedule = weekdayLayer(monToFri)
+        try save(engine, world, schedule, s1, at: clock(7, 0))
+        try engine.reconcile(now: t0, authorized: .approved)
+        XCTAssertEqual(world.state.store, s1)
+        return (world, engine, schedule)
+    }
+    private func refused(_ engine: SessionControl, _ world: EverydayWorld, _ schedule: EverydaySchedule, _ selection: Set<String>? = nil, at now: Date) -> EverydayLockReason? {
+        let before = world.state.file
+        do { try save(engine, world, schedule, selection ?? s1, at: now); return nil } catch {
+            XCTAssertEqual(world.state.file, before, "a refused save stores nothing")
+            return error as? EverydayLockReason
+        }
+    }
+    /// The lock of the stored file ends at `end`: a save that turns the layer off is refused one second before and accepted at `end`.
+    /// It runs on a copy of the world, so the stored state does not change.
+    private func assertLockEnds(_ world: EverydayWorld, at end: Date, _ context: String, file: StaticString = #filePath, line: UInt = #line) {
+        let before = EverydayWorld(world.state), at = EverydayWorld(world.state)
+        let off = weekdayLayer(nil, enabled: false)
+        XCTAssertEqual(refused(engine(before), before, off, at: end.addingTimeInterval(-1)), .turnsOff, "locked before the end: \(context)", file: file, line: line)
+        XCTAssertNil(refused(engine(at), at, off, at: end), "open at the end: \(context)", file: file, line: line)
+    }
+
+    func testWeekdaySequencesInsideTheLockOnADayThatIsOn() throws {
+        let removeMonday = weekdayLayer([3, 4, 5, 6]), removeWednesday = weekdayLayer([2, 3, 5, 6])
+        do {
+            let (world, engine, _) = try weekdayWorld()
+            XCTAssertEqual(refused(engine, world, removeMonday, at: t0), .removesWeekday, "Monday 10:00, remove Monday")
+            assertLockEnds(world, at: clock(18, 0), "remove Monday")
+            XCTAssertEqual(refused(engine, world, removeWednesday, at: t0), .removesWeekday, "Monday 10:00, remove Wednesday")
+            XCTAssertEqual(refused(engine, world, removeMonday, at: clock(12, 30)), .removesWeekday, "during lunch the gate reads the range")
+            XCTAssertNil(refused(engine, world, removeWednesday, at: clock(18, 0)), "the same edit from 18:00")
+            XCTAssertEqual(world.state.file?.schedule.weekdays, [2, 3, 5, 6])
+        }
+        do {
+            let (world, engine, _) = try weekdayWorld()
+            XCTAssertNil(refused(engine, world, weekdayLayer([2, 3, 4, 5, 6, 7]), at: t0), "add Saturday")
+            assertLockEnds(world, at: clock(18, 0), "after adding Saturday")
+            XCTAssertEqual(refused(engine, world, weekdayLayer(monToFri), at: at(300)), .removesWeekday, "remove the added Saturday")
+            XCTAssertNil(refused(engine, world, weekdayLayer(monToFri), at: clock(18, 0)))
+        }
+        do {
+            let (world, engine, _) = try weekdayWorld()
+            XCTAssertNil(refused(engine, world, weekdayLayer([2, 3, 4, 5, 6, 7], 8 * 60, 20 * 60), at: t0), "add Saturday, end at 20:00")
+            assertLockEnds(world, at: clock(20, 0), "the lock moves to 20:00")
+            XCTAssertEqual(refused(engine, world, weekdayLayer([3, 4, 5, 6, 7], 8 * 60, 20 * 60), at: clock(18, 30)), .removesWeekday)
+        }
+        do {
+            let (world, engine, _) = try weekdayWorld()
+            XCTAssertNil(refused(engine, world, weekdayLayer([2, 3, 4, 5, 6, 7], 10 * 60, 18 * 60, windows: [lunch]), at: t0), "range start moved to now")
+            XCTAssertEqual(refused(engine, world, weekdayLayer([3, 4, 5, 6, 7], 10 * 60, 18 * 60, windows: [lunch]), at: at(300)), .removesWeekday)
+            assertLockEnds(world, at: clock(18, 0), "the lock still ends at 18:00")
+        }
+        do {
+            let (world, engine, stored) = try weekdayWorld()
+            // Remove Monday, add an app and remove lunch in one save: nothing is stored, also not the stricter parts.
+            XCTAssertEqual(refused(engine, world, weekdayLayer([3, 4, 5, 6], windows: []), s2, at: t0), .removesWeekday)
+            XCTAssertEqual(world.state.file, StoredLayer(schedule: stored, selection: s1))
+        }
+    }
+    func testASaveWithAnEmptySetOfWeekdaysIsRefusedAsADraftIssueLockedOrNot() throws {
+        // Monday 10:00 is inside the lock; Monday 19:00 and Saturday 10:00 are outside it.
+        for now in [t0, clock(19, 0), day(7, 10)] {
+            let (world, engine, _) = try weekdayWorld()
+            let before = world.state.file
+            XCTAssertThrowsError(try save(engine, world, weekdayLayer([]), s1, at: now), "\(now)") { error in
+                XCTAssertEqual(error as? ControlIssue, .invalidState, "\(now)")
+            }
+            XCTAssertEqual(world.state.file, before, "a refused save stores nothing: \(now)")
+        }
+    }
+    func testWeekdaySequencesWhileTheLayerIsOffForToday() throws {
+        do {
+            let (world, engine, _) = try weekdayWorld()
+            try turnOff(engine, world, at: t0)
+            for days in [[3, 4, 5, 6], [2, 3, 5, 6]] {
+                XCTAssertEqual(refused(engine, world, weekdayLayer(days), at: at(300)), .removesWeekday, "\(days): the gate does not read offDay")
+            }
+            assertLockEnds(world, at: clock(18, 0), "off for today")
+            XCTAssertNil(refused(engine, world, weekdayLayer([2, 3, 4, 5, 6, 7]), at: at(300)), "add Saturday")
+            assertLockEnds(world, at: clock(18, 0), "off for today, after adding Saturday")
+            XCTAssertEqual(world.state.file?.schedule.offDay, "2026-11-02"); XCTAssertNil(world.state.store, "nothing blocks until today ends")
+            try engine.reconcile(now: day(7, 10), authorized: .approved)
+            XCTAssertEqual(world.state.store, s1, "Saturday blocks by the schedule")
+        }
+        do {
+            let (world, engine, _) = try weekdayWorld()
+            try turnOff(engine, world, at: t0)
+            // After the stored range end, removing today's weekday is accepted and keeps today's off day, which then has no effect.
+            XCTAssertNil(refused(engine, world, weekdayLayer([3, 4, 5, 6]), at: clock(19, 0)))
+            XCTAssertEqual(world.state.file?.schedule.offDay, "2026-11-02")
+            XCTAssertTrue(try engine.everydayStatus(now: clock(19, 5), authorized: .approved).dayIsOff, "a day that is off is reported first")
+        }
+    }
+    func testWeekdaySequencesOutsideTheLock() throws {
+        do {
+            let (world, engine, _) = try weekdayWorld()
+            XCTAssertNil(refused(engine, world, weekdayLayer([3, 4, 5, 6]), at: clock(18, 0)), "Monday 18:00, remove Monday")
+            try engine.reconcile(now: day(9, 10), authorized: .approved)
+            XCTAssertNil(world.state.store, "no later Monday blocks")
+        }
+        do {
+            let (world, engine, _) = try weekdayWorld()
+            XCTAssertNil(refused(engine, world, weekdayLayer([2, 4, 5, 6]), at: clock(19, 0)), "Monday 19:00, remove Tuesday")
+            try engine.reconcile(now: day(3, 10), authorized: .approved)
+            XCTAssertNil(world.state.store, "Tuesday is a day that is off")
+            XCTAssertNil(refused(engine, world, weekdayLayer(nil, enabled: false), at: day(3, 10)), "every edit is accepted on Tuesday")
+        }
+        do {
+            let (world, engine, _) = try weekdayWorld()
+            XCTAssertNil(refused(engine, world, weekdayLayer([3, 4, 5, 6]), at: clock(7, 59)), "Monday 07:59")
+        }
+        do {
+            // Saturday 10:00, a day that is off: adding Saturday blocks at once and starts a lock until 18:00.
+            let (world, engine, _) = try weekdayWorld()
+            try engine.reconcile(now: day(7, 10), authorized: .approved)
+            XCTAssertNil(world.state.store)
+            XCTAssertNil(refused(engine, world, weekdayLayer([2, 3, 4, 5, 6, 7]), at: day(7, 10)))
+            XCTAssertEqual(world.state.store, s1)
+            XCTAssertEqual(refused(engine, world, weekdayLayer(monToFri), at: day(7, 10, 5)), .removesWeekday)
+            assertLockEnds(world, at: day(7, 18), "Saturday")
+        }
+        for (name, schedule, selection) in [("turn off", weekdayLayer(monToFri, enabled: false), s1), ("remove an app", weekdayLayer(monToFri), ["site1"]),
+                                            ("shorten the range", weekdayLayer(monToFri, 8 * 60, 9 * 60, windows: []), s1)] as [(String, EverydaySchedule, Set<String>)] {
+            let (world, engine, _) = try weekdayWorld()
+            XCTAssertNil(refused(engine, world, schedule, selection, at: day(7, 10)), "Saturday 10:00, \(name)")
+        }
+        do {
+            let (world, engine, _) = try weekdayWorld()
+            XCTAssertNil(refused(engine, world, weekdayLayer([3, 4, 5, 6]), at: day(8, 23, 58)), "Sunday 23:58, remove Monday")
+            try engine.reconcile(now: day(9, 10), authorized: .approved)
+            XCTAssertNil(world.state.store)
+        }
+        do {
+            // An unreadable file counts as no stored layer, so any weekdays are accepted.
+            let (world, engine, _) = try weekdayWorld()
+            world.state.fileCorrupt = true
+            XCTAssertNil(refused(engine, world, weekdayLayer([4]), at: t0))
+        }
+    }
+    func testACallbackOfAnEarlierRevisionAndATimeZoneChangeReadTheStoredFile() throws {
+        let (world, engine, earlier) = try weekdayWorld()
+        let stricter = weekdayLayer([2, 3, 4, 5, 6, 7], windows: [])
+        XCTAssertNil(refused(engine, world, stricter, at: t0))
+        assertLockEnds(world, at: clock(18, 0), "after the stricter save")
+        try engine.handleCallback(activityName: name(earlier.revision, "window.1"), kind: .didStart, now: clock(12, 0), authorized: .approved)
+        XCTAssertEqual(world.state.store, s1, "the new file has no lunch window")
+        // Monday 10:00 in Seoul is Sunday 17:00 in Los Angeles: the rule and the gate read the new local day.
+        var losAngeles = Calendar(identifier: .gregorian); losAngeles.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        let moved = SessionControl(store: world, monitoring: world, shield: world, breakSelection: world, everyday: LayerView(world), calendar: losAngeles)
+        try moved.reconcile(now: t0, authorized: .approved)
+        XCTAssertNil(world.state.store)
+        try moved.saveEveryday(weekdayLayer(nil, enabled: false), now: t0, authorized: { .approved }, containsStoredSelection: { true },
+                               write: { try world.writeFile(StoredLayer(schedule: $0, selection: self.s1)) })
+        XCTAssertEqual(world.state.file?.schedule.enabled, false)
+    }
+    func testAConvergenceOnADayThatIsOffClearsALeftStoreAndKeepsTheActivities() throws {
+        let (world, engine, schedule) = try weekdayWorld()
+        // A lost range-end callback on Friday left the store on.
+        XCTAssertEqual(world.state.store, s1)
+        for time in [day(7, 8), day(7, 12, 30), day(8, 18)] {
+            world.state.store = s1
+            try engine.handleCallback(activityName: name(schedule.revision, "range"), kind: .didStart, now: time, authorized: .approved)
+            XCTAssertNil(world.state.store, "\(time)")
+            XCTAssertEqual(world.state.activities, activities(schedule), "the stored revision stays for the next day that is on")
+        }
+        let status = try engine.everydayStatus(now: day(7, 10), authorized: .approved)
+        XCTAssertTrue(status.dayIsOff); XCTAssertFalse(status.blocksNow); XCTAssertFalse(status.offForToday); XCTAssertNil(status.issue)
+        XCTAssertEqual(status.nextChange, day(9, 8))
+        XCTAssertFalse(try engine.everydayStatus(now: t0, authorized: .approved).dayIsOff)
+        try engine.handleCallback(activityName: name(schedule.revision, "range"), kind: .didStart, now: day(9, 8), authorized: .approved)
+        XCTAssertEqual(world.state.store, s1, "Monday blocks again")
+    }
+    func testOffForTodayRefusesOnADayThatIsOffAfterTheRevisionAndBeforeTheRange() throws {
+        let (world, engine, _) = try weekdayWorld()
+        let before = world.state.file
+        XCTAssertEqual(refusal(engine, world, at: day(7, 10)) as? EverydayOffRefusal, .dayIsOff)
+        XCTAssertEqual(refusal(engine, world, at: day(7, 19)) as? EverydayOffRefusal, .dayIsOff, "before the range check")
+        XCTAssertEqual(refusal(engine, world, revision: UUID(), at: day(7, 10)) as? EverydayOffRefusal, .revisionChanged)
+        XCTAssertEqual(world.state.file, before)
+        try turnOff(engine, world, at: t0)
+        XCTAssertEqual(world.state.file?.schedule.weekdays, monToFri, "the off-for-today write keeps the weekdays")
     }
 }

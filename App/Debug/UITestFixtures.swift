@@ -157,8 +157,12 @@ extension FocusServices {
             everyday = .blocking(now: now, calendar: calendar)
         }
         // `off` stores the `preview` schedule with the layer turned off.
-        if let index = arguments.firstIndex(of: "--everyday-fixture"), index + 1 < arguments.count, ["preview", "off"].contains(arguments[index + 1]) {
-            everyday.schedule = EverydaySchedule(revision: UUID(), enabled: arguments[index + 1] == "preview", rangeStart: 480, rangeEnd: 1080, windows: [EverydaySchedule.template(.lunch)!])
+        // `weekday-off` stores it on, on every weekday except the launch day's weekday in the fixture calendar, so launch is always on a day that is off.
+        if let index = arguments.firstIndex(of: "--everyday-fixture"), index + 1 < arguments.count, ["preview", "off", "weekday-off"].contains(arguments[index + 1]) {
+            everyday.schedule = EverydaySchedule(revision: UUID(), enabled: arguments[index + 1] != "off", rangeStart: 480, rangeEnd: 1080, windows: [EverydaySchedule.template(.lunch)!])
+            if arguments[index + 1] == "weekday-off" {
+                everyday.schedule?.setWeekdays(EverydaySchedule.allWeekdays.subtracting([EverydaySchedule.weekday(of: now, calendar: calendar)]))
+            }
             everyday.selection = FixtureEverydayLayer.sampleSelection()
         }
         let store = SharedControlStore(directory: directory)

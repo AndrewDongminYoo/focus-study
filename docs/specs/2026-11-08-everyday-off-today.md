@@ -18,8 +18,10 @@ Decisions made on 2026-11-08:
 1. Inside today's stored range, also during a window, the everyday settings screen offers one action that turns the everyday layer off for the rest of today. It is the only loosening allowed inside the range.
 2. The action first shows a 30-second waiting screen. It works once a day: after it succeeds, the layer blocks nothing until today ends. Leaving the app (`.background`) cancels the wait, as the M2 break wait does; an `.inactive` overlay does not.
 3. "Off for today" is not "off". The stored layer stays on, and the next day's range blocks again by the stored schedule with no action from the person.
+   - Reconciliation (2026-11-13, #126): the range of the next day that is on, as the [everyday weekdays](2026-11-13-everyday-weekdays-design.md#4-strict-only-editing-with-weekdays) design says.
 4. Every other edit inside the range keeps the existing strict rule (M3 [Editing rules](2026-11-01-m3-schedule-layer-design.md#editing-rules), five conditions). App or website removal, a shorter range and new unblocked windows stay refused inside the range.
 5. A refused save says which of the five conditions failed, in 해요체, with the time that editing opens again and a pointer to the off-for-today action.
+   - Reconciliation (2026-11-13, #126): for 4 and 5: six conditions, with the weekday condition as the fourth, and the gate also reads the weekdays.
 6. Focus sessions, breaks, the Focus filter, the Live Activity and the M2 rules do not change. Like every everyday edit, the action is refused while a stored focus session is in a phase other than `terminal`.
 
 Out of scope: picker header or footer copy, a "turn back on for today" action, limits on breaks across sessions, and protection against a revoked Screen Time access or a clock change.
@@ -71,12 +73,14 @@ everyday store blocks = the file is readable
 - The new line belongs to the schedule part, not to the break line. M3 transition 4 (re-block) applies the everyday shield when the rule without its last line gives "block", and the M3 step in transition 6 evaluates the rule with the stored `ending` phase. Both therefore read the off day, and neither applies the everyday shield on a day that is off.
 - `EverydayRules.blocks` and `EverydayRules.nextChange` read the line through the schedule part, so every caller of the rule gets it.
 - The editing rules do not read the line. They compare the new schedule with the stored schedule part without the off day (see [Editing after the layer is off for today](#editing-after-the-layer-is-off-for-today)).
+- Reconciliation (2026-11-13, #126): the rule block gets the weekday line before the `offDay` line; `EverydaySchedule.blocks(at:calendar:)` is the authority.
 
 ### The off-for-today section
 
 `turnEverydayOffForToday` is one `withExclusiveAccess` section on `SessionControl`. The app passes the stored revision that the waiting screen was shown for, `now`, the access check and the write.
 
 1. **Check.** Read the envelope and run the M2 cleanup. Read the access value inside the lock and refuse with `ControlIssue.unauthorized` if access is not approved. Refuse with `ControlIssue.busy` if a stored session is in a phase other than `terminal`; a Focus filter can start a session during the wait. Read the stored everyday file. Refuse, with a reason that the screen shows, when the file is unreadable, when no layer is stored or the stored layer is off, when the stored revision is not the one passed, when `now` is outside the stored range, or when the stored `offDay` is already today's key.
+   - Reconciliation (2026-11-13, #126): step 1 also refuses on a day that is off (`EverydayOffRefusal.dayIsOff`), after the revision check and before the range check.
 2. **Write** the stored file again with `offDay` set to the day key of `now`. This is the commit point.
 3. **Converge**: the convergence at the end of the section, as in every lock section. Step 2 finds the stored revision registered and changes nothing. Step 3 evaluates the rule, gets "not block", and clears the everyday store.
 
@@ -110,6 +114,7 @@ This document keeps decision 4 strictly. An earlier proposal was to accept every
 So:
 
 - The gate of the M3 editing rules is unchanged: inside today's stored range, with the stored layer on, the five conditions apply, also when the layer is off for today. The gate reads `enabled` and the range, not `offDay`.
+  - Reconciliation (2026-11-13, #126): six conditions, and the gate also reads the weekdays (`EverydaySchedule.isLocked`).
 - The conditions compare the new schedule with the stored schedule part without the off day, so "the new schedule blocks wherever the stored schedule blocks" means the schedule as it would block on a day that is not off.
 - Outside the stored range, every edit is accepted, as in M3.
 - An accepted save writes `offDay` itself: the stored `offDay` when it equals the day key of `now`, otherwise none. It ignores any `offDay` that the app passes. So an accepted edit never turns the layer back on for today, and an off day from an earlier date is removed at the next save.
@@ -134,6 +139,8 @@ Today `EverydaySchedule.isAtLeastAsStrict` merges conditions 1 and 4, and the sa
 The message names the failed condition in 해요체, keeps the existing time that editing opens again (the stored range end), and points to the off-for-today action.
 When the layer is already off for today, the pointer is left out, because the action is not offered.
 The builder writes the strings with the `user-facing-copy` skill.
+
+- Reconciliation (2026-11-13, #126): the save checks six conditions: the weekday condition (`EverydayLockReason.removesWeekday`) comes between conditions 3 and 4 of this list.
 
 ### Stored states and side artifacts
 
@@ -187,6 +194,8 @@ A thrown error at a step gives the state of a process exit after the step before
 | Save while off for today, any M3 save gap                                                                        | earlier or new, both off for today | as the M3 row       | empty                          | Both files are off for today, so the store stays empty in every row of the M3 save gaps. No change in blocking.                              |
 | Time zone or manual clock change after the action                                                                | off for today                      | stored              | by the earlier local day       | As the M3 rows: the app converges on the change, otherwise the next callback. Either direction until then (see [Today](#today)).             |
 
+- Reconciliation (2026-11-13, #126): in the row "Next day's first blocked time", the first blocked time of the next day that is on.
+
 ### Callbacks
 
 The section expects no new activity and no new callback.
@@ -196,6 +205,7 @@ The section expects no new activity and no new callback.
 - The callbacks of later edges today (window start or end, range end) start a lock section as before. Each evaluates the rule, gets "not block", and leaves the store empty.
 - A lost or late callback at the next day's first blocked time leaves the layer off until the next section, as M3 already accepts for a lost range start. A callback that arrives before midnight by the Monitor's clock evaluates the earlier day and gives "not block"; that early callback is `[UNCERTAIN]` in M3 as well.
 - `handleCallback` routing does not change. The off-for-today section is an app section, so its convergence may register missing activities of the stored revision.
+- Reconciliation (2026-11-13, #126): "the next day" in the first and the fourth item is the next day that is on.
 
 ### Guards across sequences of accepted actions
 
@@ -217,6 +227,8 @@ Each guard that compares an action with the stored state, checked after sequence
 | A Focus filter session starts during the wait                                                     | Refused with `busy`. A session started after the action keeps the layer off: a break, its re-block and the session end all read the off day through the schedule part of the rule.         |
 | Off for today on day D, then a clock set back to day D on a later day                             | Off again for that local date. M3 does not protect against a clock change. A later save removes the stale `offDay`.                                                                        |
 
+- Reconciliation (2026-11-13, #126): "Refused by the five conditions" is six conditions, and "the next day" in the rows of this table is the next day that is on.
+
 ### Status for the app
 
 - `everydayStatus(now:authorized:)` returns one more value: whether the stored layer is on and off for today (`offForToday`).
@@ -227,6 +239,7 @@ Each guard that compares an action with the stored state, checked after sequence
 - The everyday settings screen keeps its strict-only message inside the range, also when the layer is off for today, because the five conditions still apply. It shows the off-for-today action only under the conditions in [The app-side wait](#the-app-side-wait).
 - The timer-screen row of the [everyday status on the timer screen](2026-11-08-everyday-status-on-timer.md) spec does not change. With `issue == nil` and `blocksNow == false`, it shows no row, and the idle screen gets no "off for today" line. Any `issue` still shows `매일 제한을 확인해 주세요 ›`.
 - `EverydaySettingsModel.followStatus` reads the status again at `nextChange` as before, and the everyday settings screen also reads it at today's stored range start and range end when either is still ahead. The action depends on whether `now` is inside the range, and `nextChange` can skip the range start: with a window at the range start, a screen opened before the range would otherwise show the action only at the window end.
+- Reconciliation (2026-11-13, #126): `nextChange` is the first blocked time of the next day that is on, and the settings line names it with the day word of the [everyday weekdays](2026-11-13-everyday-weekdays-design.md#the-status-rows) design; the strict-only message has six conditions and shows only on a day that is on; the settings row and the everyday screen also read the status at the next local midnight while the line has a day word.
 
 ### Earlier builds and schema
 
@@ -248,12 +261,14 @@ Do not apply real restrictions without explicit approval for that run.
 19. Start the wait during a window, and once more about 20 seconds before the range end. Record the result of each.
 
 Unverified until those steps run: the timing of the store clear after the section, and the next day's first blocked edge after a day that was off (`[UNCERTAIN]`, as the M3 callback timing).
+Reconciliation (2026-11-13, #126): in steps 16 and 17 and in the unverified note, "the next day" is the next day that is on.
 
 ## Verification for the implementation
 
 Follow `AGENTS.md` and [README verification](../../README.md#실행과-검증).
 
 - `Shared/` changes: host tests for the day key, the blocking rule with an off day (also across a re-block and a session end), `nextChange` that skips today's edges, the save that keeps or drops `offDay`, the five refusal reasons in their order, and every refusal of the off-for-today section. Run the separate-process race check.
+  - Reconciliation (2026-11-13, #126): six refusal reasons in their order.
 - `Integration/` changes: SDK tests for the file with and without `offDay`, and for a file that an earlier build wrote.
 - `App/` changes: SDK tests for the wait (`.background` cancels, `.inactive` keeps, the section runs once at the end) and the copy, and UI tests with a DEBUG fixture that never touches real restrictions. Keep every existing accessibility identifier.
 - Simulator results do not prove real Screen Time behavior.

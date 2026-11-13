@@ -263,7 +263,7 @@ final class SessionControl {
             guard schedule.isValid else { throw ControlIssue.invalidState }
             // An unreadable file counts as no stored layer, so that the person can set the layer up again.
             let stored = try? everyday.load()
-            if let stored, stored.enabled, stored.isInsideRange(at: now, calendar: calendar) {
+            if let stored, stored.isLocked(at: now, calendar: calendar) {
                 // The new range keeps `now` and ends no earlier, so the lock lasts until at least the stored range end after every accepted edit.
                 // The conditions compare with the stored schedule without its off day, and the first one that fails names the refusal.
                 if let reason = schedule.lockReason(against: stored, at: now, calendar: calendar) { throw reason }
@@ -302,6 +302,8 @@ final class SessionControl {
             do { stored = try everyday.load() } catch { throw EverydayOffRefusal.unreadable }
             guard var schedule = stored, schedule.enabled else { throw EverydayOffRefusal.notOn }
             guard schedule.revision == revision else { throw EverydayOffRefusal.revisionChanged }
+            // The app offers the action only on a day that is on; a time zone or clock change during the wait can reach this.
+            guard schedule.applies(on: now, calendar: calendar) else { throw EverydayOffRefusal.dayIsOff }
             guard schedule.isInsideRange(at: now, calendar: calendar) else { throw EverydayOffRefusal.outsideRange }
             guard !schedule.isOff(at: now, calendar: calendar) else { throw EverydayOffRefusal.alreadyOff }
             schedule.offDay = EverydaySchedule.dayKey(of: now, calendar: calendar)
@@ -328,7 +330,8 @@ final class SessionControl {
             if issue == nil, authorized != .denied, !blocksNow, everyday.hasShield { issue = .notCleared }
             let nextChange = EverydayRules.nextChange(schedule: schedule, session: envelope.session, authorized: authorized, now: now, calendar: calendar)
             let offForToday = schedule.map { $0.enabled && $0.isOff(at: now, calendar: calendar) } ?? false
-            return EverydayStatus(schedule: schedule, blocksNow: blocksNow, nextChange: nextChange, issue: issue, offForToday: offForToday)
+            let dayIsOff = schedule.map { $0.enabled && !$0.applies(on: now, calendar: calendar) } ?? false
+            return EverydayStatus(schedule: schedule, blocksNow: blocksNow, nextChange: nextChange, issue: issue, offForToday: offForToday, dayIsOff: dayIsOff)
         }
     }
 

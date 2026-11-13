@@ -71,7 +71,8 @@ struct EverydaySettingsView: View {
         .onChange(of: settings.focus.everydayStatus) { _, _ in settings.refreshStatus() }
         // While the screen stays open, a range or window boundary changes the status without any lock section of the app.
         .task(id: settings.status) {
-            await EverydaySettingsModel.followStatus({ settings.status }, now: settings.clock, rangeCalendar: settings.focus.services.engine.calendar) {
+            await EverydaySettingsModel.followStatus({ settings.status }, now: settings.clock, rangeCalendar: settings.focus.services.engine.calendar,
+                                                     dayWordCalendar: settings.focus.services.engine.calendar) {
                 settings.refreshStatus()
             }
         }
@@ -80,7 +81,8 @@ struct EverydaySettingsView: View {
     private var form: some View {
         Form {
             Section {
-                Text(EverydaySettingsModel.statusLine(settings.status, calendar: settings.focus.services.engine.calendar)).accessibilityIdentifier("everydayStatus")
+                Text(EverydaySettingsModel.statusLine(settings.status, at: settings.statusReadAt ?? settings.clock(), calendar: settings.focus.services.engine.calendar))
+                    .accessibilityIdentifier("everydayStatus")
                 if let message = settings.strictOnlyMessage {
                     Text(message).font(.footnote).foregroundStyle(FocusTheme.Palette.secondaryText).accessibilityIdentifier("everydayStrictOnly")
                 }
@@ -93,7 +95,9 @@ struct EverydaySettingsView: View {
                 TimeField(title: "제한 시작", minutes: $settings.draft.rangeStart).accessibilityIdentifier("everydayRangeStart")
                 TimeField(title: "제한 끝", minutes: $settings.draft.rangeEnd).accessibilityIdentifier("everydayRangeEnd")
                 if let issue = settings.rangeIssue { Label(issue, systemImage: "exclamationmark.circle").foregroundStyle(FocusTheme.Palette.error).accessibilityIdentifier("everydayRangeIssue") }
-            } header: { Text("제한 시간") } footer: { Text("매일 이 시간에 고른 앱과 웹사이트를 제한해요. 앱을 열지 않아도 돼요.") }
+                weekdayRow
+                if let issue = settings.weekdaysIssue { Label(issue, systemImage: "exclamationmark.circle").foregroundStyle(FocusTheme.Palette.error).accessibilityIdentifier("everydayWeekdaysIssue") }
+            } header: { Text("제한 시간") } footer: { Text("고른 요일마다 이 시간에 고른 앱과 웹사이트를 제한해요. 앱을 열지 않아도 돼요.") }
             Section {
                 ForEach(Array(settings.draft.windows.enumerated()), id: \.offset) { index, window in
                     VStack(alignment: .leading) {
@@ -144,11 +148,27 @@ struct EverydaySettingsView: View {
                     }
                 }
             } header: { Text("일정 미리보기") } footer: {
-                Text("편집 중인 일정이에요. 저장하면 매일 반복해요. 제한 시간 밖에는 매일 제한이 꺼져요. 집중 시간의 제한은 따로 적용해요.")
+                Text("편집 중인 일정이에요. 저장하면 고른 요일마다 반복해요. 제한 시간 밖과 고르지 않은 요일에는 매일 제한이 꺼져요. 집중 시간의 제한은 따로 적용해요.")
             }
         }
         .contentMargins(.horizontal, FocusTheme.Layout.screenInset, for: .scrollContent)
         .safeAreaInset(edge: .bottom, spacing: 0) { saveActions }
+    }
+    /// "제한 요일": the summary at the trailing edge and seven day buttons below it. The row has no container identifier,
+    /// so that it does not mask the identifiers of the buttons.
+    private var weekdayRow: some View {
+        VStack(alignment: .leading, spacing: FocusTheme.Layout.inlineSpacing) {
+            HStack {
+                Text("제한 요일")
+                Spacer()
+                Text(EverydaySettingsModel.weekdaySummary(settings.draft.chosenWeekdays, calendar: settings.focus.services.engine.calendar))
+                    .foregroundStyle(FocusTheme.Palette.secondaryText).multilineTextAlignment(.trailing)
+                    .accessibilityIdentifier("everydayWeekdaysSummary")
+            }
+            // The summary above carries the days at every size, so the buttons stop growing at the first accessibility size.
+            EverydayWeekdayButtons(order: settings.weekdayOrder, chosen: settings.draft.chosenWeekdays) { settings.toggleWeekday($0) }
+                .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+        }
     }
     /// The off-for-today wait, in the manner of the M2 break wait: a progress bar with the countdown and a cancel button.
     private var offWaitScreen: some View {
@@ -178,6 +198,9 @@ struct EverydaySettingsView: View {
             if !schedule.enabled {
                 Text("매일 제한이 꺼져 있어요.").accessibilityIdentifier("\(prefix)Off")
             } else {
+                // The weekday row is a text row above the clock; the segment rows stay below it.
+                Text("제한 요일 · \(EverydaySettingsModel.weekdaySummary(schedule.chosenWeekdays, calendar: settings.focus.services.engine.calendar))")
+                    .accessibilityIdentifier("\(prefix)Weekdays")
                 // A sibling row of the text rows, so that no container identifier masks the row identifiers below.
                 EverydayDayClock(segments: segments, identifier: "\(prefix)Clock")
                     .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
@@ -191,7 +214,7 @@ struct EverydaySettingsView: View {
                 }
             }
         } else {
-            Text("시간을 확인하면 미리보기를 볼 수 있어요.")
+            Text(EverydaySettingsModel.invalidPreviewLine(schedule))
                 .foregroundStyle(FocusTheme.Palette.secondaryText).accessibilityIdentifier("\(prefix)Invalid")
         }
     }
@@ -257,6 +280,49 @@ struct EverydaySettingsView: View {
     private func windowBinding(_ index: Int, _ key: WritableKeyPath<EverydayWindow, Int>) -> Binding<Int> {
         Binding(get: { settings.draft.windows.indices.contains(index) ? settings.draft.windows[index][keyPath: key] : 0 },
                 set: { if settings.draft.windows.indices.contains(index) { settings.draft.windows[index][keyPath: key] = $0 } })
+    }
+}
+/// Seven day buttons in the order of the first weekday: one line at the standard sizes, and more lines when the text is large.
+/// A chosen day is filled and bold, a day that is not chosen is outlined, so that the two differ by more than color.
+private struct EverydayWeekdayButtons: View {
+    let order: [Int]
+    let chosen: Set<Int>
+    let toggle: (Int) -> Void
+    @ScaledMetric(relativeTo: .body) private var scaledDiameter = FocusTheme.Layout.minimumTapTarget
+    /// The scaled metric shrinks below the default text size; the tap target never does.
+    private var diameter: CGFloat { max(scaledDiameter, FocusTheme.Layout.minimumTapTarget) }
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 0) {
+                ForEach(Array(order.enumerated()), id: \.element) { index, day in
+                    if index > 0 { Spacer(minLength: 0) }
+                    button(day)
+                }
+            }
+            // The margin keeps each column at least one diameter wide.
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: diameter + FocusTheme.Layout.inlineSpacing), spacing: 0)], spacing: FocusTheme.Layout.inlineSpacing) {
+                ForEach(order, id: \.self) { day in button(day) }
+            }
+        }
+    }
+    private func button(_ day: Int) -> some View {
+        let isChosen = chosen.contains(day)
+        return Button { toggle(day) } label: {
+            Text(EverydaySettingsModel.shortWeekdayName(day))
+                .fontWeight(isChosen ? .bold : .regular)
+                .foregroundStyle(isChosen ? FocusTheme.Palette.onAccent : FocusTheme.Palette.primaryText)
+                .lineLimit(1).minimumScaleFactor(0.5)
+                .frame(width: diameter, height: diameter)
+                .background {
+                    if isChosen { Circle().fill(FocusTheme.Palette.accent) } else { Circle().strokeBorder(FocusTheme.Palette.secondaryText, lineWidth: 1) }
+                }
+                .contentShape(Circle())
+        }
+        // A borderless button in a Form row takes only its own tap.
+        .buttonStyle(.borderless)
+        .accessibilityLabel(EverydaySettingsModel.weekdayName(day))
+        .accessibilityAddTraits(isChosen ? .isSelected : [])
+        .accessibilityIdentifier("everydayWeekday.\(day)")
     }
 }
 /// The schedule preview as a clock: 24 hours as one turn, midnight at the top, clockwise.

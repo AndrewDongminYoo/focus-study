@@ -15,6 +15,7 @@ Outside a session, a student can still open the apps that distract them during t
 M3 adds an everyday blocking layer: one daily range in which a separate app and website selection is blocked, with a few short unblocked windows such as lunch.
 The layer runs every day without the app.
 It is a background rule, not a new main screen, so the app still opens on the focus-start screen.
+Reconciliation (2026-11-13, #126): the callbacks arrive every day, and the layer blocks only on the chosen weekdays, as the [everyday weekdays](2026-11-13-everyday-weekdays-design.md#3-the-blocking-rule) design says.
 
 ## Roadmap context
 
@@ -26,18 +27,21 @@ M3 must not block M4, but M3 does not build it.
 
 - A person can turn on an everyday layer with its own app and website selection, separate from the focus-session selection.
 - The person sets one daily blocking range, for example 08:00-18:00. The same range applies every day of the week.
+  - Reconciliation (2026-11-13, #126): the same range applies on every chosen weekday.
 - Inside the range, the person registers at most 3 unblocked windows. Each window is 15 to 120 minutes long, entirely inside the range, and does not overlap another window.
 - Window templates: lunch (점심), going to school (등교) and leaving school (하교).
 - Outside the daily range, the layer blocks nothing. Nights and early mornings stay free.
 - The everyday layer and the focus layer block the union of their selections.
 - An M2 break lifts both layers for its 3 minutes. After the break, each layer comes back as it applies at that time.
 - The layer turns on and off every day without the app.
+  - Reconciliation (2026-11-13, #126): the callbacks arrive every day, and the layer blocks only on the chosen weekdays.
 - Inside today's range, the person cannot loosen the layer through the settings.
   - Reconciliation (2026-11-08, #87): one loosening is now allowed inside the range: after a 30-second wait, the person can turn the layer off for the rest of today, once a day, as the [everyday off-for-today](2026-11-08-everyday-off-today.md) spec says; every other edit inside the range stays strict-only.
 
 ## Non-goals in M3 (deliberately excluded)
 
 - Rules per weekday, or a different range on some days.
+  - Reconciliation (2026-11-13, #126): the choice of weekdays is now allowed; a different range on some days stays excluded.
 - More than 3 windows, a window shorter than 15 minutes or longer than 120 minutes.
 - A blocked-window mode (the person registers blocked times instead of unblocked times).
 - A range that crosses midnight.
@@ -61,6 +65,7 @@ M3 must not block M4, but M3 does not build it.
 
 1. Blocking applies only inside a daily range that the person sets. Outside it, the layer blocks nothing.
 2. The same rules apply every day.
+   - Reconciliation (2026-11-13, #126): the same rules apply on every chosen weekday.
 3. The person registers unblocked windows, not blocked ones. Templates: lunch, going to school, leaving school. The intent is one or two short windows a day, plus a move to an academy when needed, not a class timetable.
 4. At most 3 unblocked windows, each 15 to 120 minutes long.
 5. The layer has its own app selection.
@@ -104,6 +109,7 @@ M3 must not block M4, but M3 does not build it.
 - Reconciliation (2026-11-08, #87): the five conditions and their gate do not change, also while the layer is off for today, and the lock still ends no earlier than the stored range end after any sequence of accepted edits.
   The refusal now names the first failed condition, in the order that the [everyday off-for-today](2026-11-08-everyday-off-today.md#refused-save-conditions-and-their-order) spec gives, and points to the off-for-today action.
   That action is a separate section, not an edit; an accepted save keeps today's off day and removes an off day of an earlier date.
+- Reconciliation (2026-11-13, #126): a day that is off has no range, so the gate also reads the weekdays, and the five conditions of the line above become six, with the weekday condition as the fourth, as the [everyday weekdays](2026-11-13-everyday-weekdays-design.md#4-strict-only-editing-with-weekdays) design says. `EverydaySchedule.isLocked` and `EverydaySchedule.lockReason` in `Shared/EverydaySchedule.swift` and `SessionControl.saveEveryday` are the authority, covered by the weekday tests in `CoreTests/EverydayScheduleTests.swift` and `CoreTests/EverydayControlTests.swift`.
 - An accepted edit applies at once.
 - A refused edit is not saved for later. A "pending" setting would add a second stored schedule and its own transitions.
 - If the stored layer is off, or no layer is stored, every edit is accepted.
@@ -211,6 +217,7 @@ Not documented, so these stay `[UNCERTAIN]` until a device check:
 - No file means that no layer is set up. That is not an error.
 - The layer is off after "turn off", but the file keeps the schedule and the selection, so that the person can turn it on again.
 - Reconciliation (2026-11-08, #87): the file gets the optional field `offDay`, the local day that the layer is off for, and `schemaVersion` stays `1`, as the [everyday off-for-today](2026-11-08-everyday-off-today.md#stored-off-day) spec says; the off-for-today section also writes the file, with the same revision.
+- Reconciliation (2026-11-13, #126): the file gets the optional field `weekdays`; a missing value and all seven mean every day, `schemaVersion` stays `1`, and the load drops malformed numbers instead of failing, as the [everyday weekdays](2026-11-13-everyday-weekdays-design.md#2-the-stored-value-and-its-migration) design says.
 
 #### The blocking rule
 
@@ -230,6 +237,7 @@ everyday store blocks = the file is readable
 The rule depends on the focus layer only through the last line.
 
 - Reconciliation (2026-11-08, #87): the schedule part gets the line `and offDay != dayKey(now)`, as the [everyday off-for-today](2026-11-08-everyday-off-today.md#the-blocking-rule) spec says; it is not part of the break line, so the transition 4 re-block and the transition 6 everyday step read it too.
+- Reconciliation (2026-11-13, #126): the schedule part gets the line `and (weekdays is missing or weekdays contains weekday(now))` before the `offDay` line, as the [everyday weekdays](2026-11-13-everyday-weekdays-design.md#3-the-blocking-rule) design says; the transition 4 re-block and the transition 6 everyday step read it too.
 
 ### Monitoring activities
 
@@ -339,6 +347,7 @@ The section follows [Callback routing in `handleCallback`](#callback-routing-in-
 - Every callback is one-shot for its edge on that day. No other callback of the layer repeats it.
 - The system delivers each callback when the device is first used at or after the edge. A device that is not in use needs no shield, so this delay matters only for the first use.
 - A lost or late callback is corrected by the next lock section: the next everyday edge, any focus callback, an app launch or foreground, or any app action. On a day without later edges and without the app, a lost range-start or window-end callback leaves the layer off until the next day's range start. That is the worst case in the looser direction.
+- Reconciliation (2026-11-13, #126): on a day that is off, every edge gives "not block", the range `intervalDidStart` included, and a lost range-start or window-end callback costs nothing on that day, as the [everyday weekdays](2026-11-13-everyday-weekdays-design.md#7-one-shot-callbacks-and-their-recovery) design says.
 - A callback that arrives before its edge, by the Monitor's clock, sets the store to the state before the edge. The documentation says that the edge is the earliest point, so this is `[UNCERTAIN]` and expected not to happen.
 
 ### Changes to M2 transitions
@@ -423,6 +432,7 @@ The M2 [break artifacts](2026-11-01-m2-break-pass-design.md#break-artifacts) tab
 The everyday file is not a break artifact, and no M2 cleanup deletes it.
 
 - Reconciliation (2026-11-08, #87): both tables get the state "On, off for today": the store is empty in every focus phase, and the activities of the stored revision stay registered, as the [everyday off-for-today](2026-11-08-everyday-off-today.md#stored-states-and-side-artifacts) spec says. In the row "On (blocking now or not)", the file is replaced by a save or, inside the stored range, by the off-for-today section, which writes the same revision and schedule with `offDay` set.
+- Reconciliation (2026-11-13, #126): both tables get the state "On, a day that is off": the store is empty in every focus phase, and the activities of the stored revision stay registered, as the [everyday weekdays](2026-11-13-everyday-weekdays-design.md#5-stored-states-and-side-artifacts) design says.
 
 ### Gaps between steps
 
@@ -492,6 +502,7 @@ The settings row and the everyday settings screen use it. The timer screen does 
 
 - Reconciliation (2026-11-08, #70): the idle timer screen and the completion card now also read it for their one-line everyday status, as the [everyday status on the timer screen](2026-11-08-everyday-status-on-timer.md) spec says; the in-progress and break screens still do not.
 - Reconciliation (2026-11-08, #87): the status also says whether the layer is off for today, and then its next change is the next day's first blocked time, as the [everyday off-for-today](2026-11-08-everyday-off-today.md#status-for-the-app) spec says; the timer-screen row shows nothing for that state.
+- Reconciliation (2026-11-13, #126): the next change can be up to 7 days ahead, and on a day that is off or off for today it is the first blocked time of the next day that is on; the status also says whether today is a day that is off (`EverydayStatus.dayIsOff`), as the [everyday weekdays](2026-11-13-everyday-weekdays-design.md#the-status-rows) design says.
 
 ## Superseded lines
 
@@ -515,6 +526,7 @@ Steps:
 2. Leave the app in the background with the device unlocked. Record when the shield disappears at the window start, and when it comes back at the window end.
 3. Repeat step 2 with the device locked across each edge, and again after a force-quit of the app.
 4. Record when the shield disappears at the range end. Check on the next day that the layer starts again at the range start without the app.
+   - Reconciliation (2026-11-13, #126): on the next day that is on.
 5. Start a focus session with a different app while the layer blocks. Check that both apps are shielded. End the session, and check that the everyday app is still shielded.
 6. Start a focus session before a window starts. Check that the focus app stays shielded during the window, while the everyday app is free.
 7. Take a break while both layers block. Check that both apps are free, and that both come back at the re-block. Repeat with a break that crosses a window end.

@@ -14,9 +14,11 @@ Primary sources are the issue, [M3 design](2026-11-01-m3-schedule-layer-design.m
 - Support zero and three windows, sort by start, preserve touching unblocked windows without zero-length restricted rows, and suppress all segments for an invalid schedule.
 - For a disabled layer, show that no everyday restriction runs; for an unreadable or unavailable stored schedule, do not invent a stored preview.
 - State that times outside the daily range have no everyday restriction; focus-session restrictions remain separate.
+  - Reconciliation (2026-11-13, #126): also the days that are not chosen; each preview gets the weekday row.
 - Preserve save and failure semantics, reentry behavior, existing accessibility identifiers, storage, engine validation, and maximum window count.
 - Use text rather than color to distinguish intervals, one accessibility label per row in chronological order, natural wrapping, and semantic theme colors.
 - Reconciliation (2026-11-09, #85): a 24-hour clock now shows above the text rows of each preview, as the [everyday day clock](2026-11-09-everyday-day-clock.md) spec says; the text rows and their labels stay.
+  - Reconciliation (2026-11-13, #126): the clock is above the segment rows and below the weekday row.
 
 ## Verification and boundaries
 

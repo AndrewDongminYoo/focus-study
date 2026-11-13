@@ -58,6 +58,8 @@ final class EverydayScheduleTests: XCTestCase {
             ("window after the range", layer(windows: [window(17 * 60 + 45, 18 * 60 + 15)]), .windowOutsideRange),
             ("overlapping windows", layer(windows: [lunch, window(12 * 60 + 30, 13 * 60 + 30)]), .windowsOverlap),
             ("windows cover the range", layer(8 * 60, 10 * 60, windows: [window(8 * 60, 9 * 60), window(9 * 60, 10 * 60)]), .windowsCoverRange),
+            ("no weekday", on([], layer()), .noWeekdays),
+            ("no weekday and a time problem", on([], layer(8 * 60, 8 * 60 + 30)), .rangeTooShort),
         ]
         for (name, schedule, issue) in breaches {
             XCTAssertEqual(schedule.issue, issue, name)
@@ -233,12 +235,137 @@ final class EverydayScheduleTests: XCTestCase {
             // The conditions compare with the stored schedule without its off day.
             XCTAssertEqual(schedule.lockReason(against: off(stored), at: time, calendar: calendar), reason, "off for today: \(name)")
         }
-        XCTAssertEqual(EverydayLockReason.allCases, [.turnsOff, .rangeExcludesNow, .rangeEndsEarlier, .unblocksTime, .removesSelection])
+        XCTAssertEqual(EverydayLockReason.allCases, [.turnsOff, .rangeExcludesNow, .rangeEndsEarlier, .removesWeekday, .unblocksTime, .removesSelection])
     }
     func testAScheduleWithoutOffDayDecodesWithNoOffDay() throws {
         let json = #"{"revision":"\#(UUID().uuidString)","enabled":true,"rangeStart":480,"rangeEnd":1080,"windows":[]}"#
         XCTAssertNil(try JSONDecoder().decode(EverydaySchedule.self, from: Data(json.utf8)).offDay)
         let keyed = off(layer())
         XCTAssertEqual(try JSONDecoder().decode(EverydaySchedule.self, from: JSONEncoder().encode(keyed)), keyed)
+    }
+
+    // MARK: Weekdays
+
+    /// The schedule on the given weekdays; `nil` is every day.
+    private func on(_ days: [Int]?, _ schedule: EverydaySchedule) -> EverydaySchedule {
+        var schedule = schedule; schedule.weekdays = days; return schedule
+    }
+    private let weekdaysMonToFri = [2, 3, 4, 5, 6]
+
+    func testWeekdayNumbersOfTheFixtureDaysAndTheStoredForm() {
+        // 2026-11-02 is a Monday, 2026-11-07 a Saturday and 2026-11-08 a Sunday.
+        XCTAssertEqual(EverydaySchedule.weekday(of: at(10, 0), calendar: calendar), 2)
+        XCTAssertEqual(EverydaySchedule.weekday(of: at(10, 0, day: 7), calendar: calendar), 7)
+        XCTAssertEqual(EverydaySchedule.weekday(of: at(10, 0, day: 8), calendar: calendar), 1)
+        var schedule = layer()
+        schedule.setWeekdays(EverydaySchedule.allWeekdays)
+        XCTAssertNil(schedule.weekdays, "all seven have one stored form")
+        schedule.setWeekdays([6, 2, 4])
+        XCTAssertEqual(schedule.weekdays, [2, 4, 6])
+        schedule.setWeekdays([])
+        XCTAssertEqual(schedule.weekdays, [], "the draft keeps an empty set")
+        XCTAssertEqual(layer().chosenWeekdays, EverydaySchedule.allWeekdays)
+        XCTAssertNil(EverydaySchedule.storedWeekdays(nil)); XCTAssertNil(EverydaySchedule.storedWeekdays([]))
+        XCTAssertNil(EverydaySchedule.storedWeekdays([0, 8, -1]), "nothing left is every day")
+        XCTAssertNil(EverydaySchedule.storedWeekdays([1, 2, 3, 4, 5, 6, 7, 7]))
+        XCTAssertEqual(EverydaySchedule.storedWeekdays([6, 2, 2, 9, 0]), [2, 6])
+    }
+    func testWeekdayNumbersDoNotDependOnTheCalendarSystem() {
+        let moment = Date(timeIntervalSince1970: 1_794_571_200) // Friday 2026-11-13 12:00 UTC
+        // cspell:ignore Qura
+        let identifiers: [Calendar.Identifier] = [.gregorian, .buddhist, .japanese, .islamicUmmAlQura, .hebrew, .chinese, .iso8601, .persian, .republicOfChina]
+        for identifier in identifiers {
+            var other = Calendar(identifier: identifier); other.timeZone = TimeZone(identifier: "UTC")!
+            XCTAssertEqual(EverydaySchedule.weekday(of: moment, calendar: other), 6, "\(identifier)")
+        }
+    }
+    func testTheRuleBlocksOnlyOnADayThatIsOn() {
+        let weekdays = on(weekdaysMonToFri, layer(windows: [lunch]))
+        XCTAssertTrue(weekdays.blocks(at: at(10, 0), calendar: calendar), "Monday")
+        XCTAssertFalse(weekdays.blocks(at: at(12, 30), calendar: calendar), "a window on a day that is on")
+        for day in [7, 8] {
+            for time in [at(8, 0, day: day), at(10, 0, day: day), at(13, 0, day: day)] { XCTAssertFalse(weekdays.blocks(at: time, calendar: calendar), "\(time)") }
+            XCTAssertTrue(weekdays.isInsideRange(at: at(10, 0, day: day), calendar: calendar), "the range does not read the weekday")
+            XCTAssertFalse(weekdays.isLocked(at: at(10, 0, day: day), calendar: calendar))
+        }
+        // A schedule without weekdays blocks on every day.
+        for day in 2...8 { XCTAssertTrue(layer().blocks(at: at(10, 0, day: day), calendar: calendar), "day \(day)") }
+        // One chosen day: Wednesday only.
+        let wednesday = on([4], layer())
+        for day in 2...8 { XCTAssertEqual(wednesday.blocks(at: at(10, 0, day: day), calendar: calendar), day == 4, "day \(day)") }
+        // The re-block (no break line) and the session end (`ending`) read the weekday too.
+        let saturday = at(10, 0, day: 7)
+        XCTAssertFalse(EverydayRules.blocks(schedule: weekdays, session: nil, authorized: .unknown, now: saturday, calendar: calendar))
+        var ending = ControlSession(startedAt: saturday.addingTimeInterval(-300)); ending.phase = .ending
+        XCTAssertFalse(EverydayRules.blocks(schedule: weekdays, session: ending, authorized: .approved, now: saturday, calendar: calendar))
+        XCTAssertTrue(EverydayRules.blocks(schedule: weekdays, session: ending, authorized: .approved, now: at(10, 0), calendar: calendar))
+    }
+    func testNextChangeWalksDaysThatAreOffUpToTheSameWeekdayOfTheNextWeek() {
+        let weekdays = on(weekdaysMonToFri, layer(windows: [lunch]))
+        XCTAssertEqual(weekdays.nextChange(after: at(10, 0), calendar: calendar), at(12, 0), "a day that is on keeps its edges")
+        XCTAssertEqual(weekdays.nextChange(after: at(18, 0), calendar: calendar), at(8, 0, day: 3))
+        XCTAssertEqual(weekdays.nextChange(after: at(18, 0, day: 6), calendar: calendar), at(8, 0, day: 9), "Friday evening to Monday")
+        XCTAssertEqual(weekdays.nextChange(after: at(10, 0, day: 7), calendar: calendar), at(8, 0, day: 9), "Saturday")
+        XCTAssertEqual(weekdays.nextChange(after: at(12, 30, day: 8), calendar: calendar), at(8, 0, day: 9), "Sunday, inside a window time")
+        // One chosen day: after its range end, the same weekday of the next week.
+        let monday = on([2], layer())
+        XCTAssertEqual(monday.nextChange(after: at(19, 0), calendar: calendar), at(8, 0, day: 9))
+        XCTAssertEqual(monday.nextChange(after: at(7, 0), calendar: calendar), at(8, 0))
+        // Together with an `offDay`: off for today on the only chosen day.
+        XCTAssertEqual(off(monday).nextChange(after: at(10, 0), calendar: calendar), at(8, 0, day: 9))
+        // Off for Friday, then the weekend: the next Monday.
+        XCTAssertEqual(off(weekdays, day: 6).nextChange(after: at(10, 0, day: 6), calendar: calendar), at(8, 0, day: 9))
+        // A break that ends on a day that is off changes nothing that day.
+        var session = ControlSession(startedAt: at(9, 55, day: 7)); session.phase = .onBreak; session.breakEndsAt = at(10, 0, day: 7)
+        XCTAssertEqual(EverydayRules.nextChange(schedule: weekdays, session: session, authorized: .approved, now: at(9, 58, day: 7), calendar: calendar), at(8, 0, day: 9))
+    }
+    func testDayChangesAroundADayThatIsOff() {
+        // A range that starts at 00:00, Monday to Friday.
+        let early = on(weekdaysMonToFri, layer(0, 10 * 60))
+        XCTAssertFalse(early.blocks(at: at(23, 59, 59, day: 6), calendar: calendar))
+        XCTAssertFalse(early.blocks(at: at(0, 0, day: 7), calendar: calendar), "Saturday 00:00")
+        XCTAssertFalse(early.blocks(at: at(23, 59, 59, day: 8), calendar: calendar))
+        XCTAssertTrue(early.blocks(at: at(0, 0, day: 9), calendar: calendar), "Monday 00:00")
+        XCTAssertTrue(early.blocks(at: at(9, 59, 59, day: 6), calendar: calendar), "Friday")
+        XCTAssertEqual(early.nextChange(after: at(23, 59, 59, day: 8), calendar: calendar), at(0, 0, day: 9))
+        XCTAssertEqual(early.nextChange(after: at(10, 0, day: 6), calendar: calendar), at(0, 0, day: 9))
+        // A time zone change moves the local day: Monday 10:00 in Seoul is Sunday 17:00 in Los Angeles.
+        var losAngeles = Calendar(identifier: .gregorian); losAngeles.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        let weekdays = on(weekdaysMonToFri, layer())
+        XCTAssertTrue(weekdays.blocks(at: at(10, 0), calendar: calendar))
+        XCTAssertFalse(weekdays.blocks(at: at(10, 0), calendar: losAngeles))
+        XCTAssertFalse(weekdays.isLocked(at: at(10, 0), calendar: losAngeles))
+        // A daylight saving day (New York, Sunday 2026-11-01, 25 hours) has one weekday.
+        var newYork = Calendar(identifier: .gregorian); newYork.timeZone = TimeZone(identifier: "America/New_York")!
+        func ny(_ day: Int, _ hour: Int) -> Date { newYork.date(from: DateComponents(year: 2026, month: 11, day: day, hour: hour))! }
+        let sunday = on([1], layer())
+        XCTAssertEqual(EverydaySchedule.weekday(of: ny(1, 0), calendar: newYork), 1); XCTAssertEqual(EverydaySchedule.weekday(of: ny(1, 23), calendar: newYork), 1)
+        XCTAssertTrue(sunday.blocks(at: ny(1, 10), calendar: newYork)); XCTAssertFalse(sunday.blocks(at: ny(2, 10), calendar: newYork))
+        XCTAssertEqual(sunday.nextChange(after: ny(1, 19), calendar: newYork), ny(8, 8))
+    }
+    func testTheGateReadsTheWeekdaysAndConditionFourComesBeforeTheTimes() {
+        let stored = on(weekdaysMonToFri, layer(windows: [lunch])), now = at(10, 0)
+        let cases: [(String, EverydaySchedule, Date, EverydayLockReason?)] = [
+            ("remove Monday", on([3, 4, 5, 6], layer(windows: [lunch])), now, .removesWeekday),
+            ("remove Wednesday", on([2, 3, 5, 6], layer(windows: [lunch])), now, .removesWeekday),
+            ("remove Monday during lunch", on([3, 4, 5, 6], layer(windows: [lunch])), at(12, 30), .removesWeekday),
+            ("every day is a superset", layer(windows: [lunch]), now, nil),
+            ("add Saturday", on([2, 3, 4, 5, 6, 7], layer(windows: [lunch])), now, nil),
+            ("remove Monday and add a window", on([3, 4, 5, 6], layer(windows: [lunch, window(15 * 60, 15 * 60 + 30)])), now, .removesWeekday),
+            ("remove Monday and end earlier", on([3, 4, 5, 6], layer(8 * 60, 17 * 60, windows: [lunch])), now, .rangeEndsEarlier),
+            ("remove Monday and turn off", on([3, 4, 5, 6], layer(windows: [lunch], enabled: false)), now, .turnsOff),
+            ("remove Monday at the range end", on([3, 4, 5, 6], layer(windows: [lunch])), at(18, 0), nil),
+            ("remove Monday before the range", on([3, 4, 5, 6], layer(windows: [lunch])), at(7, 59, 59), nil),
+            ("turn off on Saturday", layer(windows: [lunch], enabled: false), at(10, 0, day: 7), nil),
+            ("shorten the range on Saturday", layer(8 * 60, 9 * 60), at(10, 0, day: 7), nil),
+        ]
+        for (name, schedule, time, reason) in cases {
+            XCTAssertEqual(schedule.lockReason(against: stored, at: time, calendar: calendar), reason, name)
+            XCTAssertEqual(schedule.lockReason(against: off(stored, day: calendar.component(.day, from: time)), at: time, calendar: calendar), reason,
+                           "off for today: \(name)")
+            XCTAssertEqual(schedule.isAtLeastAsStrict(as: stored, from: time, calendar: calendar), reason == nil, "strict: \(name)")
+        }
+        // A stored schedule without weekdays has all seven.
+        XCTAssertEqual(on([2], layer()).lockReason(against: layer(), at: now, calendar: calendar), .removesWeekday)
     }
 }

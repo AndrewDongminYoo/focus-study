@@ -9,6 +9,7 @@ Primary sources are the issue, that spec, `EverydaySettingsModel.previewSegments
 ## Behavior
 
 - The draft preview and the stored preview each show one clock above their text rows.
+  - Reconciliation (2026-11-13, #126): the weekday row ("제한 요일 · …") is a text row above the clock; the segment rows stay below it, as the [everyday weekdays](2026-11-13-everyday-weekdays-design.md#the-schedule-preview-and-the-day-clock) design says.
 - The clock draws 24 hours as one turn, with midnight at the top and time running clockwise; the labels 0시, 6시, 12시 and 18시 mark the quarters.
 - A restricted interval is a thick solid arc in the accent color.
   An unblocked interval is a solid arc of the same width in an accent tint, with stronger opacity when Increase Contrast is enabled.
@@ -21,6 +22,7 @@ Primary sources are the issue, that spec, `EverydaySettingsModel.previewSegments
 - The clock shows only when its text rows show: an invalid schedule and a layer that is off show no clock.
 - `EverydaySchedule.issue` keeps every time between 00:00 and 23:55, so no arc passes midnight.
 - The text rows stay below the clock with their text, accessibility labels and identifiers (`everydayDraftSegment.N`, `everydayStoredSegment.N`); they stay the accessible alternative.
+  - Reconciliation (2026-11-13, #126): the segment rows stay below the clock, and the weekday row is above it.
 - The clock is one accessibility element with the label "하루 일정표" and the identifier `everydayDraftClock` or `everydayStoredClock`.
   It is a separate row next to the text rows, and no container with an identifier holds both.
 - The hour labels and center text stop growing at the default Large text size to avoid collisions inside the compact dial, because the text rows carry the times at every size.

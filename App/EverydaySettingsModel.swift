@@ -41,12 +41,12 @@ import Observation
     /// No edit combines with a focus phase; the save checks it again under the lock.
     var canEdit: Bool { !focus.isInSession && !focus.isStarting }
     private var timing: BreakTiming { services.engine.timing }
-    /// The spec "The app-side wait": the stored layer is on, the status read was inside the stored range, the layer is not off for today,
-    /// editing is open and access is approved. The section checks each of these again under the lock.
+    /// The spec "The app-side wait": the stored layer is on, the status read was on a day that is on and inside the stored range,
+    /// the layer is not off for today, editing is open and access is approved. The section checks each of these again under the lock.
     var offersOffForToday: Bool {
         guard offWait == nil, let status, let schedule = status.schedule, schedule.enabled, !status.offForToday,
               canEdit, focus.access == .approved else { return false }
-        return schedule.isInsideRange(at: statusReadAt ?? clock(), calendar: services.engine.calendar)
+        return schedule.isLocked(at: statusReadAt ?? clock(), calendar: services.engine.calendar)
     }
     /// 0 to 1 while the off-for-today wait is open.
     var offWaitProgress: Double? {
@@ -79,7 +79,20 @@ import Observation
         default: return nil
         }
     }
-    var windowsIssue: String? { rangeIssue == nil ? draft.issue.map(Self.message(for:)) : nil }
+    /// Every schedule issue that `rangeIssue` and `weekdaysIssue` do not take.
+    var windowsIssue: String? {
+        guard rangeIssue == nil, let issue = draft.issue, issue != .noWeekdays else { return nil }
+        return Self.message(for: issue)
+    }
+    /// The weekday issue shows only in the row "제한 요일".
+    var weekdaysIssue: String? { draft.issue == .noWeekdays ? Self.message(for: .noWeekdays) : nil }
+    /// The day buttons, in the order of the engine calendar's first weekday.
+    var weekdayOrder: [Int] { Self.weekdayOrder(calendar: services.engine.calendar) }
+    func toggleWeekday(_ day: Int) {
+        var days = draft.chosenWeekdays
+        if days.contains(day) { days.remove(day) } else { days.insert(day) }
+        draft.setWeekdays(days)
+    }
     var selectionIssue: String? {
         draft.enabled ? SelectionFeedback.draftIssue(appCount: counts.apps, websiteCount: counts.websites) : nil
     }
@@ -106,10 +119,9 @@ import Observation
     /// The position of a time on the day clock, as a fraction of one turn: midnight is 0 and each hour is 1/24.
     /// `EverydaySchedule.issue` keeps every previewed time between 00:00 and `latestRangeEnd`, so no arc passes midnight.
     nonisolated static func dayClockFraction(_ minutes: Int) -> Double { Double(minutes) / Double(24 * 60) }
-    /// The stored range locks edits even during an unblocked window; the engine rechecks at save time.
+    /// The stored range locks edits even during an unblocked window, on a day that is on; the engine rechecks at save time.
     var strictOnlyMessage: String? {
-        guard let schedule = status?.schedule, schedule.enabled,
-              schedule.isInsideRange(at: clock(), calendar: services.engine.calendar) else { return nil }
+        guard let schedule = status?.schedule, schedule.isLocked(at: clock(), calendar: services.engine.calendar) else { return nil }
         return "제한 시간에는 더 엄격하게만 바꿀 수 있어요. \(Self.time(schedule.rangeEnd))부터 자유롭게 바꿀 수 있어요."
     }
     private func clearFeedback() { refusalMessage = nil; successMessage = nil }
@@ -122,6 +134,7 @@ import Observation
             }
         }
         return lhs.enabled == rhs.enabled && lhs.rangeStart == rhs.rangeStart && lhs.rangeEnd == rhs.rangeEnd && windows(lhs) == windows(rhs)
+            && lhs.chosenWeekdays == rhs.chosenWeekdays
     }
     private static func sameSelection(_ lhs: FamilyActivitySelection, _ rhs: FamilyActivitySelection) -> Bool {
         lhs.applicationTokens == rhs.applicationTokens && lhs.webDomainTokens == rhs.webDomainTokens && lhs.categoryTokens == rhs.categoryTokens
@@ -154,7 +167,9 @@ import Observation
     /// `retried`: the screen already read once for this status. A lock timeout keeps a next change that has passed, so it gets no boundary read.
     /// `rangeCalendar`: the everyday settings screen also reads at today's stored range start and end, because the off-for-today action
     /// depends on the range and `nextChange` can skip the range start or, on a day that is off, the range end.
-    static func statusReadDelay(_ status: EverydayStatus?, now: Date, retried: Bool, rangeCalendar: Calendar? = nil) -> TimeInterval? {
+    /// `dayWordCalendar`: the settings row and the everyday screen also read at the next local midnight while their line has a day word,
+    /// because the word changes at midnight also when the status value does not.
+    static func statusReadDelay(_ status: EverydayStatus?, now: Date, retried: Bool, rangeCalendar: Calendar? = nil, dayWordCalendar: Calendar? = nil) -> TimeInterval? {
         guard let status else { return nil }
         var boundaries = [status.nextChange].compactMap { $0 }
         if let rangeCalendar, let schedule = status.schedule, schedule.enabled {
@@ -162,17 +177,22 @@ import Observation
                 rangeCalendar.date(bySettingHour: $0 / 60, minute: $0 % 60, second: 0, of: now)
             }
         }
+        if let dayWordCalendar, dayWord(status, at: now, calendar: dayWordCalendar) != nil,
+           let midnight = dayWordCalendar.date(byAdding: .day, value: 1, to: dayWordCalendar.startOfDay(for: now)) {
+            boundaries.append(midnight)
+        }
         let boundary = boundaries.filter { $0 > now }.map { $0.timeIntervalSince(now) + boundaryGrace }.min()
         let retry = !retried && (status.issue == .notApplied || status.issue == .notCleared || status.issue == .unchecked) ? issueRetry : nil
         return [boundary, retry].compactMap { $0 }.min()
     }
     /// Reads the status again after each `statusReadDelay`, until the task is cancelled or no read is due.
     /// The settings row, this screen and the timer screen each run it for the status they show, because a boundary changes it without any lock section of the app.
-    static func followStatus(_ status: () -> EverydayStatus?, now: () -> Date, rangeCalendar: Calendar? = nil,
+    static func followStatus(_ status: () -> EverydayStatus?, now: () -> Date, rangeCalendar: Calendar? = nil, dayWordCalendar: Calendar? = nil,
                              sleep: (TimeInterval) async -> Void = { try? await Task.sleep(for: .seconds($0)) },
                              read: () -> Void) async {
         var retried = false
-        while !Task.isCancelled, let wait = statusReadDelay(status(), now: now(), retried: retried, rangeCalendar: rangeCalendar) {
+        while !Task.isCancelled,
+              let wait = statusReadDelay(status(), now: now(), retried: retried, rangeCalendar: rangeCalendar, dayWordCalendar: dayWordCalendar) {
             await sleep(wait)
             if Task.isCancelled { return }
             retried = true
@@ -270,8 +290,8 @@ import Observation
 
     // MARK: Copy
 
-    /// The settings row: one line about the stored layer.
-    static func statusLine(_ status: EverydayStatus?, calendar: Calendar = .autoupdatingCurrent) -> String {
+    /// The settings row: one line about the stored layer. `readAt` is the time of the status read, which the day word counts from.
+    static func statusLine(_ status: EverydayStatus?, at readAt: Date, calendar: Calendar = .autoupdatingCurrent) -> String {
         guard let status else { return "꺼져 있어요" }
         switch status.issue {
         case .unreadable: return "설정을 불러오지 못했어요. 다시 설정해 주세요."
@@ -282,11 +302,22 @@ import Observation
         case nil: break
         }
         guard let schedule = status.schedule, schedule.enabled else { return "꺼져 있어요" }
-        let next = status.nextChange.map { Self.clock($0, calendar: calendar) }
-        // On a day that is off, the next change is the next day's first blocked time.
-        if status.offForToday { return "오늘은 꺼 두었어요" + (next.map { " · 내일 \($0)부터 다시 제한해요" } ?? "") }
+        // The day word, when there is one, stands before the time: "내일 08:00" or "월요일 08:00".
+        let word = dayWord(status, at: readAt, calendar: calendar).map { "\($0) " } ?? ""
+        let next = status.nextChange.map { word + Self.clock($0, calendar: calendar) }
+        // On a day that is off, or off for today, the next change is the first blocked time of the next day that is on.
+        if status.dayIsOff { return "오늘은 제한하지 않는 요일이에요" + (next.map { " · \($0)부터 제한해요" } ?? "") }
+        if status.offForToday { return "오늘은 꺼 두었어요" + (next.map { " · \($0)부터 다시 제한해요" } ?? "") }
         if status.blocksNow { return "지금 제한하고 있어요" + (next.map { " · \($0)까지" } ?? "") }
         return "켜져 있어요" + (next.map { " · \($0)부터 제한해요" } ?? "")
+    }
+    /// The word before the time of `nextChange` in the status line, counted in local days from `readAt`.
+    /// The two lines that say today does not block name tomorrow "내일"; every line names a later day by its weekday; otherwise there is none.
+    static func dayWord(_ status: EverydayStatus, at readAt: Date, calendar: Calendar) -> String? {
+        guard status.issue == nil, let schedule = status.schedule, schedule.enabled, !status.blocksNow, let next = status.nextChange,
+              let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: readAt), to: calendar.startOfDay(for: next)).day else { return nil }
+        if days > 1 { return weekdayName(EverydaySchedule.weekday(of: next, calendar: calendar)) }
+        return days == 1 && (status.dayIsOff || status.offForToday) ? "내일" : nil
     }
     /// The timer screen row, without its chevron: a layer that blocks now, or any status the app could not confirm. `nil` hides the row.
     static func timerLine(_ status: EverydayStatus?, calendar: Calendar = .autoupdatingCurrent) -> String? {
@@ -307,6 +338,7 @@ import Observation
         case .windowOutsideRange: "잠시 풀어 두는 시간은 제한 시간 안에서 정할 수 있어요."
         case .windowsOverlap: "잠시 풀어 두는 시간이 서로 겹쳐요. 겹치지 않게 바꿔 주세요."
         case .windowsCoverRange: "잠시 풀어 두는 시간이 제한 시간을 모두 채우고 있어요. 제한할 시간을 남겨 주세요."
+        case .noWeekdays: "제한할 요일을 하나 이상 골라 주세요."
         }
     }
     /// A refused save inside the range: the failed condition, the time that editing opens again, and the off-for-today action when it is offered.
@@ -315,6 +347,7 @@ import Observation
         case .turnsOff: "제한 시간에는 매일 제한을 끌 수 없어요."
         case .rangeExcludesNow: "제한 시간에는 지금 시각이 빠지게 제한 시간을 바꿀 수 없어요."
         case .rangeEndsEarlier: "제한 시간에는 제한 끝을 앞당길 수 없어요."
+        case .removesWeekday: "제한 시간에는 요일을 뺄 수 없어요."
         case .unblocksTime: "제한 시간에는 풀어 두는 시간을 더하거나 늘리거나 옮길 수 없어요."
         case .removesSelection: "제한 시간에는 고른 앱과 웹사이트를 뺄 수 없어요."
         }
@@ -329,9 +362,28 @@ import Observation
         case EverydayOffRefusal.unreadable: "설정을 불러오지 못해서 끄지 않았어요. 다시 설정해 주세요."
         case EverydayOffRefusal.notOn: "매일 제한이 이미 꺼져 있어요."
         case EverydayOffRefusal.revisionChanged: "매일 제한이 바뀌어서 끄지 않았어요. 다시 시도해 주세요."
+        case EverydayOffRefusal.dayIsOff: "오늘은 제한하지 않는 요일이에요."
         case EverydayOffRefusal.outsideRange: "제한 시간이 끝났어요. 지금은 자유롭게 바꿀 수 있어요."
         case EverydayOffRefusal.alreadyOff: "오늘은 이미 꺼 두었어요."
         default: "오늘만 끄지 못했어요. 제한은 그대로예요. 다시 시도해 주세요."
+        }
+    }
+    /// The line of a preview that cannot be drawn: a draft whose only issue is the weekday issue names the weekdays, not the times.
+    static func invalidPreviewLine(_ schedule: EverydaySchedule) -> String {
+        schedule.issue == .noWeekdays ? "요일을 고르면 미리보기를 볼 수 있어요." : "시간을 확인하면 미리보기를 볼 수 있어요."
+    }
+    /// Weekday numbers from the calendar's first weekday, 1 for Sunday.
+    static func weekdayOrder(calendar: Calendar) -> [Int] { (0..<7).map { (calendar.firstWeekday - 1 + $0) % 7 + 1 } }
+    static func shortWeekdayName(_ day: Int) -> String { ["일", "월", "화", "수", "목", "금", "토"][(day - 1) % 7] }
+    static func weekdayName(_ day: Int) -> String { shortWeekdayName(day) + "요일" }
+    /// The summary of the chosen days: 매일, 평일, 주말, the short names in the order of the first weekday, or 요일 없음.
+    static func weekdaySummary(_ days: Set<Int>, calendar: Calendar) -> String {
+        switch days {
+        case EverydaySchedule.allWeekdays: "매일"
+        case Set(2...6): "평일"
+        case [1, 7]: "주말"
+        case []: "요일 없음"
+        default: weekdayOrder(calendar: calendar).filter(days.contains).map(shortWeekdayName).joined(separator: ", ")
         }
     }
     static func time(_ minutes: Int) -> String { String(format: "%02d:%02d", minutes / 60, minutes % 60) }

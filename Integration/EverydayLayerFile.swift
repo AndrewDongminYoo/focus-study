@@ -16,8 +16,12 @@ final class EverydayLayerFile: EverydayLayerStore {
         var webDomains: Set<WebDomainToken>
         /// Optional, so that a file without the key loads with no off day and an earlier build ignores it; `nil` is not written.
         var offDay: String?
+        /// Optional in the same way; a missing key is every day, and all seven are not written.
+        /// The load reads it with `EverydaySchedule.storedWeekdays`, so a malformed list is never a read failure.
+        var weekdays: [Int]?
         var schedule: EverydaySchedule {
-            EverydaySchedule(revision: revision, enabled: enabled, rangeStart: rangeStart, rangeEnd: rangeEnd, windows: windows, offDay: offDay)
+            EverydaySchedule(revision: revision, enabled: enabled, rangeStart: rangeStart, rangeEnd: rangeEnd, windows: windows, offDay: offDay,
+                             weekdays: EverydaySchedule.storedWeekdays(weekdays))
         }
         var selection: FamilyActivitySelection {
             var selection = FamilyActivitySelection(includeEntireCategory: true)
@@ -51,7 +55,7 @@ final class EverydayLayerFile: EverydayLayerStore {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let value = Stored(schemaVersion: Self.schemaVersion, revision: schedule.revision, enabled: schedule.enabled, rangeStart: schedule.rangeStart,
                            rangeEnd: schedule.rangeEnd, windows: schedule.windows, applications: selection.applicationTokens, webDomains: selection.webDomainTokens,
-                           offDay: schedule.offDay)
+                           offDay: schedule.offDay, weekdays: EverydaySchedule.storedWeekdays(schedule.weekdays))
         try JSONEncoder().encode(value).write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
     }
     /// The off-for-today write: the whole file again with the stored tokens and the schedule that the section passes, which keeps the stored revision.
