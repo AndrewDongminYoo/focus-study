@@ -2,6 +2,7 @@
 
 Date: 2026-11-13.
 Status: design for approval.
+Reconciliation (2026-11-13, #125): the design was approved with its recommended choices and is implemented. `Streak` and `SessionHistory.streak(at:calendar:)` in `App/SessionRecord.swift`, `FocusModel.streak` and the `historyStreak` line in `App/TodayHistoryView.swift` are the authority, with the tests in `HistoryTests/StreakTests.swift`, `SDKTests/FocusModelTests.swift` and `UITests/FocusFlowTests.swift`.
 Source: [issue #125](https://github.com/AndrewDongminYoo/focus-study/issues/125), and the decision in [issue #43](https://github.com/AndrewDongminYoo/focus-study/issues/43).
 The [2026-10-26 design](2026-10-26-focus-study-design.md) excludes rewards ("리워드는 제외한다"); that line stays, and decision 2 of the [Contract](#contract) states where a reward starts.
 This document changes no code.
@@ -93,6 +94,7 @@ The copy and the placement are for visual approval: the implementation PR shows 
 ### Computation
 
 - The rule is a pure function in the `FocusHistory` module: it takes the start times of the records that count, the current time and a calendar, and it returns the number of days.
+  Reconciliation (2026-11-13, #125): `Streak.run(starts:now:calendar:)` also returns whether older records could still make the run longer, which is how the bounded read knows when to stop; `Streak.days(starts:now:calendar:)` returns the number alone.
   It does not import SwiftData or any Screen Time framework.
 - `SessionHistoryProviding` gets one new read that returns the streak for a time and a calendar.
   `SessionHistory` implements it with a fetch of the records with `reasonRaw == "expired"`, sorted by `startedAt` from the newest.
@@ -109,6 +111,7 @@ The copy and the placement are for visual approval: the implementation PR shows 
 ### Placement and copy
 
 - The history sheet shows one line in its first section, directly below `historySummary`.
+  Reconciliation (2026-11-13, #125): the line is in the same list row as `historySummary`, 4 points below it, with no separator between the two, in the `subheadline` text style.
 - The line shows only when `errorMessage == nil` and the streak has a value.
 - The timer screen does not change: no streak on the idle screen, on the in-progress screen, on the break screen or on the completion card.
 - The line is plain text.

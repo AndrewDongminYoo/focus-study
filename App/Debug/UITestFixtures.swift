@@ -108,6 +108,7 @@ final class FixtureEverydayLayer: EverydayLayerStore {
     init(base: any SessionHistoryProviding) { self.base = base }
     func importTerminal(_ session: ControlSession) throws { try base.importTerminal(session) }
     func records(on date: Date, calendar: Calendar) throws -> [SessionRecord] { throw ControlIssue.io }
+    func streak(at date: Date, calendar: Calendar) throws -> Int { throw ControlIssue.io }
 }
 /// In-memory selection copies; a restore never touches real restrictions.
 private final class FixtureBreakSelection: BreakSelectionStore {
@@ -233,6 +234,21 @@ extension FocusRuntime {
                 let samples: [(TimeInterval, EndReason)] = [(1500, .expired), (3000, .expired), (1500, .earlyExit), (1500, .deadlineMissed)]
                 for (index, sample) in samples.enumerated() {
                     var session = ControlSession(startedAt: start.addingTimeInterval(Double(index) * 60), length: sample.0)
+                    session.phase = .terminal; session.reason = sample.1; session.observedAt = session.expiresAt
+                    try history.importTerminal(session)
+                }
+            }
+            if let index = arguments.firstIndex(of: "--ui-testing"), index + 1 < arguments.count, arguments[index + 1] == "streak" {
+                // Completed records on today and the 2 days before it, a day whose only session was ended early, and an older completed day: the streak is 3.
+                // Just after midnight the run ends yesterday, so the number stays 3.
+                let history = SessionHistory(context: ModelContext(container), acknowledge: { _ in })
+                let calendar = Calendar.current, now = Date(), today = calendar.startOfDay(for: now)
+                let samples: [(Int, EndReason)] = [(0, .expired), (1, .expired), (1, .expired), (2, .expired), (3, .earlyExit), (4, .expired)]
+                for (index, sample) in samples.enumerated() {
+                    // Today's record keeps the rule of the `history` seed; an earlier day's records start after its noon.
+                    let day = calendar.date(byAdding: .day, value: -sample.0, to: today) ?? today
+                    let start = sample.0 == 0 ? max(today, now.addingTimeInterval(-7200)) : calendar.startOfDay(for: day).addingTimeInterval(43_200 + Double(index) * 60)
+                    var session = ControlSession(startedAt: start, length: 1500)
                     session.phase = .terminal; session.reason = sample.1; session.observedAt = session.expiresAt
                     try history.importTerminal(session)
                 }
