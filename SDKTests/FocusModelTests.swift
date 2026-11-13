@@ -9,9 +9,10 @@ import SwiftData
         let (model, history, _) = makeModel(store: store, monitoring: monitoring, shield: shield, defaults: defaults, timing: .standard)
         return (model, history, store, shield, model.services.engine)
     }
-    private func makeModel(store: ModelTestStore, monitoring: ModelTestMonitoring, shield: ModelTestShield, defaults: UserDefaults, timing: BreakTiming) -> (FocusModel, ModelTestHistory, ModelTestBreakSelection) {
+    private func makeModel(store: ModelTestStore, monitoring: ModelTestMonitoring, shield: ModelTestShield, defaults: UserDefaults, timing: BreakTiming,
+                           everyday: ModelTestEverydayLayer = ModelTestEverydayLayer()) -> (FocusModel, ModelTestHistory, ModelTestBreakSelection) {
         let copies = ModelTestBreakSelection(); copies.onRestore = { shield.applied = true }
-        let engine = SessionControl(store: store, monitoring: monitoring, shield: shield, breakSelection: copies, everyday: ModelTestEverydayLayer(), timing: timing)
+        let engine = SessionControl(store: store, monitoring: monitoring, shield: shield, breakSelection: copies, everyday: everyday, timing: timing)
         var services = FocusServices(authorization: ModelTestAuthorization(), selection: ModelTestSelection(), engine: engine, applySelection: { _ in shield.applied = true }, matchesSelection: { _ in shield.applied }, isFixture: true)
         services.settings = FocusSettings(defaults: defaults)
         services.saveBreakSelection = { selection, id in copies.saved.append((selection, id)); copies.copies.insert(id) }
@@ -320,6 +321,93 @@ import SwiftData
         model.refresh()
         XCTAssertNil(model.current); XCTAssertFalse(model.isActive); XCTAssertNotNil(model.errorMessage)
         XCTAssertFalse(shield.applied)
+    }
+    /// Issue #112: an end whose two saves throw leaves the stored `onBreak` with every activity stopped.
+    /// The model then reconciles on its own ticks, without a launch or a foreground call, until one reconcile succeeds.
+    func testEndWhoseSavesFailReconcilesOnTicksUntilTheStoreIsWritable() {
+        let endFailure = "종료 상태를 저장하지 못했어요. 다시 확인해 주세요."
+        let store = ModelTestStore(), shield = ModelTestShield(), layer = ModelTestEverydayLayer()
+        // The whole day, so that the blocking rule does not depend on the time of the run.
+        layer.schedule = EverydaySchedule(revision: UUID(), enabled: true, rangeStart: 0, rangeEnd: 24 * 60, windows: [])
+        let (model, _, _) = makeModel(store: store, monitoring: ModelTestMonitoring(), shield: shield, defaults: UserDefaults(suiteName: UUID().uuidString)!,
+                                      timing: BreakTiming(waits: [0, 0, 0], breakLength: 180, slack: 600, staleWaitGrace: 5), everyday: layer)
+        model.completeOnboarding(); model.start()
+        XCTAssertTrue(layer.shieldOn)
+        model.requestBreak(); model.tick()
+        XCTAssertEqual(model.current?.phase, .onBreak); XCTAssertFalse(layer.shieldOn, "the break lifts the everyday layer")
+        store.failSaves = true
+        var calls = store.calls
+        model.end()
+        XCTAssertEqual(store.envelope.session?.phase, .onBreak, "both saves threw"); XCTAssertFalse(shield.applied)
+        XCTAssertEqual(store.calls, calls + 2, "the end, then one reconcile that also fails")
+        XCTAssertNil(model.current); XCTAssertEqual(model.errorMessage, endFailure)
+        // While the store stays unwritable, each tick makes one attempt and the message stays.
+        for _ in 0..<3 {
+            calls = store.calls
+            model.tick()
+            XCTAssertEqual(store.calls, calls + 1)
+            XCTAssertEqual(store.envelope.session?.phase, .onBreak); XCTAssertFalse(layer.shieldOn)
+            XCTAssertNil(model.current); XCTAssertEqual(model.errorMessage, endFailure)
+        }
+        store.failSaves = false
+        model.tick()
+        XCTAssertNil(store.envelope.session, "the reconcile ended the session, and the history import acknowledged it")
+        XCTAssertTrue(layer.shieldOn, "the blocking rule no longer sees a running break")
+        XCTAssertNil(model.current); XCTAssertNil(model.errorMessage); XCTAssertTrue(model.canStart)
+        // One successful reconcile stops the attempts.
+        calls = store.calls
+        model.tick()
+        XCTAssertEqual(store.calls, calls)
+    }
+    /// The terminal save succeeded, so the reconcile right after the thrown `finish` imports the session and clears the message.
+    func testEndWhoseFirstSaveFailsReconcilesAtOnce() {
+        let store = ModelTestStore(), shield = ModelTestShield()
+        let (model, _, _) = makeModel(store: store, monitoring: ModelTestMonitoring(), shield: shield, defaults: UserDefaults(suiteName: UUID().uuidString)!, timing: .standard)
+        model.completeOnboarding(); model.start()
+        XCTAssertTrue(model.isActive)
+        store.failSavePhase = .ending
+        model.end()
+        XCTAssertNil(store.envelope.session); XCTAssertFalse(shield.applied)
+        XCTAssertNil(model.current); XCTAssertNil(model.errorMessage)
+        let calls = store.calls
+        model.tick()
+        XCTAssertEqual(store.calls, calls)
+    }
+    /// A lock timeout throws before the section body, so the session and its shield stay.
+    /// The reconcile after it succeeds with nothing to repair, and the end that did not happen is still reported.
+    func testEndLockTimeoutKeepsTheSessionAndReportsTheFailedEnd() throws {
+        let (model, _, store, shield, _) = fixture()
+        model.completeOnboarding(); model.start()
+        let session = try XCTUnwrap(model.current)
+        store.lockTimeoutCalls = [store.calls + 1]
+        model.end()
+        XCTAssertTrue(shield.applied); XCTAssertEqual(store.envelope.session?.phase, .active)
+        XCTAssertEqual(model.current, session)
+        XCTAssertEqual(model.errorMessage, "종료 상태를 저장하지 못했어요. 다시 확인해 주세요.")
+        // The message stays until "다시 확인하기", and a second end works.
+        model.tick()
+        XCTAssertNotNil(model.errorMessage)
+        model.refresh()
+        XCTAssertNil(model.errorMessage); XCTAssertTrue(model.isActive)
+        model.end()
+        XCTAssertNil(model.current); XCTAssertNil(model.errorMessage); XCTAssertFalse(shield.applied)
+    }
+    /// The end and the reconcile after it both time out: the tick that reads the running session again keeps the end message.
+    func testEndLockTimeoutMessageSurvivesTheTickThatFindsTheSession() throws {
+        let endFailure = "종료 상태를 저장하지 못했어요. 다시 확인해 주세요."
+        let (model, _, store, shield, _) = fixture()
+        model.completeOnboarding(); model.start()
+        let session = try XCTUnwrap(model.current)
+        store.lockTimeoutCalls = [store.calls + 1, store.calls + 2]
+        model.end()
+        XCTAssertNil(model.current); XCTAssertEqual(model.errorMessage, endFailure)
+        model.tick()
+        XCTAssertEqual(model.current, session); XCTAssertTrue(shield.applied)
+        XCTAssertEqual(model.errorMessage, endFailure)
+        // The session is back, so the ticks stop the attempts and leave the message.
+        let calls = store.calls
+        model.tick()
+        XCTAssertEqual(store.calls, calls); XCTAssertEqual(model.errorMessage, endFailure)
     }
     func testOnlyAFullSessionIsMarkedCompletedUntilDismissed() throws {
         let (model, _, _, shield, engine) = fixture()
@@ -637,6 +725,8 @@ enum ModelTestError: Error { case storage }
 final class ModelTestStore: ControlStore, LockedControl {
     var envelope = ControlEnvelope(), failRead = false
     var failSavePhase: SessionPhase?
+    /// Every save throws, as an unwritable store does.
+    var failSaves = false
     /// The numbers of the lock sections that throw `lockTimeout` before their body runs.
     var lockTimeoutCalls = Set<Int>()
     private(set) var calls = 0
@@ -647,6 +737,7 @@ final class ModelTestStore: ControlStore, LockedControl {
     }
     func load() throws -> ControlEnvelope { if failRead { throw ModelTestError.storage }; return envelope }
     func save(_ envelope: ControlEnvelope) throws {
+        if failSaves { throw ModelTestError.storage }
         if let failSavePhase, envelope.session?.phase == failSavePhase { throw ModelTestError.storage }
         self.envelope = envelope
     }
