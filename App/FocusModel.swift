@@ -53,6 +53,8 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
     private let history: any SessionHistoryProviding
     private(set) var current: ControlSession?
     private(set) var records: [SessionRecord] = []
+    /// The display-only streak in days; `nil` until a history read succeeds and after every refresh that does not finish the history read.
+    private(set) var streak: Int?
     private(set) var errorMessage: String?
     private(set) var isStarting = false
     private(set) var startRequestID: UUID?
@@ -142,7 +144,7 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
             try services.engine.reconcile(now: now, authorized: services.authorization.accessState(), clockChanged: clockChanged)
             current = try services.engine.snapshot().session
         } catch {
-            current = nil
+            current = nil; streak = nil
             errorMessage = failedEndID != nil ? Self.endFailure : "상태를 확인하지 못했어요. 다시 확인해 주세요."
             return
         }
@@ -160,8 +162,10 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
             // The card belongs to an idle screen: a session that started without `start()`, such as by a Focus, must not sit under it.
             if let current, current.phase != .terminal { completedSessionID = nil; completedLength = nil }
             records = try history.records(on: now, calendar: .current)
+            streak = try history.streak(at: now, calendar: .current)
             errorMessage = nil
         } catch {
+            streak = nil
             // A history failure does not invalidate a confirmed control session or its early-exit action.
             errorMessage = "기록을 불러오지 못했어요. 다시 확인해 주세요. 진행 중인 세션은 종료할 수 있어요."
         }

@@ -292,7 +292,43 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertEqual(app.staticTexts["historySummary"].label, summary)
         XCTAssertEqual(summary, "오늘 집중 0분 · 0회")
         XCTAssertTrue(app.staticTexts["아직 기록이 없어요."].exists)
+        XCTAssertTrue(app.staticTexts["historyStreak"].waitForExistence(timeout: ready))
+        XCTAssertEqual(app.staticTexts["historyStreak"].label, "연속 집중 0일")
         captureReport(app, name: "history-empty")
+    }
+    /// `streak` seeds completed sessions on today and the 2 days before it, and an older completed day behind a day without one.
+    /// The seed and the model read the launch time zone, and just after local midnight the run ends yesterday, so the number is 3 at every launch time.
+    func testHistoryShowsTheStreakOfTheSeededDays() {
+        let app = app("streak", extra: ["-AppleLanguages", "(ko)", "-AppleLocale", "ko_KR"], environment: noonZone())
+        openToday(app)
+        let summary = app.staticTexts["historySummary"], streak = app.staticTexts["historyStreak"]
+        XCTAssertTrue(summary.waitForExistence(timeout: ready)); XCTAssertTrue(streak.waitForExistence(timeout: ready))
+        XCTAssertEqual(summary.label, "오늘 집중 25분 · 1회")
+        XCTAssertEqual(streak.label, "연속 집중 3일")
+        XCTAssertGreaterThanOrEqual(streak.frame.minY, summary.frame.maxY, "the streak line is below the summary")
+        XCTAssertFalse(app.buttons["historyStreak"].exists, "the streak line is plain text, not a control")
+        captureReport(app, name: "history-streak")
+    }
+    /// The streak belongs to the history sheet only: the idle screen, a running session, the break screen and the completion card never show it.
+    func testTimerScreenNeverShowsTheStreak() {
+        let app = shortBreaks("streak", lenient: true, environment: noonZone())
+        let start = app.buttons["start"], breakStart = app.buttons["breakStart"], streak = app.descendants(matching: .any)["historyStreak"]
+        XCTAssertTrue(start.waitForExistence(timeout: ready)); XCTAssertTrue(app.buttons["todaySummary"].waitForExistence(timeout: ready))
+        XCTAssertFalse(streak.exists, "idle")
+        XCTAssertFalse(app.staticTexts["연속 집중 3일"].exists, "idle")
+        waitHittable(start); start.tap()
+        XCTAssertTrue(breakStart.waitForExistence(timeout: ready))
+        XCTAssertFalse(streak.exists, "during a session")
+        waitHittable(breakStart); breakStart.tap()
+        XCTAssertTrue(app.otherElements["breakScreen"].waitForExistence(timeout: ready))
+        XCTAssertFalse(streak.exists, "waiting for a break")
+        XCTAssertTrue(breakStarted(app).waitForExistence(timeout: ready))
+        XCTAssertFalse(streak.exists, "on break")
+        app.terminate()
+        let completed = self.app("expiring", environment: noonZone())
+        XCTAssertTrue(completed.descendants(matching: .any)["completion"].waitForExistence(timeout: ready))
+        XCTAssertFalse(completed.descendants(matching: .any)["historyStreak"].exists, "completion card")
+        XCTAssertFalse(completed.staticTexts["연속 집중 1일"].exists, "completion card")
     }
     /// `history-failure` keeps every history read failing, so no refresh between the queries can replace the error state.
     /// The recovery after a successful read is `FocusModelTests.testHistoryRetryClearsTheErrorAndLoadsRecordsAfterAFailedRead`.
@@ -304,6 +340,7 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(message.waitForExistence(timeout: ready))
         XCTAssertEqual(message.label, error)
         XCTAssertFalse(app.staticTexts["historySummary"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["historyStreak"].exists)
         XCTAssertFalse(app.staticTexts["아직 기록이 없어요."].exists)
         XCTAssertTrue(app.buttons["historyRetry"].exists)
         captureReport(app, name: "history-error")
@@ -311,6 +348,7 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertFalse(app.staticTexts["historySummary"].waitForExistence(timeout: 3))
         XCTAssertTrue(message.exists)
         XCTAssertEqual(message.label, error)
+        XCTAssertFalse(app.descendants(matching: .any)["historyStreak"].exists)
         XCTAssertFalse(app.staticTexts["아직 기록이 없어요."].exists)
     }
     func testKoreanSystemTimePicker() {

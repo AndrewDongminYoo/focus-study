@@ -20,6 +20,7 @@ Debug 빌드의 scheme 설정에서 Launch Arguments에 넣어 특정 화면이�
 | `--ui-testing expiring`                        | 앱을 띄울 때 만료 3초 전의 세션을 만들어 완료 화면을 보여 줍니다. 완료를 닫고 다시 시작한 세션은 설정한 길이만큼 진행됩니다. |
 | `--ui-testing ending-soon`                     | 시작 버튼을 누르면 집중 종료 10초 전부터 세션을 시작합니다.                                                                  |
 | `--ui-testing history`                         | 오늘 날짜에 25분·50분 완료, 집중 종료, 마감 초과 기록을 넣은 기록 화면입니다. 자정 직후에도 기록은 오늘에 속합니다.          |
+| `--ui-testing streak --selected`               | 오늘과 그 전 이틀에 완료, 사흘 전에 집중 종료, 나흘 전에 완료 기록을 넣습니다. 자정 직후에도 `연속 집중 3일`을 보여 줍니다.  |
 | `--ui-testing history-failure --selected`      | 오늘의 기록을 읽을 때마다 실패합니다. 다시 확인해도 기록 오류가 남고, 타이머 화면에서는 시작할 수 없습니다.                  |
 | `--ui-testing report-waiting --selected`       | 보고서 콘텐츠가 아직 오지 않은 대기 상태                                                                                     |
 | `--ui-testing report-empty --selected`         | 보고서 데이터가 없는 상태                                                                                                    |
