@@ -264,6 +264,7 @@ Acceptance:
 - `END_LATENCY` and `BREAK_LATENCY action=resume` are below 1,000 ms, except a sample that contains the first registration of a run.
 - Registrations stay inside the acceptance of the marker design.
 - `END_LATENCY` and `BREAK_LATENCY` bound the lock-hold time of the app sections that they time; record them as that bound. Monitor sections have no timing line, so their lock-hold time stays unverified.
+  - Reconciliation (2026-11-13, #113): the [Monitor timing design](2026-11-13-monitor-timing-design.md) gives Monitor sections a DEBUG timing line, and its [physical-device verification](2026-11-13-monitor-timing-design.md#physical-device-verification) is the run that measures their lock-hold time. Until that run is recorded, the time stays unverified.
 - Regression checks without the app in the foreground: a session end lifts the focus restrictions, the break re-blocks about 3 minutes after it starts, a session ends at its focus end, and an everyday window end applies the everyday shield again.
 - If the samples still show the unit of about 2.3 s, the working explanation is wrong for stops. Record that, keep #107 open, and decide in a new spec whether to keep the stop marker.
 

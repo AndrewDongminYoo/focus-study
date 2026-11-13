@@ -32,6 +32,7 @@ keylineTint
 kr.donminzzi.focusStudy.sdktests
 kr.donminzzi.focusStudy.uitests
 layoutSubviews
+logarchive
 Mirae
 Onone
 parallelizable
