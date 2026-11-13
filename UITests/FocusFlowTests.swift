@@ -881,8 +881,10 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["end"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["countdown"].exists); XCTAssertFalse(app.descendants(matching: .any)["completion"].exists)
     }
-    private func shortBreaks(_ mode: String = "approved", environment: [String: String] = [:]) -> XCUIApplication {
-        app(mode, extra: ["--break-timing", "short"], environment: environment)
+    /// `lenient` is for a test that never reaches the deadline: `short-lenient` keeps the short waits and break, with the standard slack and
+    /// a 5-minute stale-wait grace, so a query that holds the app's main thread for tens of seconds cannot make the automatic break start late enough to be refused.
+    private func shortBreaks(_ mode: String = "approved", lenient: Bool = false, environment: [String: String] = [:]) -> XCUIApplication {
+        app(mode, extra: ["--break-timing", lenient ? "short-lenient" : "short"], environment: environment)
     }
     /// The break countdown or, after the break, the deadline notice: the break started.
     /// A slow CI runner can spend several seconds on one query, which outlasts the 3-second short break,
@@ -941,7 +943,9 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["breakStart"].waitForExistence(timeout: 8))
     }
     func testBreakFlowReBlocksAndResumes() {
-        let app = shortBreaks(); app.buttons["start"].tap()
+        // No step here depends on how long one accessibility query takes (#109): the lenient timing admits the automatic break start
+        // however late its tick runs, and each wait below is for a state that then stays until the next tap.
+        let app = shortBreaks(lenient: true); app.buttons["start"].tap()
         XCTAssertTrue(app.buttons["breakStart"].waitForExistence(timeout: 15))
         XCTAssertEqual(app.staticTexts["breaksLeft"].label, "쉬는 시간 3번 남았어요")
         app.buttons["breakStart"].tap()
@@ -953,7 +957,8 @@ final class FocusFlowTests: XCTestCase {
         // Early return now exposes `resume` during the break; the deadline notice identifies the natural end.
         XCTAssertTrue(app.staticTexts["deadlineNotice"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.buttons["resume"].exists); XCTAssertTrue(app.buttons["end"].exists)
-        // The 15-second short slack keeps the notice counting down through one slow query.
+        // The standard 10-minute slack of the lenient timing keeps the notice counting down, so its label still changes after a slow query.
+        // `testMissedDeadlineRecordsUnfocusedSession` asserts the final text with the 15-second short slack.
         let notice = app.staticTexts["deadlineNotice"], initialNotice = app.staticTexts["deadlineNotice"].label
         expectation(for: NSPredicate(format: "label != %@", initialNotice), evaluatedWith: notice)
         waitForExpectations(timeout: 15)
@@ -978,7 +983,8 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertFalse(app.staticTexts["breakCountdown"].exists)
     }
     func testThirdBreakLeavesOnlyEnd() {
-        let app = shortBreaks(); app.buttons["start"].tap()
+        // Three automatic break starts and no deadline: the lenient timing keeps a slow query from refusing any of them.
+        let app = shortBreaks(lenient: true); app.buttons["start"].tap()
         for _ in 0..<3 {
             XCTAssertTrue(app.buttons["breakStart"].waitForExistence(timeout: 15)); app.buttons["breakStart"].tap()
             XCTAssertTrue(app.buttons["resume"].waitForExistence(timeout: 15)); app.buttons["resume"].tap()
