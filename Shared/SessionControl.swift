@@ -131,7 +131,7 @@ final class SessionControl {
             // The cleanup depends only on the envelope and the time, and an orphaned break activity is often the only caller.
             try cleanup(&envelope, locked: locked, now: now)
             guard let session = envelope.session else { return }
-            if activityName.hasPrefix(Self.everydayPrefix) {
+            if activityName.hasPrefix(ActivityNames.everydayPrefix) {
                 // An everyday edge reaches the M2 reconcile only in a late break, where the focus shield is already off.
                 // In every other phase the M2 callback identity rule holds, so it cannot end the session on access or center state.
                 guard session.phase == .onBreak, now >= (session.breakEndsAt ?? .distantFuture) else { return }
@@ -498,7 +498,6 @@ final class SessionControl {
 
     // MARK: Everyday convergence
 
-    static let everydayPrefix = "everyday."
     /// The activities of a layer that is on: the range, then windows 1-3.
     static func everydayActivities(_ schedule: EverydaySchedule) -> [(part: EverydayPart, start: Int, end: Int)] {
         [(.range, schedule.rangeStart, schedule.rangeEnd)] + schedule.windows.enumerated().map { (.window($0.offset + 1), $0.element.start, $0.element.end) }
