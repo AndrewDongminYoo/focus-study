@@ -25,8 +25,8 @@ public struct ControlSession: Codable, Equatable {
     /// Set once in the save of `preparing`. A missing value (an M3 or earlier session) means `manual`.
     public var origin: SessionOrigin?
     public var isFilterStarted: Bool { origin == .focusFilter }
-    public var activityName: String { "focus.\(id.uuidString)" }
-    public func breakActivityName(index: Int) -> String { "\(activityName).break.\(index)" }
+    public var activityName: String { ActivityNames.focus(id: id) }
+    public func breakActivityName(index: Int) -> String { ActivityNames.focusBreak(id: id, index: index) }
     public init(startedAt: Date, length: TimeInterval = 1500, id: UUID = UUID()) {
         self.id = id; self.startedAt = startedAt; expiresAt = startedAt.addingTimeInterval(length)
     }
@@ -109,6 +109,26 @@ protocol MonitoringClient {
     func stopEveryday(revision: UUID, part: EverydayPart)
 }
 enum EverydayPart: Hashable { case range, window(Int) }
+/// The only definition of the focus, break and everyday `DeviceActivityName` raw values; strings, because `Shared/` has no Screen Time import.
+/// Stored sessions, registered schedules and the Monitor's routing depend on these formats.
+enum ActivityNames {
+    static let focusPrefix = "focus."
+    static let breakInfix = ".break."
+    static let everydayPrefix = "everyday."
+    static let rangeSuffix = ".range"
+    static let windowInfix = ".window."
+    /// `focus.<UUID>`
+    static func focus(id: UUID) -> String { "\(focusPrefix)\(id.uuidString)" }
+    /// `focus.<UUID>.break.<n>`
+    static func focusBreak(id: UUID, index: Int) -> String { "\(focus(id: id))\(breakInfix)\(index)" }
+    /// `everyday.<UUID>.range` or `everyday.<UUID>.window.<n>`
+    static func everyday(revision: UUID, part: EverydayPart) -> String {
+        switch part {
+        case .range: "\(everydayPrefix)\(revision.uuidString)\(rangeSuffix)"
+        case .window(let n): "\(everydayPrefix)\(revision.uuidString)\(windowInfix)\(n)"
+        }
+    }
+}
 /// Clears `focusSession` only; the everyday layer has its own store.
 protocol ShieldClient { func clear() }
 /// The session-scoped selection copy that lets the Monitor re-block without the app.

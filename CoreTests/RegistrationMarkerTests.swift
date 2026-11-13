@@ -326,6 +326,20 @@ final class RegistrationMarkerTests: XCTestCase {
         XCTAssertEqual(stop.marker?.activityNames, [session.activityName] + (1...BreakTiming.maxBreaks).map(session.breakActivityName))
         XCTAssertNil(store.markers.marker); XCTAssertEqual(store.envelope.session?.phase, .terminal)
     }
+    /// Stored sessions, registered schedules and the Monitor's routing depend on these literal formats.
+    func testActivityNameFormatsAreFixed() throws {
+        let id = try XCTUnwrap(UUID(uuidString: "0f8fad5b-d9cb-469f-a165-70867728950e")), session = ControlSession(startedAt: t0, id: id)
+        XCTAssertEqual(ActivityNames.focus(id: id), "focus.0F8FAD5B-D9CB-469F-A165-70867728950E")
+        XCTAssertEqual(ActivityNames.focusBreak(id: id, index: 2), "focus.0F8FAD5B-D9CB-469F-A165-70867728950E.break.2")
+        XCTAssertEqual(ActivityNames.everyday(revision: id, part: .range), "everyday.0F8FAD5B-D9CB-469F-A165-70867728950E.range")
+        XCTAssertEqual(ActivityNames.everyday(revision: id, part: .window(3)), "everyday.0F8FAD5B-D9CB-469F-A165-70867728950E.window.3")
+        XCTAssertEqual(session.activityName, "focus.0F8FAD5B-D9CB-469F-A165-70867728950E")
+        XCTAssertEqual(session.breakActivityName(index: 2), "focus.0F8FAD5B-D9CB-469F-A165-70867728950E.break.2")
+        XCTAssertEqual(MarkedMonitoring.focusActivityName(id: id), "focus.0F8FAD5B-D9CB-469F-A165-70867728950E")
+        XCTAssertEqual(MarkedMonitoring.breakActivityName(id: id, index: 2), "focus.0F8FAD5B-D9CB-469F-A165-70867728950E.break.2")
+        XCTAssertEqual(MarkedMonitoring.everydayActivityName(revision: id, part: .range), "everyday.0F8FAD5B-D9CB-469F-A165-70867728950E.range")
+        XCTAssertEqual(MarkedMonitoring.everydayActivityName(revision: id, part: .window(3)), "everyday.0F8FAD5B-D9CB-469F-A165-70867728950E.window.3")
+    }
     func testStopNamesListRegisteredBreaksOfTheSessionOnce() {
         let id = UUID(), other = UUID()
         let names = MarkedMonitoring.stopActivityNames(id: id, registeredBreaks: [(id, 2), (other, 1), (id, 5)])

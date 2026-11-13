@@ -103,14 +103,9 @@ final class MarkedMonitoring: MonitoringClient {
         self.base = base; self.markers = markers; self.sectionTime = nil
     }
     /// The names that `ScreenTimeMonitoring` passes to `startMonitoring` and `stopMonitoring`; an SDK test checks that they are equal.
-    static func focusActivityName(id: UUID) -> String { "focus.\(id.uuidString)" }
-    static func breakActivityName(id: UUID, index: Int) -> String { "focus.\(id.uuidString).break.\(index)" }
-    static func everydayActivityName(revision: UUID, part: EverydayPart) -> String {
-        switch part {
-        case .range: "everyday.\(revision.uuidString).range"
-        case .window(let n): "everyday.\(revision.uuidString).window.\(n)"
-        }
-    }
+    static func focusActivityName(id: UUID) -> String { ActivityNames.focus(id: id) }
+    static func breakActivityName(id: UUID, index: Int) -> String { ActivityNames.focusBreak(id: id, index: index) }
+    static func everydayActivityName(revision: UUID, part: EverydayPart) -> String { ActivityNames.everyday(revision: revision, part: part) }
     /// The names that `ScreenTimeMonitoring.stop(id:)` passes: the focus name, every registered break of that session and breaks 1...`maxBreaks`.
     static func stopActivityNames(id: UUID, registeredBreaks: [(id: UUID, index: Int)]) -> [String] {
         var names = [focusActivityName(id: id)]

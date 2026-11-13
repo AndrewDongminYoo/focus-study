@@ -31,17 +31,17 @@ final class ScreenTimeMonitoring: MonitoringClient {
     /// The session of both `focus.<UUID>` and `focus.<UUID>.break.<n>`: the 36 characters after `focus.`.
     static func sessionID(_ activity: DeviceActivityName) -> UUID? {
         let raw = activity.rawValue
-        guard raw.hasPrefix("focus.") else { return nil }
-        let rest = raw.dropFirst(6)
+        guard raw.hasPrefix(ActivityNames.focusPrefix) else { return nil }
+        let rest = raw.dropFirst(ActivityNames.focusPrefix.count)
         guard let id = UUID(uuidString: String(rest.prefix(36))) else { return nil }
         let suffix = rest.dropFirst(36)
-        return suffix.isEmpty || suffix.hasPrefix(".break.") ? id : nil
+        return suffix.isEmpty || suffix.hasPrefix(ActivityNames.breakInfix) ? id : nil
     }
     /// `n` for `focus.<UUID>.break.<n>`, and `nil` for every other name.
     static func breakIndex(_ activity: DeviceActivityName) -> Int? {
         guard sessionID(activity) != nil else { return nil }
-        let suffix = activity.rawValue.dropFirst(6 + 36)
-        guard suffix.hasPrefix(".break."), let index = Int(suffix.dropFirst(7)), index > 0 else { return nil }
+        let suffix = activity.rawValue.dropFirst(ActivityNames.focusPrefix.count + 36)
+        guard suffix.hasPrefix(ActivityNames.breakInfix), let index = Int(suffix.dropFirst(ActivityNames.breakInfix.count)), index > 0 else { return nil }
         return index
     }
     func register(id: UUID, start: Date, end: Date) throws {
@@ -78,8 +78,8 @@ final class ScreenTimeMonitoring: MonitoringClient {
         }
     }
     func stopBreak(id: UUID, index: Int) { center.stopMonitoring([breakName(id, index)]) }
-    func name(_ id: UUID) -> DeviceActivityName { DeviceActivityName("focus.\(id.uuidString)") }
-    func breakName(_ id: UUID, _ index: Int) -> DeviceActivityName { DeviceActivityName("focus.\(id.uuidString).break.\(index)") }
+    func name(_ id: UUID) -> DeviceActivityName { DeviceActivityName(ActivityNames.focus(id: id)) }
+    func breakName(_ id: UUID, _ index: Int) -> DeviceActivityName { DeviceActivityName(ActivityNames.focusBreak(id: id, index: index)) }
 
     // MARK: Everyday layer
 
@@ -89,21 +89,19 @@ final class ScreenTimeMonitoring: MonitoringClient {
                                intervalEnd: DateComponents(hour: end / 60, minute: end % 60, second: 0), repeats: true)
     }
     static func everydayActivityName(revision: UUID, part: EverydayPart) -> DeviceActivityName {
-        switch part {
-        case .range: DeviceActivityName("everyday.\(revision.uuidString).range")
-        case .window(let n): DeviceActivityName("everyday.\(revision.uuidString).window.\(n)")
-        }
+        DeviceActivityName(ActivityNames.everyday(revision: revision, part: part))
     }
     /// The revision and the part of `everyday.<UUID>.range` and `everyday.<UUID>.window.<n>` (`n` 1-3), and `nil` for every other name.
     static func everydayName(_ activity: DeviceActivityName) -> (revision: UUID, part: EverydayPart)? {
         let raw = activity.rawValue
-        guard raw.hasPrefix("everyday.") else { return nil }
-        let rest = raw.dropFirst(9)
+        guard raw.hasPrefix(ActivityNames.everydayPrefix) else { return nil }
+        let rest = raw.dropFirst(ActivityNames.everydayPrefix.count)
         guard let revision = UUID(uuidString: String(rest.prefix(36))) else { return nil }
         let suffix = rest.dropFirst(36)
-        if suffix == ".range" { return (revision, .range) }
-        guard suffix.hasPrefix(".window."), let n = Int(suffix.dropFirst(8)), (1...EverydaySchedule.maxWindows).contains(n),
-              suffix.dropFirst(8) == "\(n)" else { return nil }
+        if suffix == ActivityNames.rangeSuffix { return (revision, .range) }
+        let number = suffix.dropFirst(ActivityNames.windowInfix.count)
+        guard suffix.hasPrefix(ActivityNames.windowInfix), let n = Int(number), (1...EverydaySchedule.maxWindows).contains(n),
+              number == "\(n)" else { return nil }
         return (revision, .window(n))
     }
     func registerEveryday(revision: UUID, part: EverydayPart, start: Int, end: Int) throws {
