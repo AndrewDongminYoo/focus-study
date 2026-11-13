@@ -313,6 +313,55 @@ import SwiftData
         XCTAssertNil(model.errorMessage)
         XCTAssertEqual(model.records.map(\.id), [ended.id])
     }
+    /// The streak has no value before a read, after a failed read and after a failed retry; a number from an earlier read is never kept.
+    func testStreakIsNilUntilAHistoryReadSucceedsAndAfterEveryFailedRead() {
+        let (model, history, _, _, _) = fixture()
+        XCTAssertNil(model.streak)
+        history.failFetch = true
+        model.refresh(); XCTAssertNil(model.streak); XCTAssertNotNil(model.errorMessage)
+        model.refresh(); XCTAssertNil(model.streak, "a retry that fails")
+        history.failFetch = false; history.streakDays = 3
+        model.refresh(); XCTAssertEqual(model.streak, 3); XCTAssertNil(model.errorMessage)
+        history.failFetch = true
+        model.refresh(); XCTAssertNil(model.streak, "no stale number after a failed read")
+        history.failFetch = false; history.streakDays = 0
+        model.refresh(); XCTAssertEqual(model.streak, 0)
+    }
+    /// A failure of the streak read alone is a history failure: the error shows and no number stays.
+    func testStreakReadFailureShowsTheHistoryErrorAndNoNumber() {
+        let (model, history, _, _, _) = fixture()
+        history.streakDays = 2; model.refresh(); XCTAssertEqual(model.streak, 2)
+        history.failStreak = true; model.refresh()
+        XCTAssertNil(model.streak)
+        XCTAssertEqual(model.errorMessage, "기록을 불러오지 못했어요. 다시 확인해 주세요. 진행 중인 세션은 종료할 수 있어요.")
+    }
+    /// A refresh that stops at the control read does not finish the history read, so the number goes too.
+    func testStreakIsNilAfterAControlReadFailure() {
+        let (model, history, store, _, _) = fixture()
+        history.streakDays = 4; model.refresh(); XCTAssertEqual(model.streak, 4)
+        store.failRead = true; model.refresh()
+        XCTAssertNil(model.streak)
+    }
+    /// The real history: the refresh that imports a completed session shows the number with that record, and `tick()` reads nothing.
+    func testRefreshComputesTheStreakAfterItsImport() throws {
+        let (base, _, _, shield, engine) = fixture()
+        let container = try ModelContainer(for: SessionRecord.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none))
+        let context = ModelContext(container)
+        let model = FocusModel(services: base.services, history: SessionHistory(context: context, acknowledge: engine.acknowledgeTerminal))
+        model.refresh(); XCTAssertEqual(model.streak, 0)
+        let started = Date().addingTimeInterval(-1499)
+        _ = try engine.start(now: started, authorized: { .approved }, apply: { shield.applied = true }, matches: { true })
+        model.refresh(); XCTAssertTrue(model.isActive); XCTAssertEqual(model.streak, 0)
+        // A record that only a refresh would read, one calendar day before the session's start day: the tick of a running session must not show it.
+        var earlier = ControlSession(startedAt: Calendar.current.date(byAdding: .day, value: -1, to: started)!)
+        earlier.phase = .terminal; earlier.reason = .expired; earlier.observedAt = earlier.expiresAt
+        context.insert(SessionRecord(session: earlier)); try context.save()
+        model.tick(); XCTAssertEqual(model.streak, 0, "a tick adds no history read")
+        Thread.sleep(forTimeInterval: 1.2)
+        model.refresh()
+        // The run ends on the session's start day, which is today or, just after midnight, yesterday.
+        XCTAssertNil(model.current); XCTAssertEqual(model.streak, 2)
+    }
     func testControlReadFailureStillInvalidatesPreviouslyConfirmedSession() throws {
         let (model, _, store, shield, engine) = fixture()
         _ = try engine.start(now: Date(), authorized: { .approved }, apply: { shield.applied = true }, matches: { true })
@@ -791,6 +840,10 @@ final class ModelTestShield: ShieldClient {
     init(acknowledge: @escaping (UUID) throws -> Void) { self.acknowledge = acknowledge }
     func importTerminal(_ session: ControlSession) throws { try acknowledge(session.id) }
     func records(on date: Date, calendar: Calendar) throws -> [SessionRecord] { if failFetch { throw ModelTestError.storage }; return [] }
+    /// The streak that a read returns; `failStreak` fails only this read, after today's records were read.
+    var streakDays = 0
+    var failStreak = false
+    func streak(at date: Date, calendar: Calendar) throws -> Int { if failFetch || failStreak { throw ModelTestError.storage }; return streakDays }
 }
 /// Fails the first read of today's records, then reads the wrapped history.
 @MainActor final class FirstReadFailingHistory: SessionHistoryProviding {
@@ -802,6 +855,7 @@ final class ModelTestShield: ShieldClient {
         if !failed { failed = true; throw ModelTestError.storage }
         return try base.records(on: date, calendar: calendar)
     }
+    func streak(at date: Date, calendar: Calendar) throws -> Int { try base.streak(at: date, calendar: calendar) }
 }
 @MainActor final class ModelTestAuthorization: AuthorizationProviding {
     var status: AccessStatus = .approved

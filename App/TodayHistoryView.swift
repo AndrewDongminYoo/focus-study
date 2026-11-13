@@ -12,10 +12,18 @@ struct TodayHistoryView: View {
                         Text(error).foregroundStyle(FocusTheme.Palette.secondaryText).accessibilityIdentifier("historyError")
                         Button("다시 확인하기") { model.refresh() }.accessibilityIdentifier("historyRetry")
                     } else {
-                        Text(SessionSummary(records: model.records).text)
-                            .font(.title2.weight(.semibold)).monospacedDigit()
-                            .fixedSize(horizontal: false, vertical: true).padding(.vertical, FocusTheme.Layout.inlineSpacing)
-                            .accessibilityIdentifier("historySummary")
+                        VStack(alignment: .leading, spacing: FocusTheme.Layout.detailSpacing) {
+                            Text(SessionSummary(records: model.records).text)
+                                .font(.title2.weight(.semibold)).monospacedDigit()
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("historySummary")
+                            if let streak = model.streak {
+                                Text("연속 집중 \(streak)일")
+                                    .font(.subheadline).monospacedDigit().foregroundStyle(FocusTheme.Palette.secondaryText)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .accessibilityIdentifier("historyStreak")
+                            }
+                        }.padding(.vertical, FocusTheme.Layout.inlineSpacing)
                     }
                 }
                 if model.errorMessage == nil {
