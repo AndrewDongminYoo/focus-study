@@ -33,6 +33,7 @@ Use these current documentation paths:
 - [Registration marker for stops](docs/specs/2026-11-10-stop-marker-design.md), which extends that marker to the `stopMonitoring` calls inside lock sections
 - [Access state](docs/specs/2026-11-11-access-state-design.md), which amends the 2026-10-26, M2, M3 and M4 designs so that only a `denied` access read ends a session or stops the everyday layer, and an unknown read does not
 - [Monitor timing](docs/specs/2026-11-13-monitor-timing-design.md), implemented and not yet run on a device: DEBUG-only timing lines for Monitor callbacks, turned on by an App Group flag that `--screen-time-diagnostics` writes
+- [Display-only streak](docs/specs/2026-11-13-streak-design.md), a design for approval: the number of consecutive local days with a completed session, as one line in today's history sheet
 - [Implementation plan](docs/plans/2026-10-26-focus-study.md)
 - [M1 implementation plan](docs/plans/2026-10-31-m1-launch-flow.md)
 - [M2 implementation plan](docs/plans/2026-11-01-m2-break-pass.md)
