@@ -277,6 +277,7 @@ The M2 [Callback identity](2026-11-01-m2-break-pass-design.md#callback-identity)
 - The M1 start steps and rollback, the M2 transitions, reconcile order, Save failure after an overwrite, Callback with nothing due and break artifacts, the M3 convergence and callback routing, the M4 filter calls and the off-for-today section.
 - The privacy limits: no tokens, usage data or names leave the app's own files, and Report gets no App Group access.
 - The Release and DEBUG split. The marker is not DEBUG-only; the timing logs stay DEBUG-only, and the Monitor adds no log.
+  - Reconciliation (2026-11-13, #113): the [Monitor timing design](2026-11-13-monitor-timing-design.md) defines the one exception: a DEBUG build of the Monitor writes timing lines to the unified log while the app's diagnostics flag is on. A Release build of the Monitor still adds no log.
 - Activity names, accessibility identifiers and `ControlEnvelope.schemaVersion` `2`.
 - `FocusMonitor` still synchronizes the Live Activity after each callback, also after a skip. That read takes its own lock attempt and may time out while the holder runs, as today.
 
