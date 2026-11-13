@@ -67,6 +67,9 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
     private(set) var completedLength: TimeInterval?
     /// The everyday layer for the settings row and for the timer screen's everyday status row, which the idle screen and the completion card show.
     private(set) var everydayStatus: EverydayStatus?
+    /// The session of a thrown `finish`, which can leave the stored phase behind its stopped activities; until one reconcile succeeds, `tick` runs one with no session.
+    private var failedEndID: UUID?
+    private static let endFailure = "종료 상태를 저장하지 못했어요. 다시 확인해 주세요."
     var access: AccessStatus { services.authorization.status }
     var isActive: Bool { current?.phase == .active }
     /// Focusing or paused for a break: the selection editor and the settings stay locked.
@@ -140,9 +143,10 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
             current = try services.engine.snapshot().session
         } catch {
             current = nil
-            errorMessage = "상태를 확인하지 못했어요. 다시 확인해 주세요."
+            errorMessage = failedEndID != nil ? Self.endFailure : "상태를 확인하지 못했어요. 다시 확인해 주세요."
             return
         }
+        let failedEnd = failedEndID; failedEndID = nil
         // The filter path imported an `.expired` session first: its card shows only on an idle screen, and this import's own card overrides it.
         if let pending = services.settings.takePendingCompletion(), current == nil || current?.phase == .terminal {
             completedSessionID = pending.id; completedLength = pending.length
@@ -161,6 +165,8 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
             // A history failure does not invalidate a confirmed control session or its early-exit action.
             errorMessage = "기록을 불러오지 못했어요. 다시 확인해 주세요. 진행 중인 세션은 종료할 수 있어요."
         }
+        // The reconcile found nothing to repair (a lock timeout threw before the end's section), so the session still runs and the end stays reported.
+        if let current, current.id == failedEnd, current.phase != .terminal { errorMessage = Self.endFailure }
         refreshEveryday()
     }
     /// Its own `do`/`catch`: a lock timeout against a Monitor everyday callback never changes `current` or `errorMessage`.
@@ -251,8 +257,8 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
         #endif
         do { try finished.get(); refresh() }
         catch {
-            services.activityDidChange()
-            current = nil; errorMessage = "종료 상태를 저장하지 못했어요. 다시 확인해 주세요."
+            // The reconcile repairs the stored phase now; when it throws too, `refresh()` keeps the end message and the ticks try again.
+            failedEndID = id; refresh()
         }
     }
     func dismissCompletion() { completedSessionID = nil; completedLength = nil }
@@ -260,7 +266,10 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
     /// `defersBreakStart`: the timer screen reserves the automatic break start, so its feedback can appear before the engine call.
     func tick(defersBreakStart: Bool = false) {
         now = Date()
-        guard let current else { return }
+        guard let current else {
+            if failedEndID != nil { refresh() }
+            return
+        }
         switch current.phase {
         case .waiting:
             // A wait past its grace throws `breakUnavailable`, and the refresh then cancels it.

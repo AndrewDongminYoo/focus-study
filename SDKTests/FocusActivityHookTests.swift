@@ -35,13 +35,23 @@ import XCTest
         XCTAssertNotNil(model.errorMessage)
         XCTAssertEqual(events.phases, [nil])
     }
-    func testEndWriteFailureStillPublishesTheCommittedTerminalState() {
+    /// Issue #112: the reconcile after the thrown `finish` imports the committed `terminal` session, so the hook publishes the state after that import, once.
+    func testEndWriteFailureStillPublishesTheCommittedStateAfterTheReconcile() {
         let (model, store, _, events) = fixture()
         model.start(); events.phases = []; store.failSavePhase = .ending
         model.end()
-        XCTAssertEqual(store.envelope.session?.phase, .terminal)
+        XCTAssertNil(store.envelope.session)
+        XCTAssertNil(model.errorMessage)
+        XCTAssertEqual(events.phases, [nil])
+    }
+    /// While the reconcile after the thrown `finish` also fails, the hook still publishes the stored state, once per attempt.
+    func testEndWhoseSavesFailPublishesTheStoredState() {
+        let (model, store, _, events) = fixture()
+        model.start(); events.phases = []; store.failSaves = true
+        model.end()
+        XCTAssertEqual(store.envelope.session?.phase, .active)
         XCTAssertNotNil(model.errorMessage)
-        XCTAssertEqual(events.phases, [.terminal])
+        XCTAssertEqual(events.phases, [.active])
     }
     func testHistoryFailureKeepsTheConfirmedSessionAndNotifiesDisplay() {
         let (model, _, history, events) = fixture()
