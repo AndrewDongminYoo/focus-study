@@ -298,6 +298,24 @@ Every access read in the Monitor returned `unknown`; only a `denied` read ends a
 `log collect` for an attached device needs root (`Must be root to collect logs from attached device`), and in zsh `log` is a shell builtin, so the command is `sudo /usr/bin/log collect …`.
 The section hold time is measured for the break re-block section only; the other Monitor sections stay unmeasured.
 
+## Focus overwrite wait: 2026-11-14
+
+On the same iPhone 16 Pro with iOS 27.0.1, a signed Debug build from `ae5faf7` (#141, app timing lines through `Logger`) launched with `--screen-time-diagnostics` ran one session from 19:42:25 to 19:45:26 +09:00 with three break requests, three break starts and three resumes with the app in front.
+The app and the Monitor lines came from one `log collect` archive.
+
+| App call                          | App time       | Monitor callbacks in the same second                                                  |
+| --------------------------------- | -------------- | ------------------------------------------------------------------------------------- |
+| Session start, `register`         | 36.3 ms        | one `didStart activity=focus`, 0.5 ms                                                 |
+| Break request, `register`         | 294.8–296.1 ms | `didEnd activity=focus` 0.3–0.5 ms, then `didStart activity=focus` 250.8–252.4 ms     |
+| Break start, `register`           | 507.8–511.4 ms | `didEnd activity=focus` 228.5–229.8 ms, then `didStart activity=focus` 245.7–247.7 ms |
+| Resume, `stop_break`              | 245.8–247.8 ms | `didEnd activity=break` 234.8–237.6 ms                                                |
+| Resume, `register` after the stop | 506.4–509.3 ms | `didEnd activity=focus` 205.9–207.6 ms, then `didStart activity=focus` 246.3–246.7 ms |
+
+Every slow callback spent 204.1 to 251.0 ms in its access read, waited 0.9 to 1.6 ms for a busy lock, and skipped on the registration or stop marker; the first callback of each call read access in 0.02 to 0.1 ms.
+So the app's `startMonitoring` and `stopMonitoring` calls return only after the Monitor callbacks that they cause have returned, and each later callback waits about 0.25 s for the main queue in `ScreenTimeAccess.current()` before it skips.
+The resumes took 1,114.1 to 1,115.5 ms in total (`BREAK_LATENCY action=resume`), above the 1,000 ms acceptance of #115; the break requests took 324.4 to 328.8 ms and the break starts 604.6 to 609.8 ms.
+This is the source of the wait of #119.
+
 ## Streak and home screen widget: 2026-11-14
 
 On the same iPhone 16 Pro with iOS 27.0.1 (`24A446`) and the same signed Debug build from `87f1103`, after the Monitor timing run.

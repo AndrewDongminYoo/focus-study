@@ -471,9 +471,13 @@ final class FocusFlowTests: XCTestCase {
         scrollEveryday(app, to: clock)
         // The large save-status area covers more than scrollEveryday's bottom margin; bring the whole clock above it for the capture.
         let clockTop = app.navigationBars["매일 제한"].frame.maxY + 12
-        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45))
-        let end = start.withOffset(CGVector(dx: 0, dy: clockTop - clock.frame.minY))
-        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.1)
+        // A drag on a slow runner can scroll farther than its distance, so measure again and correct, at most three times.
+        for _ in 0..<3 {
+            let offset = clockTop - clock.frame.minY
+            if abs(offset) < 8 { break }
+            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45))
+            start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: offset)), withVelocity: .slow, thenHoldForDuration: 0.1)
+        }
         XCTAssertGreaterThanOrEqual(clock.frame.minX, app.frame.minX)
         XCTAssertLessThanOrEqual(clock.frame.maxX, app.frame.maxX)
         XCTAssertGreaterThanOrEqual(clock.frame.minY, app.navigationBars["매일 제한"].frame.maxY)
@@ -553,6 +557,8 @@ final class FocusFlowTests: XCTestCase {
         // The count follows the draft while the sheet is still up, so wait for the sheet to go and the switch to take a tap.
         expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: fixtureSelect); waitForExpectations(timeout: ready)
         let toggle = app.switches["everydayToggle"]
+        // The selection row sits below the weekday row, so after the scroll to it the toggle can be above the navigation bar; scroll back to it.
+        scrollEveryday(app, to: toggle)
         waitHittable(toggle)
         flip(toggle)
         app.buttons["everydaySave"].tap()
