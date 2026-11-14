@@ -298,6 +298,21 @@ Every access read in the Monitor returned `unknown`; only a `denied` read ends a
 `log collect` for an attached device needs root (`Must be root to collect logs from attached device`), and in zsh `log` is a shell builtin, so the command is `sudo /usr/bin/log collect …`.
 The section hold time is measured for the break re-block section only; the other Monitor sections stay unmeasured.
 
+## Streak and home screen widget: 2026-11-14
+
+On the same iPhone 16 Pro with iOS 27.0.1 (`24A446`) and the same signed Debug build from `87f1103`, after the Monitor timing run.
+The build was signed with `-allowProvisioningUpdates`, approved for that one build on 2026-11-14, because the development profile did not include the App Groups capability for `kr.donminzzi.focusStudy.activity`. It was installed over the existing app, and the history store kept its records from 2026-10-26.
+
+| Check                                                                                   | Result                                                                                                                                                |
+| --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Widget](../specs/2026-11-13-home-widget-design.md#physical-device-verification) step 1 | The added small widget showed the Empty view ("앱에서 시작해 보세요") while today had no completed session; the gallery preview was not recorded      |
+| Widget step 2: a session completed with the app in front                                | Passed: after the completion at 15:50 the widget showed "25분 · 1회", the numbers of the app's today summary; the time to the change was not recorded |
+| [Streak](../specs/2026-11-13-streak-design.md) in the history sheet                     | Passed: "오늘 집중 25분 · 1회" and "연속 집중 1일"; today's two early exits are listed and not counted                                                |
+| Streak against the store                                                                | A copy of the store read with `sqlite3` has one `expired` record, today's, and no record on 2026-11-13, so 1 is the expected number                   |
+
+The history store is `Library/Application Support/default.store` in the App Group container `group.kr.donminzzi.focusStudy`, read with `devicectl device info files --domain-type appGroupDataContainer`; `devicectl device copy from` with the same domain copied it.
+Widget steps 3 to 7 (a completion in the background, midnight, a Focus start, a restart, and the looks) remain unverified.
+
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 
 이슈 #17의 검토 결과다.
