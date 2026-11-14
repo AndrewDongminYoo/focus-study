@@ -69,6 +69,7 @@ The existing `nil` access of M3 ("the section does not know the access value") i
 
 `Integration/` owns one reader that returns the state from the main queue: on the main thread it reads directly, otherwise it reads through `DispatchQueue.main.sync`.
 The reader runs before each lock attempt, as the closure does today, never inside a lock section, so no lock is held while it waits for the main queue.
+Reconciliation (2026-11-14, #119): before attempt 0 a callback now makes an early check without a read: a busy probe of the lock (`ControlStore.isLockBusy()`), then, if the lock is busy, the holder's marker. When the marker decides the callback, the callback returns with no access read and no lock attempt; in every other case the reader runs before each lock attempt as above. `handleCallbackRetryingLock` in `Shared/SessionControl.swift` is the authority.
 `[UNCERTAIN]` On which thread the extension delivers a callback, and whether its main queue runs while a callback waits; no source read here documents either. If a device run shows that the hop does not return, the reader falls back to `unknown`, which this design treats as safe.
 
 ### What each state does

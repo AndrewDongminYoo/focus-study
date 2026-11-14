@@ -142,6 +142,36 @@ final class MonitorTimingTests: XCTestCase {
         XCTAssertEqual(fixture.store.envelope.session?.phase, .active)
         XCTAssertTrue(lines.allSatisfy { !$0.raw.contains(fixture.id.uuidString) })
     }
+    func testCallbackThatSkipsOnTheEarlyCheckHasNoAccessLine() throws {
+        let fixture = TimingFixture.expiredFocus(now: now)
+        fixture.store.busyProbe = true
+        fixture.markers.marker = RegistrationMarker(activityName: fixture.activityName, uptime: fixture.markers.clock, validUntil: now.addingTimeInterval(60))
+        let lines = try fixture.runTimed(directory: directory, number: 8)
+        let prefix = "MONITOR_TIMING cb=8 kind=didEnd activity=focus"
+        XCTAssertEqual(lines.map(\.text), [
+            "\(prefix) step=begin flag_ms=#",
+            "\(prefix) step=lock attempt=probe wait_ms=# result=busy",
+            "\(prefix) step=marker ms=# marker=register result=skip",
+            "\(prefix) step=end total_ms=# result=skipped",
+        ])
+        XCTAssertEqual(fixture.accessReads, 0); XCTAssertEqual(fixture.store.calls, 0)
+        XCTAssertEqual(fixture.store.envelope.session?.phase, .active)
+    }
+    func testBusyProbeWhoseMarkerDoesNotDecideContinuesWithAttemptZero() throws {
+        let fixture = TimingFixture.expiredFocus(now: now)
+        fixture.store.busyProbe = true
+        let lines = try fixture.runTimed(directory: directory, number: 9)
+        let prefix = "MONITOR_TIMING cb=9 kind=didEnd activity=focus"
+        XCTAssertEqual(Array(lines.map(\.text).prefix(5)), [
+            "\(prefix) step=begin flag_ms=#",
+            "\(prefix) step=lock attempt=probe wait_ms=# result=busy",
+            "\(prefix) step=marker ms=# marker=none result=continue",
+            "\(prefix) step=access ms=# state=approved",
+            "\(prefix) step=lock attempt=0 wait_ms=# result=acquired",
+        ])
+        XCTAssertEqual(lines.last?.text, "\(prefix) step=end total_ms=# result=ran")
+        XCTAssertEqual(fixture.store.envelope.session?.reason, .expired)
+    }
     func testCallbackThatRunsAfterABusyAttempt() throws {
         let fixture = TimingFixture.expiredFocus(now: now)
         fixture.store.busyCalls = [1]
@@ -208,6 +238,13 @@ final class MonitorTimingTests: XCTestCase {
                 fixture.markers.marker = RegistrationMarker(activityName: fixture.activityName, uptime: fixture.markers.clock, validUntil: self.now.addingTimeInterval(60))
                 return fixture
             }),
+            ("early skip", {
+                let fixture = TimingFixture.expiredFocus(now: self.now)
+                fixture.store.busyProbe = true
+                fixture.markers.marker = RegistrationMarker(activityName: fixture.activityName, uptime: fixture.markers.clock, validUntil: self.now.addingTimeInterval(60))
+                return fixture
+            }),
+            ("busy probe then run", { let fixture = TimingFixture.expiredFocus(now: self.now); fixture.store.busyProbe = true; return fixture }),
             ("retries run out", { let fixture = TimingFixture.expiredFocus(now: self.now); fixture.store.busyCalls = Set(1...6); return fixture }),
             ("unreadable control file", { let fixture = TimingFixture.expiredFocus(now: self.now); fixture.store.failRead = true; return fixture }),
         ]
@@ -218,8 +255,14 @@ final class MonitorTimingTests: XCTestCase {
             let timedError = Result { try timed.runTimed(directory: directory, number: 1, into: &lines) }.failure
             XCTAssertEqual(plainError.map(String.init(describing:)), timedError.map(String.init(describing:)), name)
             XCTAssertEqual(plain.store.calls, timed.store.calls, name)
+            XCTAssertEqual(plain.store.probes, timed.store.probes, name)
             XCTAssertEqual(plain.events.list, timed.events.list, name)
-            XCTAssertFalse(plain.events.list.isEmpty && plain.store.calls == 0, name)
+            if name == "early skip" {
+                // The early skip returns on the probe, before any lock call.
+                XCTAssertEqual(plain.store.calls, 0, name); XCTAssertEqual(plain.store.probes, 1, name)
+            } else {
+                XCTAssertFalse(plain.events.list.isEmpty && plain.store.calls == 0, name)
+            }
             XCTAssertEqual(plain.store.envelope.session, timed.store.envelope.session, name)
             XCTAssertEqual(plain.accessReads, timed.accessReads, name)
             XCTAssertEqual(plain.sleeps, timed.sleeps, name)
@@ -324,7 +367,10 @@ private final class TimingTestStore: ControlStore, LockedControl {
     var busyCalls = Set<Int>()
     var markers: (any RegistrationMarkerStore)?
     var registrationMarkers: (any RegistrationMarkerStore)? { markers }
-    private(set) var calls = 0, isLocked = false
+    /// The answer of the busy probe before the access read; the lock attempts keep `busyCalls`.
+    var busyProbe = false
+    private(set) var calls = 0, probes = 0, isLocked = false
+    func isLockBusy() -> Bool { probes += 1; return busyProbe }
     func withExclusiveAccess<T>(timeout: TimeInterval?, _ body: (LockedControl) throws -> T) throws -> T {
         calls += 1
         if busyCalls.contains(calls) { throw ControlIssue.lockTimeout }
