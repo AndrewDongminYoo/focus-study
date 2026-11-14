@@ -3,6 +3,7 @@
 Date: 2026-11-13.
 Status: design for approval.
 Reconciliation (2026-11-13, #113): the design is implemented. `Integration/MonitorTiming.swift`, `Monitor/FocusMonitor.swift` and `App/FocusRuntime.swift` are the authority for the code, and `SDKTests/MonitorTimingTests.swift` pins the flag and the lines. The [physical-device verification](#physical-device-verification) is not done.
+Reconciliation (2026-11-14, #113): the device steps ran on 2026-11-14; the [device matrix](../notes/screen-time-device-matrix.md#monitor-timing-2026-11-14) records the results. `log collect` for an attached device needs root, and in zsh the binary must be named as `/usr/bin/log`; the app's `SCREEN_TIME_TIMING` lines were not in the collected archives.
 Source: [issue #113](https://github.com/AndrewDongminYoo/focus-study/issues/113), and [issue #119](https://github.com/AndrewDongminYoo/focus-study/issues/119) for the slow focus overwrites.
 This document amends the [registration marker design](2026-11-10-registration-marker-design.md) and the [stop marker design](2026-11-10-stop-marker-design.md) only where [Superseded lines](#superseded-lines) says so.
 It keeps the process-lock rule: lock sections stay synchronous, with no `await`, UI wait or actor hop inside the lock.
