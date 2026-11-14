@@ -307,11 +307,13 @@ The build was signed with `-allowProvisioningUpdates`, approved for that one bui
 | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [Widget](../specs/2026-11-13-home-widget-design.md#physical-device-verification) step 1 | The added small widget showed the Empty view ("앱에서 시작해 보세요") while today had no completed session; the gallery preview was not recorded      |
 | Widget step 2: a session completed with the app in front                                | Passed: after the completion at 15:50 the widget showed "25분 · 1회", the numbers of the app's today summary; the time to the change was not recorded |
+| Widget step 3: a session completed with the app in the background and the device locked | Passed: after the unlock the widget still showed "25분 · 1회"; after the app was opened and closed it showed "50분 · 2회"                             |
 | [Streak](../specs/2026-11-13-streak-design.md) in the history sheet                     | Passed: "오늘 집중 25분 · 1회" and "연속 집중 1일"; today's two early exits are listed and not counted                                                |
 | Streak against the store                                                                | A copy of the store read with `sqlite3` has one `expired` record, today's, and no record on 2026-11-13, so 1 is the expected number                   |
 
 The history store is `Library/Application Support/default.store` in the App Group container `group.kr.donminzzi.focusStudy`, read with `devicectl device info files --domain-type appGroupDataContainer`; `devicectl device copy from` with the same domain copied it.
-Widget steps 3 to 7 (a completion in the background, midnight, a Focus start, a restart, and the looks) remain unverified.
+Widget steps 4 to 7 (midnight, a Focus start, a restart, and the looks) remain unverified.
+During step 3, just after the switch to dark mode, the Live Activity on the Lock Screen appeared to show a light background for a moment, a screenshot taken then was white, and the card then turned dark. The observation is uncertain, the cause was not checked, and it is not recorded as a failure.
 
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 
