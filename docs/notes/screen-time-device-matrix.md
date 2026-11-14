@@ -282,6 +282,22 @@ Reconciliation (2026-11-13, #118): the access-state design now accepts this resu
 Every focus registration that overwrote a registered focus activity took 289.9 to 300.3 ms or 508.3 to 510.1 ms, while the first registration of a session took 19.6 and 36.7 ms; #119 takes it up.
 The per-step evidence is in the #115 comments of 2026-11-11.
 
+## Monitor timing: 2026-11-14
+
+On the same iPhone 16 Pro with iOS 27.0.1 (`24A446`), a signed Debug build from `87f1103` launched with `--screen-time-diagnostics` ran the [Monitor timing design's device steps](../specs/2026-11-13-monitor-timing-design.md#physical-device-verification) from 14:47 to 15:22 +09:00.
+The lines were read from `log collect` archives with the predicate of [Reading the lines](../specs/2026-11-13-monitor-timing-design.md#reading-the-lines).
+
+| Step                                         | Result                                                                                                                                                                                                                                                                                                |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2. Lines arrive                              | Passed: the session start at 14:47:31 gave a `didStart activity=focus` callback that found the lock busy, skipped on the registration marker and ended after 3.2 ms                                                                                                                                   |
+| 3. Break re-block with the app in background | Passed twice (14:51:44, 15:08:16): the `willEndWarning activity=break` section took the lock at attempt 0 and held it for 59.3 and 65.9 ms (`apply_shield` 32.3 to 33.1 ms, `apply_everyday` 12.4 to 13.3 ms, `stop_break` 3.9 to 9.2 ms); the `didEnd` of the same second skipped on the stop marker |
+| 4. Focus overwrites with the app in front    | The four focus callbacks right after a re-registration took 228.7 to 251.9 ms, of which the access read was 226.8 to 250.9 ms and the lock wait 0.6 to 1.4 ms; every other access read took 0.02 to 1.6 ms; the app's `SCREEN_TIME_TIMING op=register` lines were not in the archives                 |
+| 5. Launch without the argument               | Passed: after the relaunch at 15:21:15 the Monitor ran until 15:21:44 and wrote no `MONITOR_TIMING` line; the last line, at 15:21:07, came from the session end before the relaunch                                                                                                                   |
+
+Every access read in the Monitor returned `unknown`; only a `denied` read ends a session ([access-state design](../specs/2026-11-11-access-state-design.md#what-each-state-does)), and every session of the run continued.
+`log collect` for an attached device needs root (`Must be root to collect logs from attached device`), and in zsh `log` is a shell builtin, so the command is `sudo /usr/bin/log collect …`.
+The section hold time is measured for the break re-block section only; the other Monitor sections stay unmeasured.
+
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 
 이슈 #17의 검토 결과다.
