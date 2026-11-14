@@ -80,6 +80,8 @@ Trunk는 Markdown, YAML, GitHub Actions와 영어 철자를 검사합니다.
 | 확장      | `.activity`, `.monitor`, `.report`                     |
 | App Group | `group.kr.donminzzi.focusStudy` (App과 Monitor만 사용) |
 
+조정(2026-11-14, #124): Activity 확장도 홈 화면 위젯이 `TodaySnapshot/today.json`을 읽기 위해 이 App Group을 씁니다([홈 화면 위젯 설계](docs/specs/2026-11-13-home-widget-design.md#data-path)).
+
 이 값은 `project.yml`, `Configuration/*-Info.plist`, `Configuration/*.entitlements`에 들어 있습니다.
 Apple 계정의 식별자 등록, capability, 프로필은 따로 확인해야 하며, 현재 서명 준비 상태는 [실기기 검증 기록](docs/notes/screen-time-device-matrix.md#서명과-배포)에 있습니다.
 실제 앱과 웹사이트를 제한하기 전에는 기기 소유자의 선택과 동의를 받아야 합니다.

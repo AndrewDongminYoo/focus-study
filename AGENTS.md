@@ -8,6 +8,7 @@ A session has up to 3 breaks of up to 3 minutes, each after a waiting screen; â€
 An everyday blocking layer has its own selection, one daily range and at most 3 unblocked windows; it runs on the chosen weekdays without the app, blocks together with the focus layer, and a break lifts it (see the [M3 design](docs/specs/2026-11-01-m3-schedule-layer-design.md)); inside the range, after a 30-second wait, it can be turned off for the rest of today once a day (see the [off-for-today spec](docs/specs/2026-11-08-everyday-off-today.md)).
 A Focus filter starts a normal focus session when an iOS Focus with its session option turns on and ends that session when the Focus turns off; iOS filters notifications by the Focus's own settings, which the app neither reads nor changes (see the [M4 design](docs/specs/2026-11-01-m4-focus-filter-design.md)).
 A read-only Live Activity projects confirmed timing as planned times, never shielding (see [contract](docs/specs/2026-11-06-live-activity-decision.md)).
+A read-only home screen widget shows today's completed focus time and count from a snapshot that the app writes, never a session state or shielding (see [design](docs/specs/2026-11-13-home-widget-design.md)).
 The history sheet shows a display-only streak, the number of consecutive local days with a completed session (see the [streak design](docs/specs/2026-11-13-streak-design.md)).
 Keep changes within this baseline unless the task explicitly expands it: no other pause, parental management, Android client, accounts, backend, AI, or rewards, where rewards include points, badges, unlocks, rankings, comparison with friends and a notification that a streak is about to break.
 Preserve existing Korean UI text; use English for code identifiers and technical documentation.
@@ -34,7 +35,7 @@ Use these current documentation paths:
 - [Registration marker for stops](docs/specs/2026-11-10-stop-marker-design.md), which extends that marker to the `stopMonitoring` calls inside lock sections
 - [Access state](docs/specs/2026-11-11-access-state-design.md), which amends the 2026-10-26, M2, M3 and M4 designs so that only a `denied` access read ends a session or stops the everyday layer, and an unknown read does not
 - [Monitor timing](docs/specs/2026-11-13-monitor-timing-design.md), implemented and not yet run on a device: DEBUG-only timing lines for Monitor callbacks, turned on by an App Group flag that `--screen-time-diagnostics` writes
-- [Home screen widget](docs/specs/2026-11-13-home-widget-design.md), a design for approval: a small widget that shows today's completed focus time and count from an App Group snapshot file that the app writes
+- [Home screen widget](docs/specs/2026-11-13-home-widget-design.md), implemented and not yet run on a device: a small widget that shows today's completed focus time and count from an App Group snapshot file that the app writes
 - [Everyday weekdays](docs/specs/2026-11-13-everyday-weekdays-design.md), implemented and not yet run on a device: the everyday layer keeps one schedule and applies it on chosen weekdays, decided by the local day inside the blocking rule
 - [Display-only streak](docs/specs/2026-11-13-streak-design.md), implemented under issue #125: the number of consecutive local days with a completed session, as one line in today's history sheet
 - [Implementation plan](docs/plans/2026-10-26-focus-study.md)
@@ -75,10 +76,11 @@ Keep new plans, specs, and notes under `docs/plans/`, `docs/specs/`, and `docs/n
 | `App/Debug/UITestFixtures.swift`                                                                                      | Synthetic authorization, selection, monitoring, storage failures, and report lifecycle/state probes                                                                                                                                                                          |
 | `Integration/DeviceDiagnostics.swift`, `App/Debug/DeviceDiagnosticsSection.swift`                                     | Opt-in DEBUG diagnostics around the real monitoring adapter and shared callback engine                                                                                                                                                                                       |
 | `Integration/MonitorTiming.swift`                                                                                     | DEBUG flag file `monitor-timing.json`, and the recorder and wrappers that build the `MONITOR_TIMING` lines of a Monitor callback; `FocusMonitor` owns the logger                                                                                                             |
+| `Shared/TodaySnapshot.swift`, `App/TodaySnapshotWriter.swift`, `Widget/`                                              | Today snapshot: the rule for "for today" and the timeline entries; the app's write after a history read; the home screen widget and its reader                                                                                                                               |
 
 App and Monitor compile `Shared/` and `Integration/`; Report stays separate.
 `Presentation/` shares views between App and Report, never report data.
-Widget compiles only `Shared/FocusActivityContent.swift` and Activity attributes/views, with no App Group or control-store access.
+Widget compiles only `Shared/FocusActivityContent.swift`, the today snapshot file of `Shared/`, Activity attributes/views and `Widget/`; its App Group access is for reading `TodaySnapshot/today.json` only, and it compiles nothing that can open the control store, a selection file, the marker or the history store.
 SwiftPM exposes `FocusCore`, `FocusHistory`, `FocusReportLogic`; keep Screen Time imports out of `Shared/` and reuse injected protocols/closures.
 
 ## Behavioral changes and verification

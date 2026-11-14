@@ -50,6 +50,7 @@ App과 Monitor는 하나의 `ManagedSettingsStore(named: ManagedSettingsStore.Na
 App Group에는 `ControlEnvelope.schemaVersion`과 선택적인 `session`을 저장한다.
 조정(2026-11-10, #101): [등록 표시 설계](2026-11-10-registration-marker-design.md#marker-file)에 따라 App Group에는 잠금 구간 안의 `startMonitoring` 호출 동안 `SessionControl/registration-marker.json`도 있다.
 이 파일에는 활동 이름과 시각만 있고, 토큰·앱이나 웹사이트 이름·집중 모드 이름·사용량은 없으며, 기기 밖으로 나가지 않는다.
+조정(2026-11-14, #124): [홈 화면 위젯 설계](2026-11-13-home-widget-design.md#data-path)에 따라 App Group에는 `SessionControl/` 옆의 `TodaySnapshot/today.json`도 있다. 앱만 이 파일을 쓰고 Activity 확장의 홈 화면 위젯이 읽는다. 이 파일에는 그날의 시작 시각과 그날 완료한 세션 수와 집중 시간(초)만 있고, 세션 UUID·토큰·앱이나 웹사이트 이름·사용량은 없다.
 세션에는 UUID, 시작/만료 시각, 단계(`preparing/active/ending/terminal`), 종료 사유·관측 시각을 둔다.
 `activityName`은 UUID에서 계산하며 JSON 필드로 저장하지 않는다.
 마지막 terminal 항목은 본체 기록 반영 확인 전까지 유지한다.
@@ -167,6 +168,8 @@ Implementation for [#74](https://github.com/AndrewDongminYoo/focus-study/issues/
 The [feasibility record](../notes/2026-11-06-live-activity-feasibility.md) distinguishes verified simulator behavior from physical-device and iOS 17 release gates.
 The existing engine remains authoritative; display payloads contain only a session UUID, phase, timing, and freshness metadata.
 The new extension will receive no App Group access, selections, report data, or history.
+Reconciliation (2026-11-14, #124): the extension now has App Group access for the home widget, which reads only the snapshot `TodaySnapshot/today.json` (today's completed count and focus seconds), and still no selections, report data or history ([home widget design](2026-11-13-home-widget-design.md#data-path)).
 Existing focus/break/deadline rules, everyday-layer independence, and the iOS 17 minimum remain unchanged.
 No completion notification, home widget, interactive session control, server, or push transport is added to this scope.
+Reconciliation (2026-11-14, #124): a read-only home screen widget is added by the [home widget design](2026-11-13-home-widget-design.md); it has no control, and the other items of this line stay out of scope.
 The decision contract defines fallback, stale-content limits, privacy, and implementation/device verification gates.

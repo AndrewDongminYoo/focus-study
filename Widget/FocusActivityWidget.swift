@@ -2,7 +2,7 @@ import ActivityKit
 import SwiftUI
 import WidgetKit
 
-@main struct FocusActivityWidget: Widget {
+struct FocusActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: FocusActivityAttributes.self) { context in
             FocusActivityCard(content: context.state, isStale: context.isStale)

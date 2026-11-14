@@ -310,6 +310,7 @@ entitlement 신청이나 스토어 제출은 이 검토에 포함하지 않았�
 세 파일 모두 `.completeFileProtectionUntilFirstUserAuthentication`으로 쓴다.
 `control.json`과 `registration-marker.json`에는 토큰이 없다.
 Report와 Activity 확장은 App Group entitlement가 없어 이 파일들을 읽지 못한다.
+조정(2026-11-14, #124): Activity 확장은 이제 홈 화면 위젯을 위해 App Group entitlement(`Configuration/Activity.entitlements`)를 가진다. 시스템은 확장 프로세스에 컨테이너 전체를 열어 주므로 경계는 타깃의 코드다: 위젯 코드는 `TodaySnapshot/today.json`만 읽고, 제어 파일·선택 파일·등록 표시·기록 저장소를 열 수 있는 파일은 컴파일하지 않는다(`CoreTests/WidgetSourceListTests.swift`, [홈 화면 위젯 설계](../specs/2026-11-13-home-widget-design.md#data-path)). Report는 그대로 App Group entitlement가 없다. 기록 저장소의 위치는 아직 관측하지 못했다: 서명하지 않은 시뮬레이터 Debug 빌드는 entitlement가 없어(`codesign -d --entitlements -`가 빈 결과) `simctl get_app_container … groups`가 아무 그룹도 보여 주지 않았고, 실제 런타임은 App Group 디렉터리를 얻지 못해 저장소를 만들지 않았다. 서명한 기기 빌드에서 관측한다.
 토큰이 기기 밖으로 나가는 경로는 찾지 못했다: 네트워크 호출이 없고, 앱의 `NSLog` 호출은 모두 `#if DEBUG` 안의 진단 줄이다.
 그중 `SCREEN_TIME_TIMING`, `SCREEN_TIME_PROBE`, `START_LATENCY`, `BREAK_LATENCY`, `END_LATENCY`는 작업 이름, 시간, 오류 설명만 기록한다.
 `LIVE_ACTIVITY_PROBE`가 받는 메시지의 내용은 이 검토에서 줄 단위로 확인하지 않았다.
@@ -324,6 +325,8 @@ Report와 Activity 확장은 App Group entitlement가 없어 이 파일들을 �
 | Monitor                                       | 미신청                           | 위와 같다.                                                                                       |
 | Report                                        | 미신청                           | 위와 같다.                                                                                       |
 | Activity (`kr.donminzzi.focusStudy.activity`) | 해당 없음                        | `project.yml`의 `FocusActivity` 타깃에는 entitlements 파일이 없고 Family Controls를 쓰지 않는다. |
+
+조정(2026-11-14, #124): Activity 행의 근거 중 entitlements 파일이 없다는 부분은 바뀌었다. `Configuration/Activity.entitlements`는 App Group만 담고 Family Controls는 쓰지 않으므로 배포 entitlement는 여전히 해당 없음이다. 이 App ID의 App Groups capability와 프로필 변경은 아직 하지 않았다.
 
 개발 빌드는 가능하다: 세 타깃의 Family Controls 개발 entitlement와 개발 프로필로 서명한 Debug 빌드를 2026-10-26부터 실기기에 설치해 왔다([개발 프로비저닝과 설치 완료](#개발-프로비저닝과-설치-완료-2026-10-26)).
 이것은 배포 승인이 아니다: App Store나 TestFlight 배포에는 App, Monitor, Report 각 App ID의 배포 entitlement 승인이 따로 필요하며, 신청 절차는 [Apple 신청 안내](https://developer.apple.com/documentation/familycontrols/requesting-the-family-controls-entitlement)를 따른다.

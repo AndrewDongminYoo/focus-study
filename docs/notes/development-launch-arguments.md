@@ -58,6 +58,10 @@ Live Activity는 마지막으로 확인한 집중·휴식·복귀 계획을 보�
 - probe 실행에서는 표시 작업이 `LIVE_ACTIVITY_PROBE`로 시작하는 콘솔 로그로 남습니다.
 - 휴식 경계는 `--break-timing short`로, 집중 종료는 `--ui-testing ending-soon`으로 앞당길 수 있습니다.
 
+## 홈 화면 위젯 확인
+
+- `--widget-preview <모드>`는 홈 화면 위젯의 공용 view를 합성 상태로 그립니다. 모드는 `numbers`(1시간 15분, 3회), `empty`, `check`입니다. 스냅숏 파일을 읽지 않고 WidgetKit 요청도 보내지 않으며, 라이트·다크 모드와 큰 글씨를 확인할 때 씁니다. 시스템의 작은 위젯 크기, 강조(accented) 모드, 배경이 빠지는 StandBy, 갱신 시점은 확인하지 못합니다.
+
 ## 실기기 진단
 
 `--screen-time-diagnostics`는 Debug 빌드에서만 동작하며, 합성 데이터 대신 실제 권한·선택·monitoring 경로를 사용합니다.
