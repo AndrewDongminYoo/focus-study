@@ -2,6 +2,7 @@ import Foundation
 import FamilyControls
 import SwiftData
 import WidgetKit
+import os
 
 @MainActor struct FocusRuntime {
     let recovery: StartupRecovery
@@ -40,7 +41,11 @@ import WidgetKit
         #if DEBUG
         let monitoring: any MonitoringClient
         let diagnosticMonitoring: DiagnosticMonitoring?
-        let logTiming: (ScreenTimeOperation, TimeInterval) -> Void = { operation, duration in NSLog("SCREEN_TIME_TIMING op=%@ ms=%.3f", operation.rawValue, duration * 1000) }
+        // A unified-log `Logger`, so that `log collect` on the device keeps these lines next to the Monitor's `MONITOR_TIMING` lines; `NSLog` lines were not in the archives of 2026-11-14.
+        let timingLog = Logger(subsystem: "kr.donminzzi.focusStudy", category: "timing")
+        let logTiming: (ScreenTimeOperation, TimeInterval) -> Void = { operation, duration in
+            timingLog.log("SCREEN_TIME_TIMING op=\(operation.rawValue, privacy: .public) ms=\(String(format: "%.3f", duration * 1000), privacy: .public)")
+        }
         if ProcessInfo.processInfo.arguments.contains("--screen-time-diagnostics") {
             let wrapped = DiagnosticMonitoring(base: systemMonitoring, didMeasure: logTiming)
             diagnosticMonitoring = wrapped; monitoring = wrapped
@@ -89,9 +94,11 @@ import WidgetKit
             #if DEBUG
             services.diagnostics = diagnostics
             if diagnostics != nil {
-                services.didMeasureStart = { duration in NSLog("START_LATENCY total_ms=%.3f", duration * 1000) }
-                services.didMeasureBreak = { action, duration in NSLog("BREAK_LATENCY action=%@ total_ms=%.3f", action.rawValue, duration * 1000) }
-                services.didMeasureEnd = { duration in NSLog("END_LATENCY total_ms=%.3f", duration * 1000) }
+                services.didMeasureStart = { duration in timingLog.log("START_LATENCY total_ms=\(String(format: "%.3f", duration * 1000), privacy: .public)") }
+                services.didMeasureBreak = { action, duration in
+                    timingLog.log("BREAK_LATENCY action=\(action.rawValue, privacy: .public) total_ms=\(String(format: "%.3f", duration * 1000), privacy: .public)")
+                }
+                services.didMeasureEnd = { duration in timingLog.log("END_LATENCY total_ms=\(String(format: "%.3f", duration * 1000), privacy: .public)") }
             }
             #endif
             let container = try ModelContainer(for: SessionRecord.self, configurations: ModelConfiguration(cloudKitDatabase: .none))
