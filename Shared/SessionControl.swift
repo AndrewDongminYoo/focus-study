@@ -155,10 +155,15 @@ final class SessionControl {
     /// The store throws `lockTimeout` before the section runs, so a failed attempt changed nothing. Worst case with the defaults: attempt 0, then 5 lock waits of 0.25 s and 4 pauses of 0.25 s, about 2.25 s.
     /// After every `lockTimeout`, a fresh marker of the lock holder that decides this callback ends the callback: the holder's section decides that activity.
     /// A `register` marker decides `didStart` and `didEnd` before its `validUntil`; a `stop` marker decides only `didEnd`.
+    /// Before attempt 0, a busy probe and a deciding marker end the callback with no access read and no lock attempt.
     func handleCallbackRetryingLock(activityName: String, kind: CallbackKind, now: () -> Date, authorized: () -> AccessState, retries: Int = 4, pause: TimeInterval = 0.25,
                                     sleep: (TimeInterval) -> Void = { Thread.sleep(forTimeInterval: $0) }) throws {
-        // Attempt 0: one lock call that does not wait, with no pause after it.
         let first = now()
+        // The early check (#119): while a holder has the lock and its fresh marker decides this callback, return before the access read, which can take a main-queue hop of about 0.2 s.
+        // The holder can release the lock between the probe and the marker read. That is the race of a `lockTimeout` followed by the marker read below:
+        // a holder deletes its marker before it releases the lock, so a marker that is read then is that holder's, whose section decides this activity, or a leftover that the next lock holder deletes.
+        if store.isLockBusy(), holderDecides(activityName: activityName, kind: kind, now: first) { return }
+        // Attempt 0: one lock call that does not wait, with no pause after it.
         do { return try handleCallback(activityName: activityName, kind: kind, now: first, authorized: authorized(), lockTimeout: 0) }
         catch ControlIssue.lockTimeout { if holderDecides(activityName: activityName, kind: kind, now: first) { return } }
         var attempt = 0
@@ -172,7 +177,7 @@ final class SessionControl {
             }
         }
     }
-    /// Read only after a `lockTimeout`: a marker without a busy lock is a leftover, and the callback must then run.
+    /// Read only after a busy probe or a `lockTimeout`: a marker without a busy lock is a leftover, and the callback must then run.
     private func holderDecides(activityName: String, kind: CallbackKind, now: Date) -> Bool {
         store.registrationMarkers?.freshMarker()?.decides(activityName: activityName, kind: kind, now: now) == true
     }

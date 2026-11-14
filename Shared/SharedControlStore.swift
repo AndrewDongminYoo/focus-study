@@ -36,6 +36,15 @@ final class SharedControlStore: ControlStore {
         try? markers.delete()
         return try body(FileControl(url: directory.appendingPathComponent("control.json")))
     }
+    /// One shared `flock` call that does not wait. A probe that gets the lock releases it at once and deletes no marker.
+    /// A lock file that is missing or that `open` refuses, and any other `flock` error count as free, so the callback takes its lock attempts of today.
+    func isLockBusy() -> Bool {
+        let fd = open(directory.appendingPathComponent("control.lock").path, O_RDONLY)
+        guard fd >= 0 else { return false }
+        defer { close(fd) }
+        guard flock(fd, LOCK_SH | LOCK_NB) != 0 else { flock(fd, LOCK_UN); return false }
+        return errno == EWOULDBLOCK || errno == EAGAIN
+    }
 }
 private struct FileControl: LockedControl {
     let url: URL

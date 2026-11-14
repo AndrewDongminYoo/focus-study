@@ -95,6 +95,7 @@ How the wrapper reaches them is left to the builder; a stop marker needs no sect
 A Monitor callback returns without running its section only when all of these hold:
 
 1. Its lock attempt did not get the lock (attempt 0 and every retry, as in the marker design).
+   - Reconciliation (2026-11-14, #119): or the busy probe before attempt 0 found the lock busy; a callback that skips there makes no access read and no lock attempt. `handleCallbackRetryingLock` in `Shared/SessionControl.swift` is the authority.
 2. The marker is readable and fresh.
 3. The callback's activity name is in `activityNames`.
 4. For a `register` marker: the conditions 4 and 5 of the marker design (the kind is `didStart` or `didEnd`, and `now < validUntil`).
