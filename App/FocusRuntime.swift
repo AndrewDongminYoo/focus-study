@@ -1,6 +1,7 @@
 import Foundation
 import FamilyControls
 import SwiftData
+import WidgetKit
 
 @MainActor struct FocusRuntime {
     let recovery: StartupRecovery
@@ -67,6 +68,8 @@ import SwiftData
         #endif
         // One settings object for the screens and the filter, so that a refusal recorded by the filter updates the guide that is shown.
         let settings = FocusSettings()
+        // One writer per process, so its first write check asks for one reload; `group` is `SessionControl/` inside the container.
+        let todaySnapshot = TodaySnapshotWriter(container: group.deletingLastPathComponent()) { WidgetCenter.shared.reloadTimelines(ofKind: TodaySnapshot.widgetKind) }
         return FocusRuntime(recovery: StartupRecovery(engine: engine), accessState: authorization.accessState, holder: FocusRuntimeHolder(engine: engine, authorization: authorization, settings: settings, activityDidChange: activityDidChange) {
             let directory = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent("PrivateSelection")
             #if DEBUG
@@ -82,6 +85,7 @@ import SwiftData
             services.everydayContains = { try everyday.contains($0) }
             services.writeEveryday = { try everyday.write($0, selection: $1) }
             services.writeEverydayOffDay = { try everyday.writeOffDay($0) }
+            services.writeTodaySnapshot = { try todaySnapshot.write($0) }
             #if DEBUG
             services.diagnostics = diagnostics
             if diagnostics != nil {

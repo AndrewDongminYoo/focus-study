@@ -2,6 +2,7 @@
 
 Date: 2026-11-13.
 Status: design for approval.
+Reconciliation (2026-11-14, #124): the design was approved with its recommended choices (#134) and is implemented, not yet run on a device. `Shared/TodaySnapshot.swift`, `App/TodaySnapshotWriter.swift`, the write points in `App/FocusModel.swift` and `App/FocusFilterHandler.swift`, and `Widget/` are the authority, with the tests in `CoreTests/TodaySnapshotTests.swift`, `CoreTests/WidgetSourceListTests.swift`, `SDKTests/TodaySnapshotWriterTests.swift` and `UITests/FocusActivityTests.swift`.
 Source: [issue #124](https://github.com/AndrewDongminYoo/focus-study/issues/124), and the decision of 2026-11-13 in [issue #43](https://github.com/AndrewDongminYoo/focus-study/issues/43).
 This document amends the [Live Activity decision](2026-11-06-live-activity-decision.md) and the [2026-10-26 design](2026-10-26-focus-study-design.md) only where [Superseded lines](#superseded-lines) says so.
 This document changes no code, and the implementation needs its approval first.
@@ -73,6 +74,7 @@ What these pages do not say:
 - `[UNCERTAIN]` How soon a reload request is served, in the foreground or in a background launch.
 - `[UNCERTAIN]` Whether WidgetKit asks for a new timeline after a time-zone change or a manual clock change. The budget list names a locale change, not these.
 - `[UNCERTAIN]` Whether the App Group container is available to an unsigned simulator build of the extension.
+  Reconciliation (2026-11-14, #124): in the unsigned simulator Debug build of the app, `codesign -d --entitlements -` printed no entitlements and `simctl get_app_container … groups` listed no group, so the container is not available there; the widget was not added to the simulator home screen.
 - `[UNCERTAIN]` Which iOS versions show the home screen widget in the `accented` mode.
 
 ## Design
@@ -238,9 +240,11 @@ The product target count stays at four.
 - `Configuration/Activity.entitlements` (new): only `com.apple.security.application-groups` with `group.kr.donminzzi.focusStudy`.
 - `Configuration/Activity-Info.plist`: the key `FocusAppGroupIdentifier`, as in the app and the Monitor.
 - `project.yml`, target `FocusActivity`: `CODE_SIGN_ENTITLEMENTS: Configuration/Activity.entitlements`, and the new `Shared/` file in `sources`. `FocusSDKTests` gets the new app file of the writer.
+  Reconciliation (2026-11-14, #124): the app target also compiles `Widget/TodayWidgetView.swift`, so that the DEBUG screen `--widget-preview` draws the production view; the `FocusActivity` source list is unchanged by this.
 - `Package.swift`: the new `App/` file goes into the `exclude` list of `FocusHistory`; the new `Shared/` file is in `FocusCore` without a change.
 - Regenerate `FocusStudy.xcodeproj` with `xcodegen generate` and review the diff.
 - `Widget/PrivacyInfo.xcprivacy` stays as it is. `[UNCERTAIN]` Whether reading a file's content needs an entry; the builder checks Apple's list of required-reason APIs.
+  Reconciliation (2026-11-14, #124): checked against [`NSPrivacyAccessedAPIType`](https://developer.apple.com/documentation/bundleresources/app-privacy-configuration/nsprivacyaccessedapitypes/nsprivacyaccessedapitype) through the documentation JSON on 2026-11-14. Its categories are file timestamps, system boot time, disk space, active keyboards and user defaults. The widget calls `Bundle.main.object(forInfoDictionaryKey:)`, `FileManager.containerURL(forSecurityApplicationGroupIdentifier:)` and `Data(contentsOf:)`, none of which is in that list, so the file stays as it is.
 
 Signing: the App ID `kr.donminzzi.focusStudy.activity` needs the App Groups capability with this group, and its development profile must include it.
 That is a capability and profile change, so it needs explicit authorization under [`AGENTS.md`, Signing and physical-device boundary](../../AGENTS.md#signing-and-physical-device-boundary), and no build of this work uses `-allowProvisioningUpdates` without it.
@@ -266,6 +270,7 @@ The implementation PR shows captures in light, dark, the accented home screen an
 - The Check line is the stale line of the Live Activity views, so both surfaces send the person to the app with the same words.
 - No view says "차단", "제한" or "완료 인증", and no view shows a time of day.
 - The view reads `widgetRenderingMode`: full color uses the app's accent for the time, the accented mode puts only the time in the accent group, and the vibrant mode depends on no color.
+  Reconciliation (2026-11-14, #124): the extension has no asset catalog, so `TodayWidgetView.accent` holds the light and dark values of `App/Assets.xcassets/AccentColor` in code; the app's DEBUG preview uses the same constant.
 - The time uses one line with a scale factor, so that the largest text size does not clip the count.
 
 ### Stored states and failure cases
@@ -407,6 +412,7 @@ Follow `AGENTS.md` and [README verification](../../README.md#실행과-검증).
   - An unchanged content writes nothing and asks for no reload; the first check of a process asks once.
   - A Focus on call with no `FocusModel` writes in its last step, after a start and after a refusal, and a thrown write changes neither the result nor the stored refusal.
   - The fixture runtime never calls the writer.
+    Reconciliation (2026-11-14, #124): `UITestFixtures.swift` is not in `FocusSDKTests`, so the SDK test establishes only that the default closure of `FocusServices` writes nothing; that `FocusServices.fixture` never sets it is a reading of the source.
 - The view: a DEBUG screen that draws the production widget view for each state, as `--activity-preview` does for the Live Activity, with a UI test and captures in light, dark and the largest text size.
   This does not show the system's small size, the accented mode, the removed background or a reload.
   `[UNCERTAIN]` Whether a UI test can add a widget to the simulator's home screen; the plan does not depend on it.

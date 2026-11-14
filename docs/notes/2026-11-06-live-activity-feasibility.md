@@ -15,6 +15,7 @@ The Monitor schedules optional update/end work after its engine callback release
 
 The widget compiles only the payload, Activity attributes and views.
 It has no App Group, control-store reader, selection, report, history, notification request or push token.
+Reconciliation (2026-11-14, #124): the extension now also holds the home screen widget and has the App Group entitlement, and its code reads only `TodaySnapshot/today.json`; it still compiles no control-store reader, selection, report or history code ([home widget design](../specs/2026-11-13-home-widget-design.md#data-path)).
 Every state describes a plan and last confirmation, with app confirmation at stale/elapsed boundaries.
 The return boundary is separate from the absolute session deadline; a zero countdown never asserts completion or shielding.
 

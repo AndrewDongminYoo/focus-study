@@ -18,6 +18,8 @@
 	<string>0.1</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>FocusAppGroupIdentifier</key>
+	<string>group.kr.donminzzi.focusStudy</string>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionPointIdentifier</key>

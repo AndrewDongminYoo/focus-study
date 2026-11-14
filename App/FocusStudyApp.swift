@@ -7,6 +7,8 @@ import SwiftData
             #if DEBUG
             if let index = ProcessInfo.processInfo.arguments.firstIndex(of: "--activity-preview"), index + 1 < ProcessInfo.processInfo.arguments.count {
                 FocusActivityPreviewView(mode: ProcessInfo.processInfo.arguments[index + 1])
+            } else if let index = ProcessInfo.processInfo.arguments.firstIndex(of: "--widget-preview"), index + 1 < ProcessInfo.processInfo.arguments.count {
+                TodayWidgetPreviewView(mode: ProcessInfo.processInfo.arguments[index + 1])
             } else { FocusBootstrap() }
             #else
             FocusBootstrap()

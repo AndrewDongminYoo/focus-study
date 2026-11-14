@@ -35,8 +35,7 @@ struct SessionSummary {
         focusDuration = completed.reduce(0) { $0 + $1.focusDuration }
     }
     var text: String {
-        let duration = Duration.seconds(focusDuration).formatted(.units(allowed: [.hours, .minutes], width: .wide))
-        return "오늘 집중 \(duration) · \(completedCount)회"
+        "오늘 집중 \(TodaySnapshot.durationText(focusDuration)) · \(completedCount)회"
     }
 }
 /// The display-only streak: consecutive local days, ending today or yesterday, with at least one record that counts.

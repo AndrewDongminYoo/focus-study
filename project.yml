@@ -16,7 +16,15 @@ targets:
   FocusStudy:
     type: application
     platform: iOS
-    sources: [App, Shared, Integration, Presentation, Activity]
+    sources:
+      [
+        App,
+        Shared,
+        Integration,
+        Presentation,
+        Activity,
+        Widget/TodayWidgetView.swift,
+      ]
     settings:
       base:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -67,10 +75,12 @@ targets:
       - Activity/FocusActivityAttributes.swift
       - Activity/FocusActivityViews.swift
       - Shared/FocusActivityContent.swift
+      - Shared/TodaySnapshot.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: kr.donminzzi.focusStudy.activity
         INFOPLIST_FILE: Configuration/Activity-Info.plist
+        CODE_SIGN_ENTITLEMENTS: Configuration/Activity.entitlements
         APPLICATION_EXTENSION_API_ONLY: YES
         TARGETED_DEVICE_FAMILY: "1"
   FocusSDKTests:
@@ -91,6 +101,7 @@ targets:
         App/AuthorizationService.swift,
         App/FocusFilterHandler.swift,
         App/FocusRuntimeHolder.swift,
+        App/TodaySnapshotWriter.swift,
         Activity/FocusActivityAttributes.swift,
         Activity/SystemFocusActivityClient.swift,
       ]

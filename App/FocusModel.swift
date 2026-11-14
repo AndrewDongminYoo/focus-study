@@ -23,6 +23,8 @@ import Observation
     var writeEveryday: (EverydaySchedule, FamilyActivitySelection) throws -> Void = { _, _ in throw ControlIssue.io }
     /// Writes `everyday-layer.json` again with the stored selection and the schedule's `offDay`; it runs inside the engine's off-for-today section.
     var writeEverydayOffDay: (EverydaySchedule) throws -> Void = { _ in throw ControlIssue.io }
+    /// Writes the home screen widget's snapshot after a history read of today; only `FocusRuntime.real()` sets it, so a fixture writes nothing and asks for no reload.
+    var writeTodaySnapshot: (TodaySnapshot) throws -> Void = { _ in }
     #if DEBUG
     var diagnostics: DeviceDiagnostics?
     /// Opt-in timing of the complete synchronous start call; never carries selection or usage data.
@@ -164,6 +166,8 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
             // The card belongs to an idle screen: a session that started without `start()`, such as by a Focus, must not sit under it.
             if let current, current.phase != .terminal { completedSessionID = nil; completedLength = nil }
             records = try history.records(on: now, calendar: .current)
+            // A failed snapshot write never sets `errorMessage` or changes `records`; the next refresh writes again.
+            try? services.writeTodaySnapshot(TodaySnapshot(records: records, now: now, calendar: .current))
             streak = try history.streak(at: now, calendar: .current)
             errorMessage = nil
         } catch {

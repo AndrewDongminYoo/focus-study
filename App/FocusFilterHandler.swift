@@ -24,7 +24,15 @@ enum FocusFilterReading: Equatable { case on, off, unknown }
         await Self.serially {
             if startsSession { await self.start() } else { await self.end() }
             self.refresh()
+            if startsSession { self.writeTodaySnapshot() }
         }
+    }
+    /// The last part of step 5 of the on call: today's records through the handler's own history, for a background launch with no model.
+    /// It runs after the start section and the record of step 4, so it changes no result of the call; a failed read or write writes nothing.
+    private func writeTodaySnapshot() {
+        let date = now()
+        guard let records = try? history.records(on: date, calendar: .current) else { return }
+        try? services.writeTodaySnapshot(TodaySnapshot(records: records, now: date, calendar: .current))
     }
     /// The last Focus call of the process. A call waits for it, so the calls run one at a time in the order they arrive.
     private static var lastCall: Task<Void, Never>?

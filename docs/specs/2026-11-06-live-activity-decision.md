@@ -22,6 +22,7 @@ The older competitor survey's lack of adoption evidence remains a limitation; ma
 
 - Keep the iOS 17 minimum and existing focus, break, deadline, history, authorization, and everyday-layer rules.
 - Add one WidgetKit extension for the Live Activity, without a home widget, notification request, push token, server, account, or new dependency.
+  Reconciliation (2026-11-14, #124): the [home widget design](2026-11-13-home-widget-design.md) adds a home screen widget to this extension, with a `WidgetBundle` that lists the Live Activity and the home widget; `Widget/FocusWidgets.swift`, `Widget/TodayWidget.swift` and `Widget/TodayWidgetView.swift` are the authority.
 - Offer the Lock Screen presentation on supported iPhones and compact, minimal, and expanded Dynamic Island presentations where the hardware supports them.
 - Start at most one activity after a successful foreground session start, if allowed; reconcile an already-running session on foreground entry.
 - A Focus-filter session started while the app is not foregrounded remains fully functional without a new activity; attach the display on the next foreground entry if still relevant.
@@ -77,6 +78,7 @@ Activity attributes/content contain only a session UUID, display phase, timing v
 They contain no selected apps, category tokens, website tokens/domains, report data, history rows, or student identity.
 The widget receives the ActivityKit payload and must not read control storage, selection files, SwiftData, or the report extension.
 Do not grant the new extension App Group access or broaden the Report boundary.
+Reconciliation (2026-11-14, #124): the extension now has the App Group entitlement (`Configuration/Activity.entitlements`) for the home widget, whose code reads only `TodaySnapshot/today.json`; the Live Activity code still reads no file, and the Report boundary is unchanged. `CoreTests/WidgetSourceListTests.swift` and the [home widget design](2026-11-13-home-widget-design.md#data-path) are the authority.
 Do not add a separate authoritative state file; retain existing engine metadata as the authority.
 Review system presentation on paired devices separately; local application data handling does not promise that iOS displays the card only on this iPhone.
 
