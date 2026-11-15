@@ -417,6 +417,22 @@ The app was reopened from the Home Screen at about 14:30, which removed the timi
 #13 closes with the Picker record above and this record: Safari blocks the selected domain and its paths in both tab types, and Chrome and Firefox do not block it on this device and OS.
 Widget step 5 (a Focus start with the app closed) cannot run until #152 is resolved.
 
+## Focus changes with the app in front, `current`, and access: 2026-11-15 (#55, #11)
+
+On the same device and build, relaunched with `--screen-time-diagnostics` at 15:08:38 +09:00, every Focus change made from Control Center with the app in front.
+Focus changes come from `donotdisturbd` in a `log collect` archive; session rows come from a copy of the device store.
+
+| Step                                                             | Result                                                                                                                                                                                                                                                                                                      |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M4 step 6: a session from the start button, then Work on and off | Passed: the session started at 15:09:14 kept running through Work on (15:09:19) and off (15:09:30) and was ended by hand at 15:09:53                                                                                                                                                                        |
+| M4 step 12: direct switches and quick changes                    | Each switch from Work to Personal Time or Do Not Disturb, and each Work off, ended the session at once; each switch back to Work started a new one (sessions 15:10:00–15:10:13, 15:10:32–15:10:56, 15:11:01–15:11:30, 15:11:40–15:12:35, 15:13:21–15:13:44); every one of them is `earlyExit` ("집중 종료") |
+| M4 step 13: `current` from the diagnostics                       | `off` with the Focus off and `on` with Work on                                                                                                                                                                                                                                                              |
+| M4 step 11: Work on with access revoked in Settings (15:14:53)   | Passed: no session started; the timer screen kept "스크린 타임 권한을 확인하고 있어요. 시작하면 다시 확인해요." and the Focus filter diagnostics showed the refusal `access`                                                                                                                                |
+| #11: deny, then allow                                            | A tap on start showed the system request; after a denial an error notice showed for a moment and the screen went back to the checking line; a second request that was allowed started a session                                                                                                             |
+
+The denial does not leave its notice on screen, because a denial on iOS 27 reads `.notDetermined`; #38 takes up the notice and the settings path.
+Unchecked in M4: steps 5, 8, 9, 10 and 14, and step 7 beyond the partial record above.
+
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 
 이슈 #17의 검토 결과다.
