@@ -524,12 +524,13 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(start.exists, app.debugDescription)
         return (start, end)
     }
-    private func scrollEveryday(_ app: XCUIApplication, to element: XCUIElement) {
+    /// `above` names the direction for a row that the form has dropped from the accessibility tree: a row scrolled out of view does not exist until it comes back.
+    private func scrollEveryday(_ app: XCUIApplication, to element: XCUIElement, above: Bool = false) {
         let top = app.navigationBars["매일 제한"].frame.maxY + 12
         let bottom = app.buttons["everydaySave"].frame.minY - 80
         for _ in 0..<20 {
             if element.isHittable, element.frame.midY > top, element.frame.maxY < bottom { break }
-            let down = element.exists && element.frame.midY < top
+            let down = element.exists ? element.frame.midY < top : above
             let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: down ? 0.35 : 0.60))
             let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: down ? 0.60 : 0.35))
             start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.1)
@@ -557,8 +558,8 @@ final class FocusFlowTests: XCTestCase {
         // The count follows the draft while the sheet is still up, so wait for the sheet to go and the switch to take a tap.
         expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: fixtureSelect); waitForExpectations(timeout: ready)
         let toggle = app.switches["everydayToggle"]
-        // The selection row sits below the weekday row, so after the scroll to it the toggle can be above the navigation bar; scroll back to it.
-        scrollEveryday(app, to: toggle)
+        // The selection row sits below the weekday row, so after the scroll to it the toggle can be out of view above, and then it does not exist; scroll back up to it.
+        scrollEveryday(app, to: toggle, above: true)
         waitHittable(toggle)
         flip(toggle)
         app.buttons["everydaySave"].tap()
