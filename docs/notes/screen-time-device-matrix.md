@@ -330,8 +330,27 @@ The build was signed with `-allowProvisioningUpdates`, approved for that one bui
 | Streak against the store                                                                | A copy of the store read with `sqlite3` has one `expired` record, today's, and no record on 2026-11-13, so 1 is the expected number                   |
 
 The history store is `Library/Application Support/default.store` in the App Group container `group.kr.donminzzi.focusStudy`, read with `devicectl device info files --domain-type appGroupDataContainer`; `devicectl device copy from` with the same domain copied it.
-Widget steps 4 to 7 (midnight, a Focus start, a restart, and the looks) remain unverified.
+Widget steps 5 to 7 (a Focus start, a restart, and the looks) remain unverified.
 During step 3, just after the switch to dark mode, the Live Activity on the Lock Screen appeared to show a light background for a moment, a screenshot taken then was white, and the card then turned dark. The observation is uncertain, the cause was not checked, and it is not recorded as a failure.
+
+Around midnight from 2026-11-14 to 2026-11-15, with the app not opened:
+
+- Widget step 4: the widget, which showed "50분 · 2회" on 2026-11-14, showed the Empty view ("오늘 집중", "앱에서 시작해 보세요") around midnight and still showed it later. No number of the earlier day was seen; the exact minute of the change was not recorded, so the 00:00, 00:01 and 00:05 readings of the plan are not separately recorded.
+- Usage report (#14), date change: opened just after midnight, the report showed the new day, with 온:공 at 0분; the "no data" notice did not appear, because the report had a row. The notice for missing or late data remains unverified on the device.
+
+## Usage report: closed on 2026-11-15 (#14)
+
+On the iPhone 16 Pro with iOS 27.0.1 and the signed Debug builds of `87f1103` and `ae5faf7`, the usage report was opened on 2026-11-14 and again just after midnight on 2026-11-15.
+
+| Item of #14                     | Result                                                                                                                                                                                                                                                                                    |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Today's report on the device    | Verified: it showed at once, inside the extension, with no visible wait                                                                                                                                                                                                                   |
+| Date change                     | Verified: after midnight the report showed the new day                                                                                                                                                                                                                                    |
+| Reload on the same day          | Verified on 2026-11-15: the reload button left the area blank for a moment while the extension drew the recreated content (`.id(refreshID)` in `App/UsageReportHost.swift`), and the notice below it stayed; closing and reopening the screen showed the earlier content without a redraw |
+| Notice for missing or late data | Not seen on the device and accepted as unverified there: the report lists 온:공 itself from 0분 on, so a day with no row is rare; `testReportWaitingDoesNotClaimZeroUsage` and `testEmptyReportShowsUnavailableInsteadOfZero` cover both notices in the simulator fixture                 |
+
+No usage value, app name or domain is recorded here.
+Decided on 2026-11-15: #14 closes with this record, and the notice for missing or late data stays covered by the simulator fixtures only.
 
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 
