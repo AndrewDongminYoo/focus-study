@@ -316,6 +316,22 @@ So the app's `startMonitoring` and `stopMonitoring` calls return only after the 
 The resumes took 1,114.1 to 1,115.5 ms in total (`BREAK_LATENCY action=resume`), above the 1,000 ms acceptance of #115; the break requests took 324.4 to 328.8 ms and the break starts 604.6 to 609.8 ms.
 This is the source of the wait of #119.
 
+## Focus overwrite wait after the early check: 2026-11-15
+
+On the same iPhone 16 Pro with iOS 27.0.1, a signed Debug build from `62a1955` (#144, the busy probe before the access read) launched with `--screen-time-diagnostics` ran one session from 09:48:52 to 09:51:14 +09:00 with three break requests, three break starts and three resumes with the app in front.
+
+| App call                          | 2026-11-14     | 2026-11-15     |
+| --------------------------------- | -------------- | -------------- |
+| Break request, `register`         | 294.8–296.1 ms | 41.7–43.4 ms   |
+| Break start, `register`           | 507.8–511.4 ms | 24.8–25.3 ms   |
+| Resume, `stop_break`              | 245.8–247.8 ms | 2.4–3.0 ms     |
+| Resume, `register` after the stop | 506.4–509.3 ms | 17.9–26.3 ms   |
+| Resume, `BREAK_LATENCY` total     | 1,114–1,116 ms | 105.2–120.3 ms |
+
+Every one of the 31 Monitor callbacks found the lock busy at the probe (`attempt=probe`), skipped on the holder's marker with no `access` line, and took 0.13 to 1.25 ms.
+The session start registration, which overwrites nothing, took 133.4 ms.
+Every focus overwrite is below 100 ms, which is the done-when of #119.
+
 ## Streak and home screen widget: 2026-11-14
 
 On the same iPhone 16 Pro with iOS 27.0.1 (`24A446`) and the same signed Debug build from `87f1103`, after the Monitor timing run.

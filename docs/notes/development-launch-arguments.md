@@ -127,7 +127,7 @@ Xcode 콘솔의 앱 로그(`SCREEN_TIME_TIMING` 등)는 그대로입니다.
 ```plaintext
 MONITOR_TIMING cb=<n> kind=<kind> activity=<activity> step=begin flag_ms=<ms>
 MONITOR_TIMING cb=<n> kind=<kind> activity=<activity> step=access ms=<ms> state=<approved|denied|unknown>
-MONITOR_TIMING cb=<n> kind=<kind> activity=<activity> step=lock attempt=<0-5> wait_ms=<ms> result=<acquired|busy>
+MONITOR_TIMING cb=<n> kind=<kind> activity=<activity> step=lock attempt=<probe|0-5> wait_ms=<ms> result=<acquired|busy>
 MONITOR_TIMING cb=<n> kind=<kind> activity=<activity> step=marker ms=<ms> marker=<none|register|stop> result=<skip|continue>
 MONITOR_TIMING cb=<n> kind=<kind> activity=<activity> step=call op=<op> ms=<ms>
 MONITOR_TIMING cb=<n> kind=<kind> activity=<activity> step=section hold_ms=<ms>
@@ -137,6 +137,7 @@ MONITOR_TIMING cb=<n> kind=<kind> activity=<activity> step=end total_ms=<ms> res
 - `cb`는 그 확장 프로세스에서 측정한 콜백의 번호이고, 로그 도구가 보여 주는 프로세스 id와 함께 한 콜백의 줄을 묶습니다.
 - `kind`는 `didStart`, `didEnd`, `willEndWarning` 중 하나이고, `activity`는 `focus`, `break`, `everyday`, `other` 중 하나입니다. 활동 이름, UUID, 토큰, 앱 이름, 도메인은 어느 줄에도 없습니다.
 - `op`는 `register`, `register_break`, `register_everyday`, `stop`, `stop_break`, `stop_everyday`, `apply_shield`, `clear_shield`, `apply_everyday`, `clear_everyday` 중 하나입니다.
+- `attempt=probe`는 접근 상태 읽기 전에 잠금이 잡혀 있는지만 보는 확인이고, 잠금이 잡혀 있을 때만 `result=busy`로 남습니다. 이 확인 뒤 표식이 콜백을 정하면 `access` 줄 없이 `marker ... result=skip`과 `end ... result=skipped`로 끝납니다.
 - `hold_ms`는 잠금 구간 본문이 걸린 시간입니다. 잠금을 잡은 시도의 `lock`, `call`, `section` 줄은 잠금을 푼 뒤에 한꺼번에 남으므로, 로그를 남기는 시간은 `hold_ms`에 들어가지 않습니다.
 - 잠금 구간 안에서 프로세스가 끝난 콜백은 `begin`만 있고 `end`가 없습니다. 반대로 `end`가 없다는 것만으로는 어느 단계였는지 알 수 없습니다. 접근 상태 읽기, 잠금 대기, 재시도 사이의 0.25초 대기 중에 끝나도 `end`가 없으므로, 마지막으로 남은 줄로 단계를 좁힙니다.
 

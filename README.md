@@ -41,7 +41,7 @@ xcodebuild build -project FocusStudy.xcodeproj -scheme FocusStudy -configuration
 | `FocusUITests`  | DEBUG 합성 데이터로 실행한 화면 흐름                                                   |
 | Release 빌드    | 개발용 코드를 뺀 App, Monitor, Report, Activity의 기기용 컴파일                        |
 
-경합 검사는 다음 열 줄을 출력해야 합니다.
+경합 검사는 다음 열한 줄을 출력해야 합니다.
 
 ```log
 PASS: stale A cannot clear B
@@ -49,6 +49,7 @@ PASS: stale break 1 cannot touch break 2
 PASS: stale everyday revision cannot undo a newer save
 PASS: focus off cannot end a manual session
 PASS: a callback for the holder's registration returns at once
+PASS: a callback for the holder's registration skips the access read
 PASS: a callback for another name keeps the bounded retry
 PASS: the next lock holder deletes a leftover marker
 PASS: a didEnd for the holder's stop returns at once

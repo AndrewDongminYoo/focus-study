@@ -97,6 +97,13 @@ private final class FileCopies: BreakSelectionStore {
         }
     }
 }
+/// The shared store with a busy probe that always answers free, so a callback takes attempt 0 and its `lockTimeout` path on the real lock.
+private struct FreeProbeStore: ControlStore {
+    let store: SharedControlStore
+    var registrationMarkers: (any RegistrationMarkerStore)? { store.registrationMarkers }
+    func withExclusiveAccess<T>(timeout: TimeInterval?, _ body: (LockedControl) throws -> T) throws -> T { try store.withExclusiveAccess(timeout: timeout, body) }
+    func isLockBusy() -> Bool { false }
+}
 private func waitForReady(_ root: URL) {
     let deadline = Date().addingTimeInterval(3)
     while !FileManager.default.fileExists(atPath: root.appendingPathComponent("ready").path) {
@@ -125,9 +132,12 @@ private func waitForReady(_ root: URL) {
             case "marker-skip":
                 waitForReady(root)
                 let name = try String(contentsOf: root.appendingPathComponent("ready"), encoding: .utf8)
-                try engine.handleCallbackRetryingLock(activityName: name, kind: .didEnd, now: { markerCallbackNow }, authorized: { .approved })
+                var accessReads = 0
+                try engine.handleCallbackRetryingLock(activityName: name, kind: .didEnd, now: { markerCallbackNow }, authorized: { accessReads += 1; return .approved })
                 // The callback returned while the holder still held the lock, so its section did not run.
                 do { try SharedControlStore(directory: root).withExclusiveAccess(timeout: 0) { _ in }; exit(1) } catch ControlIssue.lockTimeout {}
+                // The holder holds the lock and its marker for the whole wait, so the early check decides the callback.
+                try Data("\(accessReads)".utf8).write(to: root.appendingPathComponent("access-reads"))
             case "marker-wait":
                 waitForReady(root)
                 let begin = ProcessInfo.processInfo.systemUptime
@@ -150,10 +160,15 @@ private func waitForReady(_ root: URL) {
                 waitForReady(root)
                 let name = try String(contentsOf: root.appendingPathComponent("ready"), encoding: .utf8)
                 let control = root.appendingPathComponent("control.json"), before = try Data(contentsOf: control)
-                try engine.handleCallbackRetryingLock(activityName: name, kind: .didEnd, now: { markerCallbackNow }, authorized: { .approved })
+                // The probe answers free here, so the marker decides after the `lockTimeout` of attempt 0; "marker-skip" covers the early check.
+                let engine = SessionControl(store: FreeProbeStore(store: SharedControlStore(directory: root)), monitoring: monitor, shield: shield, breakSelection: copies, everyday: layer, calendar: utc)
+                var accessReads = 0
+                try engine.handleCallbackRetryingLock(activityName: name, kind: .didEnd, now: { markerCallbackNow }, authorized: { accessReads += 1; return .approved })
                 // The callback returned while the holder still held the lock, so its section did not run and `control.json` is the holder's `ending`.
                 do { try SharedControlStore(directory: root).withExclusiveAccess(timeout: 0) { _ in }; exit(1) } catch ControlIssue.lockTimeout {}
                 if try Data(contentsOf: control) != before { exit(1) }
+                // One access read: the callback returned after attempt 0, not after a retry.
+                if accessReads != 1 { exit(1) }
             case "stop-wait":
                 // args[3] is the kind; args[4], when given, a break index of the stopped session.
                 waitForReady(root)
@@ -258,6 +273,8 @@ private func waitForReady(_ root: URL) {
         let current = try markerEngine(root).snapshot().session
         guard exited, markerDeleted, current?.phase == .active, current?.startedAt == markerStart else { exit(1) }
         print("PASS: a callback for the holder's registration returns at once")
+        guard try String(contentsOf: root.appendingPathComponent("access-reads"), encoding: .utf8) == "0" else { exit(1) }
+        print("PASS: a callback for the holder's registration skips the access read")
     }
     /// A callback for another name waits for the whole bounded retry while the holder's registration call runs.
     private static func verifyMarkerOtherName(executable: String) throws {

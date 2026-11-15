@@ -162,6 +162,8 @@ It can arrive for the same name while the holder's call is in progress:
 1. **Attempt 0.** Try the lock once, without waiting. `SharedControlStore` with a timeout of 0 makes one `flock(LOCK_EX | LOCK_NB)` call and then throws `lockTimeout`. If the lock is busy, read the marker. If the callback matches, return. Attempt 0 goes through the same `ControlStore` value as the retries, with a timeout argument of 0, so a host fake sees it as one more lock attempt. Any error other than `lockTimeout` is thrown at once, as today.
 2. **Retries of today.** 5 attempts that wait up to 0.25 s for the lock, with 4 pauses of 0.25 s, each with a fresh `now`. After every `lockTimeout`, read the marker again. If the callback matches, return.
 
+Reconciliation (2026-11-14, #119): an early check now comes before attempt 0 and before the access read. `SharedControlStore.isLockBusy()` makes one `flock(LOCK_SH | LOCK_NB)` call and releases a lock that it gets at once; if the lock is busy, the callback reads the marker, and if the callback matches, it returns with no access read and no lock attempt. Otherwise attempt 0 and the retries run as above. `handleCallbackRetryingLock` in `Shared/SessionControl.swift` is the authority.
+
 The marker can appear after the callback starts to wait: the holder may register that name later in its section, and then the holder decides that activity as well.
 Attempt 0 has no pause after it.
 A callback that gets the lock at any attempt runs its section as today.
@@ -178,6 +180,7 @@ This design takes attempt 0.
 `[UNCERTAIN]` The time that iOS needs to deliver a callback, including a launch of the extension, is not part of this bound.
 
 The marker is not read before the first lock attempt.
+Reconciliation (2026-11-14, #119): the marker is now also read after a busy probe before attempt 0, which needs the same busy lock, so a marker without a busy lock still makes no callback skip. The holder can release the lock between the probe and the read, as it can between a `lockTimeout` and the read. `handleCallbackRetryingLock` in `Shared/SessionControl.swift` is the authority.
 A marker without a busy lock is a leftover of a holder that exited, and the callback must then run, because no other section decides its activity; it can be the repair of [Callback with nothing due](2026-11-01-m2-break-pass-design.md#callback-with-nothing-due).
 
 #### The extension as the holder

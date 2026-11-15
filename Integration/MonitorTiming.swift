@@ -167,6 +167,14 @@ final class MonitorTimingRecorder {
     fileprivate func sectionEnded(since began: TimeInterval) {
         line("step=section hold_ms=\(Self.ms(Self.uptime() - began))")
     }
+    /// The busy probe before the access read. Only a busy probe has a line, `attempt=probe`, because it is no lock attempt and the attempt count does not change.
+    fileprivate func lockProbe(_ probe: () -> Bool) -> Bool {
+        resolveMarker(skipped: false)
+        let began = Self.uptime()
+        let busy = probe()
+        if busy { line("step=lock attempt=probe wait_ms=\(Self.ms(Self.uptime() - began)) result=busy") }
+        return busy
+    }
     fileprivate func lockBusy(since began: TimeInterval) {
         line("step=lock attempt=\(attempt) wait_ms=\(Self.ms(Self.uptime() - began)) result=busy")
         attempt += 1
@@ -192,6 +200,7 @@ private final class TimedControlStore: ControlStore {
     private let recorder: MonitorTimingRecorder
     init(base: any ControlStore, recorder: MonitorTimingRecorder) { self.base = base; self.recorder = recorder }
     var registrationMarkers: (any RegistrationMarkerStore)? { base.registrationMarkers.map { TimedMarkerStore(base: $0, recorder: recorder) } }
+    func isLockBusy() -> Bool { recorder.lockProbe(base.isLockBusy) }
     func withExclusiveAccess<T>(timeout: TimeInterval?, _ body: (LockedControl) throws -> T) throws -> T {
         let began = recorder.lockBegan()
         var entered = false
@@ -209,7 +218,7 @@ private final class TimedControlStore: ControlStore {
         }
     }
 }
-/// Times the marker read after a busy lock attempt. Writes and deletes are the lock holder's and are only forwarded.
+/// Times the marker read after a busy probe or a busy lock attempt. Writes and deletes are the lock holder's and are only forwarded.
 private final class TimedMarkerStore: RegistrationMarkerStore {
     private let base: any RegistrationMarkerStore
     private let recorder: MonitorTimingRecorder

@@ -19,6 +19,10 @@ private final class MarkerControlStore: ControlStore, LockedControl {
     private(set) var timeouts: [TimeInterval?] = []
     /// Runs before a queued lock failure is thrown, with the number of the attempt (0 first).
     var beforeFailure: ((Int) -> Void)?
+    /// The answer of the busy probe; the queued lock failures stay separate.
+    var lockBusy = false
+    private(set) var probes = 0
+    func isLockBusy() -> Bool { probes += 1; return lockBusy }
     func withExclusiveAccess<T>(timeout: TimeInterval?, _ body: (LockedControl) throws -> T) throws -> T {
         timeouts.append(timeout)
         if !lockFailures.isEmpty { beforeFailure?(timeouts.count - 1); throw lockFailures.removeFirst() }
@@ -227,6 +231,99 @@ final class RegistrationMarkerTests: XCTestCase {
         try engine.handleCallbackRetryingLock(activityName: session.activityName, kind: .didEnd, now: { self.at(1500) }, authorized: { .approved }, sleep: { pauses.append($0) })
         XCTAssertTrue(pauses.isEmpty); XCTAssertEqual(store.timeouts.last, 0)
         XCTAssertEqual(store.envelope.session?.phase, .terminal); XCTAssertEqual(store.envelope.session?.reason, .expired)
+    }
+
+    // MARK: The early check before the access read (#119)
+
+    /// Runs one callback at `at(1500)` and counts its access reads, pauses and lock attempts.
+    private func callback(_ engine: SessionControl, _ store: MarkerControlStore, name: String, kind: CallbackKind) -> (error: Error?, reads: Int, pauses: [TimeInterval], timeouts: [TimeInterval?]) {
+        let firstLockCall = store.timeouts.count
+        var reads = 0, pauses: [TimeInterval] = []
+        var error: Error?
+        do { try engine.handleCallbackRetryingLock(activityName: name, kind: kind, now: { self.at(1500) }, authorized: { reads += 1; return .approved }, sleep: { pauses.append($0) }) }
+        catch let thrown { error = thrown }
+        return (error, reads, pauses, Array(store.timeouts.dropFirst(firstLockCall)))
+    }
+    func testBusyLockWithADecidingRegisterMarkerSkipsWithoutAnAccessRead() throws {
+        let (engine, store, _, session) = try started()
+        store.markers.marker = RegistrationMarker(activityName: session.activityName, uptime: 1000, validUntil: at(2000))
+        store.lockBusy = true
+        let before = store.envelope.session
+        let result = callback(engine, store, name: session.activityName, kind: .didEnd)
+        XCTAssertNil(result.error); XCTAssertEqual(result.reads, 0, "no access read")
+        XCTAssertTrue(result.timeouts.isEmpty, "no lock attempt"); XCTAssertTrue(result.pauses.isEmpty)
+        XCTAssertEqual(store.envelope.session, before)
+    }
+    func testBusyLockWithAStopMarkerSkipsADidEndWithoutAnAccessRead() throws {
+        let (engine, store, _, session) = try started()
+        store.markers.marker = .stop([session.activityName], uptime: 1000)
+        store.lockBusy = true
+        let before = store.envelope.session
+        let result = callback(engine, store, name: session.activityName, kind: .didEnd)
+        XCTAssertNil(result.error); XCTAssertEqual(result.reads, 0)
+        XCTAssertTrue(result.timeouts.isEmpty); XCTAssertTrue(result.pauses.isEmpty)
+        XCTAssertEqual(store.envelope.session, before)
+    }
+    func testBusyLockWithAStopMarkerKeepsTheBoundedRetryForADidStart() throws {
+        let (engine, store, _, session) = try started()
+        store.markers.marker = .stop([session.activityName], uptime: 1000)
+        store.lockBusy = true; store.lockFailures = Array(repeating: ControlIssue.lockTimeout, count: 6)
+        let before = store.envelope.session
+        let result = callback(engine, store, name: session.activityName, kind: .didStart)
+        XCTAssertEqual(result.error as? ControlIssue, .lockTimeout)
+        XCTAssertEqual(result.reads, 6, "one access read before each lock attempt")
+        XCTAssertEqual(result.timeouts, [0, nil, nil, nil, nil, nil]); XCTAssertEqual(result.pauses, Array(repeating: 0.25, count: 4))
+        XCTAssertEqual(store.envelope.session, before)
+    }
+    func testFreeLockWithAFreshMarkerReadsAccessOnceAndRunsTheSection() throws {
+        let (engine, store, _, session) = try started()
+        // A marker without a busy lock is a leftover, so the early check does not apply.
+        store.markers.marker = RegistrationMarker(activityName: session.activityName, uptime: 1000, validUntil: at(2000))
+        let result = callback(engine, store, name: session.activityName, kind: .didEnd)
+        XCTAssertNil(result.error); XCTAssertEqual(result.reads, 1)
+        XCTAssertEqual(result.timeouts, [0]); XCTAssertEqual(store.probes, 1)
+        XCTAssertEqual(store.envelope.session?.phase, .terminal); XCTAssertEqual(store.envelope.session?.reason, .expired)
+    }
+    func testBusyLockWithAStaleMarkerReadsAccessAndRetries() throws {
+        let (engine, store, _, session) = try started()
+        store.markers.marker = RegistrationMarker(activityName: session.activityName, uptime: 989.999, validUntil: at(2000))
+        store.lockBusy = true; store.lockFailures = Array(repeating: ControlIssue.lockTimeout, count: 6)
+        let before = store.envelope.session
+        let result = callback(engine, store, name: session.activityName, kind: .didEnd)
+        XCTAssertEqual(result.error as? ControlIssue, .lockTimeout); XCTAssertEqual(result.reads, 6)
+        XCTAssertEqual(result.timeouts, [0, nil, nil, nil, nil, nil]); XCTAssertEqual(result.pauses, Array(repeating: 0.25, count: 4))
+        XCTAssertEqual(store.envelope.session, before)
+    }
+    func testBusyLockWithAnExpiredRegisterMarkerReadsAccessAndRetries() throws {
+        let (engine, store, _, session) = try started()
+        // Fresh by uptime, but the callback runs at its validUntil.
+        store.markers.marker = RegistrationMarker(activityName: session.activityName, uptime: 1000, validUntil: at(1500))
+        store.lockBusy = true; store.lockFailures = Array(repeating: ControlIssue.lockTimeout, count: 6)
+        let before = store.envelope.session
+        let result = callback(engine, store, name: session.activityName, kind: .didEnd)
+        XCTAssertEqual(result.error as? ControlIssue, .lockTimeout); XCTAssertEqual(result.reads, 6)
+        XCTAssertEqual(result.timeouts, [0, nil, nil, nil, nil, nil]); XCTAssertEqual(result.pauses, Array(repeating: 0.25, count: 4))
+        XCTAssertEqual(store.probes, 1)
+        XCTAssertEqual(store.envelope.session, before)
+    }
+    func testBusyProbeOfTheSharedStoreDoesNotWaitOrTakeTheLock() throws {
+        let store = SharedControlStore(directory: directory)
+        XCTAssertFalse(store.isLockBusy(), "no lock file yet")
+        try store.withExclusiveAccess { _ in }
+        XCTAssertFalse(store.isLockBusy())
+        try writeLeftover()
+        let fd = open(directory.appendingPathComponent("control.lock").path, O_RDWR)
+        XCTAssertGreaterThanOrEqual(fd, 0)
+        defer { close(fd) }
+        XCTAssertEqual(flock(fd, LOCK_EX | LOCK_NB), 0)
+        let begin = ProcessInfo.processInfo.systemUptime
+        XCTAssertTrue(store.isLockBusy())
+        XCTAssertLessThan(ProcessInfo.processInfo.systemUptime - begin, 0.1)
+        flock(fd, LOCK_UN)
+        XCTAssertFalse(store.isLockBusy())
+        // A probe that found the lock free released it at once and did not delete the marker, which only a lock holder does.
+        XCTAssertEqual(flock(fd, LOCK_EX | LOCK_NB), 0); flock(fd, LOCK_UN)
+        XCTAssertNotNil(store.registrationMarkers?.read())
     }
 
     // MARK: Writing and deleting around each registration

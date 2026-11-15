@@ -88,10 +88,14 @@ protocol ControlStore {
     func withExclusiveAccess<T>(timeout: TimeInterval?, _ body: (LockedControl) throws -> T) throws -> T
     /// The registration marker next to the control state, or `nil` for a store without one.
     var registrationMarkers: (any RegistrationMarkerStore)? { get }
+    /// Whether another holder has the lock now: a probe that does not wait and does not keep the lock.
+    func isLockBusy() -> Bool
 }
 extension ControlStore {
     func withExclusiveAccess<T>(_ body: (LockedControl) throws -> T) throws -> T { try withExclusiveAccess(timeout: nil, body) }
     var registrationMarkers: (any RegistrationMarkerStore)? { nil }
+    /// A store without a shared lock is never busy, so its callbacks take the lock attempts of today.
+    func isLockBusy() -> Bool { false }
 }
 protocol MonitoringClient {
     var registeredSessionIDs: [UUID] { get }
