@@ -433,6 +433,24 @@ Focus changes come from `donotdisturbd` in a `log collect` archive; session rows
 The denial does not leave its notice on screen, because a denial on iOS 27 reads `.notDetermined`; #38 takes up the notice and the settings path.
 Unchecked in M4: steps 5, 8, 9, 10 and 14, and step 7 beyond the partial record above.
 
+## Restart with a running session: 2026-11-15 (#11, widget, #55)
+
+On the same device and build, a session was started from the app at about 15:57:53 +09:00, a one-time Work Focus schedule was set for 16:05 to 17:00, and the device restarted (`=== system boot` at 16:00:24, first unlock at 16:01:14 by `analytics_send_first_unlock`, both from one `log collect` archive).
+An earlier boot at 15:55:53 (first unlock 15:56:21) is in the same archive.
+
+| Check                                        | Result                                                                                                                                                                                                                                    |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Shield through the restart (#11)             | Passed: after the unlock every app of the focus selection was still shielded                                                                                                                                                              |
+| Live Activity before the first unlock        | Not shown on the Lock Screen                                                                                                                                                                                                              |
+| Widget step 6                                | After the unlock the widget showed "25분 · 1회", the completed session of the day                                                                                                                                                         |
+| App after the restart (#11)                  | Failed: a `FocusStudy` process started at 16:00:40, before the first unlock; opening the app at about 16:10 showed "앱 데이터를 확인해 주세요"; "다시 확인하기" restored the running session with about 12 minutes left; #155 takes it up |
+| M4 step 14: a Focus schedule after a restart | Inconclusive: the Work schedule did not turn the Focus on at 16:05, before or after the unlock, and the schedule still showed as never triggered; with the app not in front the filter would not run anyway (#152)                        |
+
+The earlier boot shows the cause of the failure: its pre-unlock process logged `Failed to fetch authorization status: ... Code=257` for `Authorizations.plist`.
+
+#11 closes with the records of 2026-11-15: allow, deny and revoke; force-quit and lock; a real 25-minute expiry with its planned and observed times; a relaunch and a restart; repeated start and end taps with one record each.
+The preparing and ending states were not forced on the device, and their recovery stays covered by the host and simulator tests only.
+
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 
 이슈 #17의 검토 결과다.
