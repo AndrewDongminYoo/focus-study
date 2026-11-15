@@ -463,6 +463,14 @@ On the same device and build, with "자동으로 설정" turned off in Settings 
 | A session from 16:39:35, then the clock set 10 minutes ahead by hand                       | Passed: the Live Activity countdown dropped at once, and the app showed the session ended as `clockChanged` ("시각 변경으로 중단") at 16:50:26 device time                                             |
 
 The session across local midnight remains for #12.
+The date and time settings were set back to automatic after these checks (reported on 2026-11-15).
+
+## Restart after the pre-unlock fix: 2026-11-15 (#155)
+
+On the same iPhone 16 Pro with iOS 27.0.1, a signed Debug build from `8794caa` (#158) was installed over the existing app at 18:15 +09:00 and opened from the Home Screen, with no diagnostics argument; a session was started and the device restarted.
+From one `log collect` archive: `=== system boot` at 18:18:22, a `FocusStudy` process (pid 247) at 18:18:36 with no user action, `Failed to fetch authorization status: ... Code=257` for `Authorizations.plist` in that process at 18:18:38, and the first unlock (`analytics_send_first_unlock`) at 18:20:20.
+After the unlock the app opened on the running session with no "앱 데이터를 확인해 주세요" screen, in the same process that had started before the unlock.
+This is the condition of the failure recorded above (a launch before the first unlock that cannot read protected files), and it no longer shows the failure screen, which is the done-when of #155.
 
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 
