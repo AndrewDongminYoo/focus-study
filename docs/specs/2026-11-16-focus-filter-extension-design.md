@@ -39,10 +39,10 @@ The person expects the restrictions to stay for as long as the Focus stays on, a
 3. The rollover chunk is the base length, never shorter, so every registered focus interval is at least 25 minutes, above the 15-minute system minimum of a DeviceActivity interval. One long interval for the whole Focus was rejected: no checked document states a maximum interval length (see [Apple documentation](#apple-documentation-checked-2026-11-16)), and a rollover reuses the registration that the device already proved.
 4. When the Focus turns off, an open session ends with this reason, in this order:
    - `.authorizationRevoked` with a `denied` access read (the [access-state design](2026-11-11-access-state-design.md));
-   - the timed reason of `timedEnd`, if time already ended it (usually `.deadlineMissed`; `.expired` only when a rollover was lost, see decision 6);
-   - `.expired` when the focused time is at least the base length: the session counts as completed;
+   - `.deadlineMissed` when the deadline has passed (`timedEnd`); the timed `.expired` never applies here, because the session is still treated as open in this end (see [Filter end](#filter-end-focus-off));
+   - `.expired` when the open focused time (decision 5) is at least the base length: the session counts as completed;
    - else `.earlyExit`, as in M4.
-5. An open session that ends as `.expired` stores `expiresAt = startedAt + focused(at: end)` in its `ending` save, so `length` is the focused time. History, the today summary, the widget snapshot and the streak then read the real focused time with no change to `SessionRecord` (`focusDuration = expiresAt - startedAt`). This is the M2 meaning of `expiresAt`: start plus focus time, never moved by breaks.
+5. The **open focused time** at `end` is `end - startedAt - pausedSeconds - openPause`, not capped at `length`. `focused(at:)` caps at `length`, so it would drop the time after a lost rollover, while the restrictions stayed on. An open session that ends as `.expired` stores `expiresAt = startedAt + open focused time` in its `ending` save, so `length` is the focused time. This applies to every end of a session that was open at the start of the section: the Focus off call, the activation check and "집중 종료". History, the today summary, the widget snapshot and the streak then read the real focused time with no change to `SessionRecord` (`focusDuration = expiresAt - startedAt`). This is the M2 meaning of `expiresAt`: start plus focus time, never moved by breaks.
 6. A session that is no longer open (its activation was cleared, see [Activation check](#activation-check)) ends by time at its current focus end as `.expired`, with the same `expiresAt` rule. So it ends at most one chunk later, never at once in the middle of a chunk.
 7. A manual session never rolls over, also while a Focus with this filter is on.
 8. No upper limit on the number of rollovers. The person can always end the session with "집중 종료" (decision 3), and a lost off call is repaired by the activation check when the app opens. A limit would lift the restrictions while the Focus is still on, against decision 2.
@@ -69,7 +69,7 @@ The person expects the restrictions to stay for as long as the Focus stays on, a
 ### Access read in the extension
 
 19. A fresh extension process is expected to read `notDetermined` until it calls `requestAuthorization`: the Monitor process read `notDetermined` with access approved (#115), and a revocation in Settings also read `notDetermined` (#118). So the access value in the extension is usually `unknown`.
-20. The filter start treats `unknown` as "not proven denied": it does not refuse with `access`, and the M1 start steps decide. If shields or registration fail, the M1 rollback records "시작 실패" (`.startFailed`). Only `denied` refuses with `access`. This changes the access-state rule "an action that needs access refuses on `unknown`" for the filter start only. The reason: a refusal on `unknown` would refuse every background start.
+20. The filter start treats `unknown` as "not proven denied": it does not refuse with `access`, and the two access reads inside the M1 start steps (after the registration and after the shield, `SessionControl.begin`) accept `unknown` as well. They still fail on `denied`, and the registration check (`isRegistered`) and the shield check (`matches`) stay as they are, so the start proves its restrictions without proving access. If shields or registration fail, the M1 rollback records "시작 실패" (`.startFailed`). Only `denied` refuses with `access`. This changes the access-state rule "an action that needs access refuses on `unknown`" for the filter start only. The reason: a refusal on `unknown` would refuse every background start.
     `[UNCERTAIN]` Whether `requestAuthorization(for: .individual)` in the extension returns at once without UI for an approved app. The builder may call it before the read only if a device check shows no prompt; otherwise the extension does not call it.
 
 ### App screens
@@ -136,7 +136,7 @@ The Monitor's `didEnd` of the focus activity runs this through its existing reco
 ### Filter end (Focus off)
 
 The M4 [filter end](2026-11-01-m4-focus-filter-design.md#filter-end-focus-off), with step 4 changed: a filter-started session that is not `terminal` ends with the reason of decision 4, and with the `expiresAt` of decision 5 for `.expired`.
-Step 2 clears the marker before step 3, so the reconcile of step 3 sees a session that is no longer open and never rolls it over.
+The section decides whether the stored session is open before step 2 clears the marker, and keeps that decision for the rest of the section. For a session that was open, the reconcile of step 3 neither rolls it over nor ends it with the timed `.expired`; it can still end it as `.deadlineMissed` or `.authorizationRevoked`. Step 4 then ends it with the reason of decision 4 and the open focused time of decision 5, so a lost rollover does not shorten the recorded time.
 The #53 guarantee (the off call releases a filter-started session after a caught cleanup or reconcile error) applies unchanged, with the reason order of decision 4.
 
 ### Activation check
@@ -147,7 +147,7 @@ Without the app, a lost off call keeps an open session rolling over (decision 8)
 
 ### Manual end
 
-"집중 종료" runs `finish()` as today. For an open session the reason is `.expired` when the focused time is at least the base length (decision 5 sets `expiresAt`), else `.earlyExit`.
+"집중 종료" runs `finish()` as today. For an open session the reason is `.expired` when the open focused time is at least the base length (decision 5 sets `expiresAt`), else `.earlyExit`.
 The marker stays, so the same activation starts no new session (M4 decision 11).
 
 ## Gaps between steps
@@ -217,7 +217,7 @@ On the iPhone 16 Pro with the signed Debug build, after the signing approval:
 
 ## Verification
 
-- Host tests (`Shared/`): rollover in `active` at the focus end, catch-up after a late callback, no rollover for a manual session or a session whose activation was cleared, deadline before the focus end, rollover registration failure, the reason order of decision 4, `expiresAt` of decision 5, decoding a version 2 file without the new fields.
+- Host tests (`Shared/`): rollover in `active` at the focus end, catch-up after a late callback, no rollover for a manual session or a session whose activation was cleared, deadline before the focus end, rollover registration failure, the reason order of decision 4, `expiresAt` of decision 5 (including a Focus off after a lost rollover, which records the uncapped time), a filter start with `unknown` access that passes both verification reads and one with `denied` that rolls back, decoding a version 2 file without the new fields.
 - The separate-process race check, because rollover adds a write to an existing callback.
 - SDK tests for the migration and for the App Group stores.
 - UI tests with fixtures for the count-up timer screen and the completion card of an open session.
