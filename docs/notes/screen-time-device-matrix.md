@@ -382,6 +382,18 @@ The history rows come from a copy of the device store read with `sqlite3`; the t
 The registration failure is injected by the DEBUG path of #15, not a failure that the system produced; no natural registration failure or late callback of an earlier session was observed on the device, so those stay unverified.
 The replay of the earlier callback runs the engine in the app process, so it has no Monitor line.
 
+## Picker selection limit: 2026-11-15 (#13)
+
+On the same device and build, with no session and with an everyday layer that already had apps selected, the focus selection was edited with individual apps only, no category and no website.
+
+| Step                                                                        | Result                                                                                                                               |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| 50 focus apps that, with the everyday apps, made more than 50 apps together | Refused with "집중 시간과 매일 제한을 합쳐 앱은 50개까지 고를 수 있어요.", as the union rule of `SelectionValidator.unionLimit` says |
+| 50 apps together, two of them shared with the everyday selection            | Saved                                                                                                                                |
+| One more app, 51 together                                                   | Refused, and the saved selection stayed as it was                                                                                    |
+
+The limit for websites and the per-category counting were not checked on the device. Safari and other browsers remain open in #13.
+
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 
 이슈 #17의 검토 결과다.
