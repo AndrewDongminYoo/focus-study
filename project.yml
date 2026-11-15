@@ -101,6 +101,7 @@ targets:
         App/AuthorizationService.swift,
         App/FocusFilterHandler.swift,
         App/FocusRuntimeHolder.swift,
+        App/StartupAttempts.swift,
         App/TodaySnapshotWriter.swift,
         Activity/FocusActivityAttributes.swift,
         Activity/SystemFocusActivityClient.swift,

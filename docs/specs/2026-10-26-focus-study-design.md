@@ -118,6 +118,12 @@ SwiftData `SessionRecord`는 UUID를 고유 키로 하고 시작/예정 만료/�
 
 시작 시 세션 제어 복구를 선택 토큰과 SwiftData 초기화보다 먼저 수행한다. 선택·기록 저장소가 열리지 않아도 제어 경로를 유지하며 오류 화면에서 안전한 현재 세션 종료와 재시도를 제공한다. 기록 저장소가 정상화되기 전에는 terminal을 확인 처리하지 않는다.
 
+2026-11-15 보완([#155](https://github.com/AndrewDongminYoo/focus-study/issues/155)): 위 문단의 "오류 화면"은 보호된 데이터를 읽을 수 있을 때의 실패에만 적용한다.
+재시동 후 첫 잠금 해제 전처럼 보호된 데이터를 읽을 수 없을 때 시작이 실패하면 준비 중 화면을 유지하고, `protectedDataDidBecomeAvailableNotification`마다, 그리고 기다리는 동안 앱이 활성화될 때마다 시작을 한 번 다시 실행한다.
+보호된 데이터를 읽을 수 있는데 그 재실행이 실패하면 오류 화면을 보여 주며, 재실행을 반복하지 않는다.
+오류 화면이 보이는 동안에는 그 실패 뒤 첫 `protectedDataDidBecomeAvailableNotification`에서만 시작을 한 번 다시 실행하고, 다시 실패하면 화면과 안내 문구(세션 종료 요청 뒤의 안내 포함)를 바꾸지 않는다.
+코드 기준은 `App/StartupAttempts.swift`이다.
+
 기록 조회 실패는 확인된 활성 제어 상태를 무효화하지 않으며 중도 종료를 계속 제공한다.
 제어 상태 읽기 실패는 활성 표시를 유지하지 않는다.
 같은 날 보고서를 다시 불러올 때도 `UsageReportContainer`의 콘텐츠 ID를 바꿔 하위 뷰를 새로 만든다.
