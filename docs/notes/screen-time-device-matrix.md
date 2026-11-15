@@ -394,6 +394,29 @@ On the same device and build, with no session and with an everyday layer that al
 
 The limit for websites and the per-category counting were not checked on the device. Safari and other browsers remain open in #13.
 
+## Focus filter, force-quit, real expiry and web blocking: 2026-11-15 (#55, #11, #13, widget)
+
+On the same device and build, from 14:11 to about 15:05 +09:00, with the Work Focus.
+Focus changes come from `donotdisturbd` (category `AppFocusConfiguration`) in `log collect` archives; session times come from a copy of the device store.
+The app was reopened from the Home Screen at about 14:30, which removed the timing flag, so later steps have no app or Monitor timing lines.
+
+| Step                                                      | Result                                                                                                                                                                                                                 |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M4 step 1: the filter in Settings > Focus > Work          | Listed as 온:공 with the filter switch "집중 시간" (its description below it) and one option, "집중 시작"; both were turned on                                                                                         |
+| M4 steps 2 and 3: Focus on with the app not in front      | Failed: at 14:12:58 and 14:15:13 the system logged `No extension for action in app; background update unavailable`, `perform()` did not run, no session started and no refusal was stored; #152 takes it up            |
+| Focus on with the app in front                            | A session started at once (14:24:35, and again at 14:34:30)                                                                                                                                                            |
+| Force-quit during the session, then lock and unlock (#11) | Passed: the Live Activity kept counting, every app of the focus selection stayed shielded, and the reopened app showed the running session                                                                             |
+| Safari (#13), with youtube.com in the focus selection     | Passed: youtube.com and every path under it were blocked in normal and private tabs; apple.com, not selected, opened                                                                                                   |
+| Other browsers (#13)                                      | Not blocked: youtube.com opened in Chrome and in Firefox for iOS; this is recorded as a limit of the web domain shield in those browsers                                                                               |
+| Notifications (M4 step 7, partial)                        | A shielded app showed no notification; an app allowed in the Work Focus delivered its notifications silently                                                                                                           |
+| Real 25-minute expiry with the app not running (#11)      | Passed: the session that started at 14:34:30 had its planned end at 14:59:30; the Monitor ended it with `observedAt` 14:59:33 and the apps opened at about 15:00; the row `expired` appeared when the app was opened   |
+| Focus off at 15:01:18 with the app not running            | No `perform()` call, as above                                                                                                                                                                                          |
+| Widget and Live Activity before the app ran               | The widget kept the Empty view and the Live Activity kept its confirmation state; after the app was opened, the widget showed the completed session, the Live Activity ended, and the history sheet showed "25분 완료" |
+| Widget step 7: looks                                      | Passed in dark mode, the tinted Home Screen, the largest text size and StandBy                                                                                                                                         |
+
+#13 closes with the Picker record above and this record: Safari blocks the selected domain and its paths in both tab types, and Chrome and Firefox do not block it on this device and OS.
+Widget step 5 (a Focus start with the app closed) cannot run until #152 is resolved.
+
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 
 이슈 #17의 검토 결과다.

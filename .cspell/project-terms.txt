@@ -19,6 +19,7 @@ com.apple.deviceactivityui.report-extension
 com.apple.widgetkit-extension
 devicectl
 donminzzi
+donotdisturbd
 dsym
 ENABLE_STRICT_OBJC_MSGSEND
 exclamationmark.circle
