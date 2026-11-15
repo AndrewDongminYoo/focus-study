@@ -368,6 +368,20 @@ On the iPhone 16 Pro with iOS 27.0.1 and the signed Debug builds of `87f1103` an
 No usage value, app name or domain is recorded here.
 Decided on 2026-11-15: #14 closes with this record, and the notice for missing or late data stays covered by the simulator fixtures only.
 
+## Injected registration failure, earlier callback and repeated taps: 2026-11-15 (#16, #11)
+
+On the same iPhone 16 Pro with iOS 27.0.1, a signed Debug build from `62a1955` launched with `--screen-time-diagnostics` at 13:53 +09:00.
+The history rows come from a copy of the device store read with `sqlite3`; the timing lines come from one `log collect` archive.
+
+| Step                                                                            | Result                                                                                                                                                                                                                                 |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "다음 등록 후 실패 주입", then start (#16)                                      | Passed: an error notice, no timer screen, and the selected apps stayed open; the app logged `register` (94.1 ms) and then `stop` (11.6 ms) in the same second with no `apply_shield`, and the history row is `startFailed` at 13:53:32 |
+| Session A, "현재 세션 콜백 저장", end A; session B, "이전 세션 콜백 전달" (#16) | Passed: A ran 13:54:08–13:54:29, B started at 13:54:36 and kept its restrictions until it was ended by hand at 13:55:05, with no `stop` between; both rows are `earlyExit`, and the sheet shows them under the same start minute       |
+| Start tapped twice quickly, end and its confirmation tapped twice quickly (#11) | Passed: one `register` at 13:55:46, one `stop` at 13:55:53, and one `earlyExit` row                                                                                                                                                    |
+
+The registration failure is injected by the DEBUG path of #15, not a failure that the system produced; no natural registration failure or late callback of an earlier session was observed on the device, so those stay unverified.
+The replay of the earlier callback runs the engine in the app process, so it has no Monitor line.
+
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 
 이슈 #17의 검토 결과다.
