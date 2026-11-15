@@ -450,6 +450,19 @@ The earlier boot shows the cause of the failure: its pre-unlock process logged `
 
 #11 closes with the records of 2026-11-15: allow, deny and revoke; force-quit and lock; a real 25-minute expiry with its planned and observed times; a relaunch and a restart; repeated start and end taps with one record each.
 The preparing and ending states were not forced on the device, and their recovery stays covered by the host and simulator tests only.
+Reconciliation (2026-11-15): the store copy of round 6 shows that the restarted session started at 15:59:12, not at about 15:57:53 as written above, and that it expired normally: planned end 16:24:12, `observedAt` 16:24:15, reason `expired`.
+
+## Time zone and manual clock changes: 2026-11-15 (#12)
+
+On the same device and build, with "자동으로 설정" turned off in Settings > General > Date & Time; session rows come from a copy of the device store.
+
+| Step                                                                                       | Result                                                                                                                                                                                                 |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A session from 16:35:01 (planned end 17:00:01), time zone to Singapore, then back to Seoul | Passed: the session kept running, the remaining time neither grew nor shrank, and the planned end stayed 17:00:01; it was ended by hand at 16:39:11 (`earlyExit`)                                      |
+| The end time shown during the Singapore time zone                                          | Still "5:00" in Seoul time. The timer screen shows only the remaining time, so this is most likely the Live Activity, which keeps its rendered time until the app sends an update; not checked further |
+| A session from 16:39:35, then the clock set 10 minutes ahead by hand                       | Passed: the Live Activity countdown dropped at once, and the app showed the session ended as `clockChanged` ("시각 변경으로 중단") at 16:50:26 device time                                             |
+
+The session across local midnight remains for #12.
 
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 
