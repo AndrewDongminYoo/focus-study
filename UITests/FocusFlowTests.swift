@@ -1094,7 +1094,8 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(resume.isHittable)
         captureReport(app, name: "break-return-largest-text")
         resume.tap()
-        XCTAssertTrue(app.buttons["breakStart"].waitForExistence(timeout: 8))
+        // The focus screen stays once it is back, so this waits only for the runner: one tap took 17 s and one query 15 s on CI (PR #144).
+        XCTAssertTrue(app.buttons["breakStart"].waitForExistence(timeout: ready))
     }
     func testBreakFlowReBlocksAndResumes() {
         // No step here depends on how long one accessibility query takes (#109): the lenient timing admits the automatic break start
