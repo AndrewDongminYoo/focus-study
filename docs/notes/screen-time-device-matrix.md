@@ -462,7 +462,7 @@ On the same device and build, with "자동으로 설정" turned off in Settings 
 | The end time shown during the Singapore time zone                                          | Still "5:00" in Seoul time. The timer screen shows only the remaining time, so this is most likely the Live Activity, which keeps its rendered time until the app sends an update; not checked further |
 | A session from 16:39:35, then the clock set 10 minutes ahead by hand                       | Passed: the Live Activity countdown dropped at once, and the app showed the session ended as `clockChanged` ("시각 변경으로 중단") at 16:50:26 device time                                             |
 
-The session across local midnight remains for #12.
+The session across local midnight is recorded in its own section below.
 The date and time settings were set back to automatic after these checks (reported on 2026-11-15).
 
 ## Restart after the pre-unlock fix: 2026-11-15 (#155)
@@ -471,6 +471,20 @@ On the same iPhone 16 Pro with iOS 27.0.1, a signed Debug build from `8794caa` (
 From one `log collect` archive: `=== system boot` at 18:18:22, a `FocusStudy` process (pid 247) at 18:18:36 with no user action, `Failed to fetch authorization status: ... Code=257` for `Authorizations.plist` in that process at 18:18:38, and the first unlock (`analytics_send_first_unlock`) at 18:20:20.
 After the unlock the app opened on the running session with no "앱 데이터를 확인해 주세요" screen, in the same process that had started before the unlock.
 This is the condition of the failure recorded above (a launch before the first unlock that cannot read protected files), and it no longer shows the failure screen, which is the done-when of #155.
+
+## Session across local midnight: 2026-11-15 to 2026-11-16 (#12)
+
+On the same iPhone 16 Pro with iOS 27.0.1 and the signed Debug build from `8794caa`, with the date and time set to automatic in the Seoul time zone, a 25-minute session was started before midnight and left to run without a break.
+Session times come from a copy of the device store taken at 00:07 on 2026-11-16; the other results were observed on the device.
+
+| Check                             | Result                                                                                                                                            |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Expiry across midnight            | Passed: started 2026-11-15 23:42:03, planned end 2026-11-16 00:07:03, `observedAt` 00:07:05, reason `expired`; every restricted app was unblocked |
+| Today's history after midnight    | Passed: the sheet on 2026-11-16 showed no session, because a session belongs to the local day of its start                                        |
+| Home screen widget after midnight | Passed: Empty, since 2026-11-16 has no completed session; the widget was not checked before midnight                                              |
+| Streak after midnight             | Passed: "연속 집중 2일"; the store has completed sessions on 2026-11-14 and 2026-11-15 and none on 2026-11-16, so the run ends yesterday          |
+
+With the time zone and clock checks above, this covers the done-when of #12.
 
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 
