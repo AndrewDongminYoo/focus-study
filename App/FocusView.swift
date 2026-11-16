@@ -102,10 +102,16 @@ struct FocusView: View {
                 everydayStatusRow
                 Button("닫기") { model.dismissCompletion() }.modifier(FocusSecondaryAction()).accessibilityIdentifier("completionDismiss")
             } else {
-                clock(model.remaining)
-                    .accessibilityLabel("남은 시간 \(model.remaining / 60)분 \(model.remaining % 60)초").accessibilityIdentifier("countdown")
+                if let elapsed = model.openElapsed {
+                    clock(elapsed, countsDown: false)
+                        .accessibilityLabel("집중한 시간 \(elapsed / 3600 > 0 ? "\(elapsed / 3600)시간 " : "")\(elapsed % 3600 / 60)분 \(elapsed % 60)초").accessibilityIdentifier("countdown")
+                } else {
+                    clock(model.remaining)
+                        .accessibilityLabel("남은 시간 \(model.remaining / 60)분 \(model.remaining % 60)초").accessibilityIdentifier("countdown")
+                }
                 if model.isInSession {
-                    Text("집중 시간 진행 중").font(.subheadline).foregroundStyle(FocusTheme.Palette.secondaryText)
+                    Text(model.openElapsed == nil ? "집중 시간 진행 중" : "집중 모드를 끌 때까지 이어져요").font(.subheadline).foregroundStyle(FocusTheme.Palette.secondaryText)
+                        .accessibilityIdentifier("sessionStatus")
                 } else {
                     Button("집중 시작하기") { if model.access == .checking { Task { await model.recoverAccessAndStart() } } else { model.requestStart() } }.modifier(FocusPrimaryAction()).controlSize(.large).modifier(ProminentLabel())
                         .disabled(!model.canStart).accessibilityIdentifier("start")
@@ -139,10 +145,11 @@ struct FocusView: View {
                 .disabled(model.isStarting).accessibilityLabel(line).accessibilityIdentifier("everydayStatusRow")
         }
     }
-    private func clock(_ seconds: Int) -> some View {
-        Text(String(format: "%02d:%02d", seconds / 60, seconds % 60))
+    /// `mm:ss`, or `h:mm:ss` from one hour, which only the count-up of an open session reaches.
+    private func clock(_ seconds: Int, countsDown: Bool = true) -> some View {
+        Text(seconds >= 3600 ? String(format: "%d:%02d:%02d", seconds / 3600, seconds % 3600 / 60, seconds % 60) : String(format: "%02d:%02d", seconds / 60, seconds % 60))
             .font(.system(size: countdownSize, weight: .light, design: .rounded)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
-            .contentTransition(.numericText(countsDown: true)).animation(reduceMotion ? nil : .default, value: seconds)
+            .contentTransition(.numericText(countsDown: countsDown)).animation(reduceMotion ? nil : .default, value: seconds)
             .accessibilityAddTraits(.updatesFrequently)
     }
     private var focusActions: some View {

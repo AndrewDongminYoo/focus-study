@@ -629,8 +629,33 @@ import SwiftData
         await handler.focusDidChange(startsSession: false)
         XCTAssertEqual(try engine.snapshot().session?.reason, .expired)
         model.refresh()
-        XCTAssertEqual(model.completedSessionID, s2.id); XCTAssertEqual(model.completedLength, 1800)
+        // An open session records its focused time, here about 1900 seconds, not the 1800-second base (2026-11-16 extension design, decision 5).
+        XCTAssertEqual(model.completedSessionID, s2.id); XCTAssertEqual(try XCTUnwrap(model.completedLength), 1900, accuracy: 5)
         XCTAssertNil(model.services.settings.pendingCompletion)
+    }
+    func testOpenSessionPastItsBaseLengthCountsUp() async throws {
+        let (model, history, store, _, engine) = fixture()
+        model.services.settings.lengthMinutes = 30
+        var clock = Date().addingTimeInterval(-600)
+        let handler = filterHandler(model, history: history, refresh: {}, now: { clock })
+        await handler.focusDidChange(startsSession: true)
+        model.refresh()
+        XCTAssertNil(model.openElapsed, "before the base length the countdown stays")
+        // Move the stored start back, as if the Focus had stayed on for 1900 seconds; the refresh rolls the session over.
+        var session = try XCTUnwrap(try engine.snapshot().session)
+        let shift = TimeInterval(1300)
+        session.startedAt = session.startedAt.addingTimeInterval(-shift); session.expiresAt = session.expiresAt.addingTimeInterval(-shift)
+        store.envelope.session = session
+        clock = Date()
+        model.refresh()
+        XCTAssertEqual(try XCTUnwrap(model.openElapsed), 1900, accuracy: 5)
+        XCTAssertGreaterThan(model.remaining, 0)
+    }
+    func testManualSessionNeverCountsUp() throws {
+        let (model, _, _, shield, engine) = fixture()
+        _ = try engine.start(now: Date().addingTimeInterval(-1400), authorized: { .approved }, apply: { shield.applied = true }, matches: { true })
+        model.refresh()
+        XCTAssertNil(model.openElapsed)
     }
     func testNoBreakActionAfterThirdBreak() {
         let (model, _, _) = breakFixture()

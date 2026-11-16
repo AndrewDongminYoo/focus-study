@@ -221,7 +221,9 @@ import SwiftData
         XCTAssertNotNil(newer); XCTAssertNotEqual(newer, marker); XCTAssertEqual(rig.store.envelope.filterActivation, newer)
         let session = stored(rig)
         await rig.handler.checkActivation(reading: { .off })
-        XCTAssertNil(rig.store.envelope.filterActivation); XCTAssertEqual(stored(rig), session)
+        // The clear ends the session that was open for that marker (2026-11-16 extension design, "Activation check"); before its base length, as the person's end.
+        XCTAssertNil(rig.store.envelope.filterActivation)
+        XCTAssertEqual(stored(rig)?.id, session?.id); XCTAssertEqual(stored(rig)?.phase, .terminal); XCTAssertEqual(stored(rig)?.reason, .earlyExit)
     }
     /// Focus off while access is `checking`, such as with the app not running: the session ends as the person's end, never as revoked.
     func testOffCallWhileCheckingEndsWithoutRevocation() async throws {
@@ -239,7 +241,8 @@ import SwiftData
             await rig.handler.checkActivation(reading: { .off })
             await rig.handler.focusDidChange(startsSession: false)
             XCTAssertEqual(rig.authorization.requests, 0, "\(status)")
-            if status != .approved { XCTAssertEqual(rig.services.settings.lastFilterRefusal?.reason, .access, "\(status)") }
+            // Only `denied` refuses; an unknown status starts (2026-11-16 extension design, decision 20).
+            XCTAssertEqual(rig.services.settings.lastFilterRefusal?.reason, status == .denied ? .access : nil, "\(status)")
         }
     }
     func testHandlerAndScreensShareOneRuntime() async throws {

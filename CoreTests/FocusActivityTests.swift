@@ -19,6 +19,25 @@ final class FocusActivityTests: XCTestCase {
         XCTAssertEqual(projection.content.focusRemaining, 1220)
         XCTAssertEqual(projection.content.checkedAt, now)
     }
+    func testRolledOverOpenSessionIsProjected() throws {
+        var value = ControlSession(startedAt: Date(timeIntervalSince1970: 1000), length: 3600)
+        value.phase = .active; value.origin = .focusFilter; value.activation = UUID(); value.baseLength = 1800
+        XCTAssertNotNil(FocusActivityProjection.make(session: value, now: now, timing: .standard))
+        value.expiresAt = Date(timeIntervalSince1970: 1000 + 2000)
+        XCTAssertNil(FocusActivityProjection.make(session: value, now: now, timing: .standard), "a length outside the rule is not displayed")
+    }
+    func testOpenSessionPastItsBaseLengthCountsUpWithoutAPlannedEnd() throws {
+        var value = ControlSession(startedAt: Date(timeIntervalSince1970: 1000), length: 3600)
+        value.phase = .active; value.origin = .focusFilter; value.activation = UUID(); value.baseLength = 1800; value.pausedSeconds = 100
+        let at = Date(timeIntervalSince1970: 1000 + 2000)
+        let content = try XCTUnwrap(FocusActivityProjection.make(session: value, now: at, timing: .standard)).content
+        XCTAssertEqual(content.phase, .openFocus)
+        XCTAssertEqual(content.focusStart, Date(timeIntervalSince1970: 1100), "start plus the paused time, so the count-up shows 1900 s")
+        XCTAssertNil(content.focusEnd)
+        // Before the base length the countdown of the focus phase stays.
+        let early = try XCTUnwrap(FocusActivityProjection.make(session: value, now: Date(timeIntervalSince1970: 1000 + 600), timing: .standard)).content
+        XCTAssertEqual(early.phase, .focus); XCTAssertNil(early.focusStart)
+    }
     func testBreakProjectionKeepsFocusFrozenAndUsesScheduledBreakBoundary() throws {
         var value = session(.onBreak)
         value.pausedAt = Date(timeIntervalSince1970: 1300)

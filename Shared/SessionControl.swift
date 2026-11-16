@@ -37,54 +37,87 @@ final class SessionControl {
     // MARK: Focus filter
 
     /// The spec "Filter start", step 3. One activation starts at most one session: a refusal also stores the marker.
-    func startFromFocusFilter(now: Date, length: TimeInterval, authorized: () -> AccessState, selectionReady: Bool, apply: () -> Void, matches: () -> Bool) throws -> FocusFilterStart {
+    /// `calledAt` is the arrival time of the call (2026-11-16 extension design, "Call order across processes"); `nil` skips the order check.
+    func startFromFocusFilter(now: Date, length: TimeInterval, authorized: () -> AccessState, selectionReady: Bool, apply: () -> Void, matches: () -> Bool,
+                              calledAt: Date? = nil) throws -> FocusFilterStart {
         try section(now: now) { locked in
             var envelope = try read(locked)
             try cleanup(&envelope, locked: locked, now: now)
-            // A repeated call of the same activation makes no change of its own.
-            guard envelope.filterActivation == nil else { return .repeated }
+            // A call that arrived before an accepted one makes no change of its own.
+            if Self.isStale(calledAt, envelope) { return .stale }
+            if let calledAt { envelope.filterCallAt = calledAt }
+            // A repeated call of the same activation makes no change of its own; it stores only its arrival time.
+            guard envelope.filterActivation == nil else { try saveCallTime(envelope, locked: locked); return .repeated }
             envelope.filterActivation = UUID()
             locked.access = authorized()
             let refusal: FocusFilterRefusal?
-            if locked.access != .approved { refusal = .access }
+            // Only `denied` refuses: a fresh extension process usually reads `unknown` (2026-11-16 extension design, decision 20).
+            if locked.access == .denied { refusal = .access }
             else if !selectionReady { refusal = .selection }
             else if let prior = envelope.session { refusal = prior.phase == .terminal ? .history : .busy }
             else { refusal = nil }
             if let refusal { try locked.save(envelope); return .refused(refusal) }
             // The save of `preparing` writes the marker; the rollback keeps it, so the activation is used.
-            return .started(try begin(&envelope, locked: locked, now: now, length: length, origin: .focusFilter, authorized: authorized, apply: apply, matches: matches))
+            // The two access reads inside `begin` also accept `unknown`; the registration and shield checks still prove the restrictions.
+            let notDenied: () -> AccessState = { authorized() == .denied ? .denied : .approved }
+            return .started(try begin(&envelope, locked: locked, now: now, length: length, origin: .focusFilter, activation: envelope.filterActivation,
+                                      authorized: notDenied, apply: apply, matches: matches))
         }
     }
     /// The spec "Filter end". The Focus-off rule ends only a `focusFilter` session; a manual one ends only for the reasons of any reconcile.
-    func endFromFocusFilter(now: Date, authorized: AccessState) throws {
+    /// Returns `false` for a stale call, which changes nothing of its own.
+    @discardableResult
+    func endFromFocusFilter(now: Date, authorized: AccessState, calledAt: Date? = nil) throws -> Bool {
         try section(now: now, access: authorized) { locked in
             var envelope = try read(locked)
             // Turning the Focus off is the person's end, so it must still lift the restrictions of a filter-started session when the cleanup or the reconcile cannot save (#53).
             var caught: Error?
             do { try cleanup(&envelope, locked: locked, now: now) } catch { caught = error }
+            if Self.isStale(calledAt, envelope) {
+                if let caught { throw caught }
+                return false
+            }
+            if let calledAt { envelope.filterCallAt = calledAt }
+            // Openness is decided before the marker is cleared and kept for the rest of the section (2026-11-16 extension design, "Filter end").
+            let wasOpen = envelope.sessionIsOpen
             // Every later save of this section writes the cleared marker.
             envelope.filterActivation = nil
             if caught == nil {
-                do { try reconcile(&envelope, locked: locked, now: now, authorized: authorized, clockChanged: false) } catch { caught = error }
+                do { try reconcile(&envelope, locked: locked, now: now, authorized: authorized, clockChanged: false, finalizingOpen: wasOpen) } catch { caught = error }
             }
             // An `end` inside the cleanup or the reconcile sets `terminal` in memory before its last save, so its own error never causes a second end.
             if let session = envelope.session, session.phase != .terminal, session.isFilterStarted {
-                // The reconcile order after a caught error: access `denied`, then the timed end, else the person's end. `unknown` is not a revocation.
-                let reason: EndReason = caught == nil ? .earlyExit : authorized == .denied ? .authorizationRevoked : session.timedEnd(at: now, timing: timing) ?? .earlyExit
-                try end(&envelope, locked: locked, reason: reason, now: now)
+                if wasOpen {
+                    try endOpen(&envelope, locked: locked, now: now, authorized: authorized)
+                } else {
+                    // The reconcile order after a caught error: access `denied`, then the timed end, else the person's end. `unknown` is not a revocation.
+                    let reason: EndReason = caught == nil ? .earlyExit : authorized == .denied ? .authorizationRevoked : session.timedEnd(at: now, timing: timing) ?? .earlyExit
+                    try end(&envelope, locked: locked, reason: reason, now: now)
+                }
             } else if let caught { throw caught }
-            if var stored = locked.stored, stored.filterActivation != nil {
-                stored.filterActivation = nil; try locked.save(stored)
+            if var stored = locked.stored, stored.filterActivation != nil || (calledAt != nil && stored.filterCallAt != calledAt) {
+                stored.filterActivation = nil
+                if let calledAt { stored.filterCallAt = calledAt }
+                try locked.save(stored)
             }
+            return true
         }
     }
-    /// The spec "Activation check", step 3: clears the marker only while it is still the one that the caller read. It never starts or ends a session.
+    /// The spec "Activation check", step 3: clears the marker only while it is still the one that the caller read.
+    /// It never starts a session; it ends a session that was open for that marker, as a Focus off would (2026-11-16 extension design).
     func clearFilterActivation(matching id: UUID, now: Date) throws {
         try section(now: now) { locked in
             var envelope = try read(locked)
             try cleanup(&envelope, locked: locked, now: now)
             guard envelope.filterActivation == id else { return }
-            envelope.filterActivation = nil; try locked.save(envelope)
+            let wasOpen = envelope.sessionIsOpen
+            // The time of the check makes an on call that arrived before it stale (spec "Call order across processes", step 4).
+            envelope.filterActivation = nil; envelope.filterCallAt = max(envelope.filterCallAt ?? now, now)
+            if wasOpen, let session = envelope.session, Self.isRunning(session.phase) {
+                try endOpen(&envelope, locked: locked, now: now, authorized: .unknown)
+            } else {
+                try locked.save(envelope)
+            }
         }
     }
     func snapshot() throws -> ControlEnvelope { try holding { try read($0) } }
@@ -100,6 +133,10 @@ final class SessionControl {
             guard let current = envelope.session, current.id == id, current.phase != .terminal else {
                 if let cleanupError { throw cleanupError }
                 return
+            }
+            // "집중 종료" of an open session counts when the base length was reached (2026-11-16 extension design, "Manual end"); the marker stays.
+            if reason == .earlyExit, envelope.sessionIsOpen, Self.isRunning(current.phase) {
+                try endOpen(&envelope, locked: locked, now: endedAt ?? now, authorized: .unknown); return
             }
             try end(&envelope, locked: locked, reason: reason, now: endedAt ?? now)
         }
@@ -358,10 +395,11 @@ final class SessionControl {
         }
     }
     /// The M1 start steps after the start checks: save `preparing`, register, verify, apply, verify, save `active`, or the rollback.
-    private func begin(_ envelope: inout ControlEnvelope, locked: LockedControl, now: Date, length: TimeInterval, origin: SessionOrigin,
+    private func begin(_ envelope: inout ControlEnvelope, locked: LockedControl, now: Date, length: TimeInterval, origin: SessionOrigin, activation: UUID? = nil,
                        authorized: () -> AccessState, apply: () -> Void, matches: () -> Bool) throws -> ControlSession {
         var session = ControlSession(startedAt: now, length: length)
         session.origin = origin
+        if origin == .focusFilter { session.activation = activation; session.baseLength = length }
         do {
             envelope.session = session
             try locked.save(envelope)
@@ -395,20 +433,27 @@ final class SessionControl {
         // The copy goes last, because in `waiting` it is the only sign that the end must be registered again.
         breakSelection.removeAll(except: allowed?.id)
     }
-    private func reconcile(_ envelope: inout ControlEnvelope, locked: LockedControl, now: Date, authorized: AccessState, clockChanged: Bool, reBlockEarly: Bool = false) throws {
+    /// `finalizingOpen`: the Focus-off section of a session that was open; it neither rolls over nor ends with the timed `.expired`, and its own end follows.
+    private func reconcile(_ envelope: inout ControlEnvelope, locked: LockedControl, now: Date, authorized: AccessState, clockChanged: Bool, reBlockEarly: Bool = false,
+                           finalizingOpen: Bool = false) throws {
         guard let s = envelope.session, s.phase != .terminal else { return }
+        let open = finalizingOpen || envelope.sessionIsOpen
         if s.phase == .ending { try end(&envelope, locked: locked, reason: s.reason ?? .recoveryInterrupted, now: s.observedAt ?? now); return }
         // Step 2. Only a `denied` read is a revocation; `unknown` skips this step and runs every other one.
         if authorized == .denied { try end(&envelope, locked: locked, reason: .authorizationRevoked, now: now); return }
         if s.phase == .preparing { try end(&envelope, locked: locked, reason: .recoveryInterrupted, now: now); return }
         if clockChanged { try end(&envelope, locked: locked, reason: .clockChanged, now: now); return }
+        // Also for an open session: a missing registration can be the read-failure cleanup, which cleared the shield, so a rollover must not continue it.
         if !monitoring.isRegistered(id: s.id) { try end(&envelope, locked: locked, reason: .recoveryInterrupted, now: now); return }
         // The app was not there to start the break, so the wait is cancelled as of its end plus the grace.
         if s.phase == .waiting, let waitEndsAt = s.waitEndsAt, now >= waitEndsAt.addingTimeInterval(timing.staleWaitGrace) {
             try closeWait(&envelope, locked: locked, now: now)
         }
         guard let current = envelope.session, current.phase != .waiting else { return }
-        if let reason = current.timedEnd(at: now, timing: timing) { try end(&envelope, locked: locked, reason: reason, now: now); return }
+        if open, !finalizingOpen, try rollOver(&envelope, locked: locked, now: now) { return }
+        if let reason = current.timedEnd(at: now, timing: timing), !(finalizingOpen && reason == .expired) {
+            try end(&envelope, locked: locked, reason: reason, now: now); return
+        }
         if current.phase == .onBreak, reBlockEarly || now >= (current.breakEndsAt ?? .distantPast) { try reBlock(&envelope, locked: locked, now: now) }
     }
     /// Transition 2: `waiting` → `active`. The paused time up to `waitEndsAt` + grace is added to the pause and to the deadline.
@@ -448,7 +493,9 @@ final class SessionControl {
     /// Transition 6, in the order of the 2026-10-26 design plus the break artifacts.
     private func end(_ envelope: inout ControlEnvelope, locked: LockedControl, reason: EndReason, now: Date) throws {
         guard var session = envelope.session else { return }
-        session.phase = .ending; session.reason = reason; session.observedAt = now
+        // A stored `ending` keeps the reason and the time it was saved with, so a retry cannot pair a measured length with another reason.
+        if session.phase != .ending { session.reason = reason; session.observedAt = now }
+        session.phase = .ending
         envelope.session = session
         // A disk failure must not prevent releasing our own restrictions.
         var writeError: Error?
@@ -462,6 +509,58 @@ final class SessionControl {
         session.phase = .terminal; envelope.session = session
         try locked.save(envelope)
         if let writeError { throw writeError }
+    }
+
+    // MARK: Open sessions (2026-11-16 Focus filter extension design)
+
+    /// A call is stale when an accepted call arrived later. Equal times keep the lock order, and a missing time on either side makes no call stale.
+    static func isStale(_ calledAt: Date?, _ envelope: ControlEnvelope) -> Bool {
+        guard let calledAt, let stored = envelope.filterCallAt else { return false }
+        return stored > calledAt
+    }
+    /// The save of an accepted call that changes nothing else.
+    private func saveCallTime(_ envelope: ControlEnvelope, locked: TrackedControl) throws {
+        // `stored` is the envelope of the last load or save of this section, so the save keeps whatever the cleanup saved.
+        guard var stored = locked.stored, stored.filterCallAt != envelope.filterCallAt else { return }
+        stored.filterCallAt = envelope.filterCallAt
+        try locked.save(stored)
+    }
+
+    static func isRunning(_ phase: SessionPhase) -> Bool { [.active, .waiting, .onBreak, .breakOver].contains(phase) }
+    /// The spec "Rollover": `true` when the section rolled the session over or ended it, so the reconcile stops.
+    private func rollOver(_ envelope: inout ControlEnvelope, locked: LockedControl, now: Date) throws -> Bool {
+        guard let before = envelope.session, before.phase == .active, let base = before.baseLength, base > 0,
+              now >= before.focusEnd, before.focusEnd <= before.deadline(timing: timing) else { return false }
+        var next = before
+        while next.focusEnd <= now, next.length + base <= ControlSession.maxLength { next.expiresAt = next.expiresAt.addingTimeInterval(base) }
+        // At the one-week bound the timed end of the reconcile ends the session as `.expired`, with the length that the catch-up reached.
+        guard next.focusEnd > now else { envelope.session = next; return false }
+        guard let end = focusActivityEnd(next) else { return false }
+        do { try registerFocus(next, end: end) }
+        catch {
+            // Step 5: without a callback at its next change the session does not keep its restrictions; the base length was reached, so it counts.
+            var ending = before; ending.expiresAt = before.startedAt.addingTimeInterval(before.openFocused(at: now))
+            envelope.session = ending
+            try self.end(&envelope, locked: locked, reason: .expired, now: now)
+            return true
+        }
+        var updated = envelope; updated.session = next
+        try locked.save(updated); envelope = updated
+        return true
+    }
+    /// The end of a session that was open, with the reason order of decision 4: `denied`, the deadline, the base length reached, else the person's end.
+    /// Every end of an open session converges here, so the missing-registration rule of the reconcile holds on each path:
+    /// the read-failure cleanup cleared the shield and stopped monitoring, so that time is never counted.
+    private func endOpen(_ envelope: inout ControlEnvelope, locked: LockedControl, now: Date, authorized: AccessState) throws {
+        guard var session = envelope.session else { return }
+        if authorized == .denied { try end(&envelope, locked: locked, reason: .authorizationRevoked, now: now); return }
+        if !monitoring.isRegistered(id: session.id) { try end(&envelope, locked: locked, reason: .recoveryInterrupted, now: now); return }
+        if session.timedEnd(at: now, timing: timing) == .deadlineMissed { try end(&envelope, locked: locked, reason: .deadlineMissed, now: now); return }
+        let focused = session.openFocused(at: now)
+        guard let base = session.baseLength, focused >= base else { try end(&envelope, locked: locked, reason: .earlyExit, now: now); return }
+        session.expiresAt = session.startedAt.addingTimeInterval(focused)
+        envelope.session = session
+        try end(&envelope, locked: locked, reason: .expired, now: now)
     }
 
     // MARK: Focus activity end

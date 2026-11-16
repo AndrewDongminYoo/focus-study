@@ -115,6 +115,12 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
         return counts.apps + counts.websites == 0 ? .selection : nil
     }
     var remaining: Int { current.map { TimeRules.remaining(session: $0, now: now) } ?? Int(services.settings.lengthSeconds) }
+    /// The focused time of a Focus filter session past its base length, which then continues until the Focus turns off (2026-11-16 extension design, decision 22).
+    /// `nil` keeps the countdown. A rollover moves `expiresAt`, so `remaining` alone would count down a new base length.
+    var openElapsed: Int? {
+        guard let s = current, s.phase != .terminal, FocusActivityProjection.countsUp(s, now: now) else { return nil }
+        return Int(s.openFocused(at: now))
+    }
     /// Which screen launch shows: onboarding resumes at its first unfinished step; a finished person who lost access or selection returns to that step.
     /// The screens follow the session before access, so a session that is not `terminal` stays reachable in every access status.
     var route: LaunchRoute {

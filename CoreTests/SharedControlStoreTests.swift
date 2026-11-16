@@ -83,6 +83,66 @@ final class SharedControlStoreTests: XCTestCase {
         try store.withExclusiveAccess { locked in var envelope = try locked.load(); envelope.session = s; try locked.save(envelope) }
         XCTAssertThrowsError(try store.withExclusiveAccess { try $0.load() }) { XCTAssertEqual($0 as? ControlIssue, .invalidState) }
     }
+    // MARK: Open sessions (2026-11-16 Focus filter extension design, "Length validation")
+
+    private func openSession(base: TimeInterval, length: TimeInterval) -> ControlSession {
+        var s = ControlSession(startedAt: start, length: length)
+        s.origin = .focusFilter; s.activation = UUID(); s.baseLength = base
+        return s
+    }
+    private func saveAndReload(_ session: ControlSession, callAt: Date? = nil) throws -> ControlEnvelope {
+        let store = SharedControlStore(directory: directory)
+        var envelope = ControlEnvelope(); envelope.session = session; envelope.filterCallAt = callAt
+        try store.withExclusiveAccess { try $0.save(envelope) }
+        return try store.withExclusiveAccess { try $0.load() }
+    }
+    private func assertRejected(_ session: ControlSession, _ message: String) throws {
+        let store = SharedControlStore(directory: directory)
+        var envelope = ControlEnvelope(); envelope.session = session
+        try store.withExclusiveAccess { try $0.save(envelope) }
+        XCTAssertThrowsError(try store.withExclusiveAccess { try $0.load() }, message) { XCTAssertEqual($0 as? ControlIssue, .invalidState, message) }
+    }
+    func testVersion2FileWithoutOpenSessionFieldsDecodes() throws {
+        try writeM1Envelope(version: 2, extra: #","origin":"focusFilter""#)
+        let envelope = try SharedControlStore(directory: directory).withExclusiveAccess { try $0.load() }
+        XCTAssertNil(envelope.session?.activation); XCTAssertNil(envelope.session?.baseLength); XCTAssertNil(envelope.filterCallAt)
+    }
+    func testOpenSessionFieldsRoundTrip() throws {
+        let session = openSession(base: 2400, length: 2400), callAt = start.addingTimeInterval(5)
+        let loaded = try saveAndReload(session, callAt: callAt)
+        XCTAssertEqual(loaded.session?.activation, session.activation); XCTAssertEqual(loaded.session?.baseLength, 2400)
+        XCTAssertEqual(loaded.filterCallAt, callAt)
+    }
+    func testRolledOverLengthIsAMultipleOfTheBase() throws {
+        for multiple in [1.0, 2.0, 3.0] {
+            XCTAssertEqual(try saveAndReload(openSession(base: 2400, length: 2400 * multiple)).session?.length, 2400 * multiple)
+        }
+        try assertRejected(openSession(base: 2400, length: 3000), "not a multiple")
+        try assertRejected(openSession(base: 1560, length: 3120), "base not allowed")
+        try assertRejected(openSession(base: 3000, length: 3000 * 202), "above one week")
+    }
+    func testExpiredOpenSessionStoresTheMeasuredTime() throws {
+        for phase in [SessionPhase.ending, .terminal] {
+            var s = openSession(base: 2400, length: 2850)
+            s.phase = phase; s.reason = .expired; s.observedAt = start.addingTimeInterval(2900)
+            XCTAssertEqual(try saveAndReload(s).session?.length, 2850, "\(phase)")
+            var tooLong = s; tooLong.expiresAt = start.addingTimeInterval(ControlSession.maxLength + 1)
+            try assertRejected(tooLong, "\(phase) above one week")
+            var tooShort = s; tooShort.expiresAt = start.addingTimeInterval(2000)
+            try assertRejected(tooShort, "\(phase) below the base")
+            var earlyExit = s; earlyExit.reason = .earlyExit
+            try assertRejected(earlyExit, "\(phase) early exit keeps a multiple")
+        }
+    }
+    func testLengthRuleRejectsNonFiniteAndKeepsManualLengths() {
+        var open = openSession(base: 2400, length: 2400); open.expiresAt = Date(timeIntervalSinceReferenceDate: .infinity)
+        XCTAssertFalse(open.hasValidLength)
+        XCTAssertFalse(ControlSession(startedAt: start, length: 5000).hasValidLength)
+        XCTAssertTrue(ControlSession(startedAt: start, length: 3000).hasValidLength)
+    }
+    func testOneWeekBoundMatchesTheWidgetSnapshotBound() {
+        XCTAssertEqual(ControlSession.maxLength, TodaySnapshot.maxFocusSeconds)
+    }
     func testAtomicReplacementFailurePreservesFileAndAllowsRetry() throws {
         let store = SharedControlStore(directory: directory)
         let file = directory.appendingPathComponent("control.json")

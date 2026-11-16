@@ -214,6 +214,15 @@ private func waitForReady(_ root: URL) {
             case "filter-end":
                 waitForReady(root)
                 try engine.endFromFocusFilter(now: Date(timeIntervalSince1970: 2100), authorized: .approved)
+            case "filter-off-newer":
+                // The off call that arrived later takes the lock first, then lets the older on call try.
+                try engine.endFromFocusFilter(now: Date(timeIntervalSince1970: 3000), authorized: .approved, calledAt: Date(timeIntervalSince1970: 3000))
+                try! Data().write(to: root.appendingPathComponent("ready"))
+            case "filter-on-older":
+                waitForReady(root)
+                let result = try engine.startFromFocusFilter(now: Date(timeIntervalSince1970: 3010), length: 1500, authorized: { .approved }, selectionReady: true,
+                                                             apply: { try! Data("S".utf8).write(to: shield.file) }, matches: { true }, calledAt: Date(timeIntervalSince1970: 2990))
+                if result != .stale { exit(1) }
             default:
                 waitForReady(root)
                 try engine.handleCallback(activityName: args[3], kind: .didEnd, now: Date(timeIntervalSince1970: 5000), authorized: .approved)
@@ -224,6 +233,7 @@ private func waitForReady(_ root: URL) {
         try verifyStaleBreak(executable: args[0])
         try verifyStaleEveryday(executable: args[0])
         try verifyFilterEnd(executable: args[0])
+        try verifyFilterCallOrder(executable: args[0])
         try verifyMarkerSkip(executable: args[0])
         try verifyMarkerOtherName(executable: args[0])
         try verifyMarkerLeftover(executable: args[0])
@@ -348,6 +358,18 @@ private func waitForReady(_ root: URL) {
               Set(monitor.registeredEveryday.map { "\($0.revision).\($0.part)" }) == Set([EverydayPart.range, .window(1)].map { "\(stored.schedule.revision).\($0)" }),
               layer.applied == "B" else { exit(1) }
         print("PASS: stale everyday revision cannot undo a newer save")
+    }
+    /// An on call that arrived before an off call takes the lock after it in another process; it is stale and starts nothing (2026-11-16 extension design).
+    private static func verifyFilterCallOrder(executable: String) throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let shield = FileShield(root)
+        let engine = SessionControl(store: SharedControlStore(directory: root), monitoring: LocalMonitor(root), shield: shield, breakSelection: FileCopies(root, shield: shield), everyday: FileLayer(root))
+        let exited = try run(executable, ["filter-on-older", root.path], ["filter-off-newer", root.path])
+        let stored = try engine.snapshot()
+        guard exited, stored.session == nil, stored.filterActivation == nil, stored.filterCallAt == Date(timeIntervalSince1970: 3000),
+              (try? String(contentsOf: shield.file, encoding: .utf8)) != "S" else { exit(1) }
+        print("PASS: an older on call cannot start after a newer off call")
     }
     /// A Focus off call waits for the lock while another process starts a manual session; it clears the marker and leaves that session running.
     private static func verifyFilterEnd(executable: String) throws {
