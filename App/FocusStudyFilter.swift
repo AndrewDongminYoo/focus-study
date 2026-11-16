@@ -1,6 +1,7 @@
 import AppIntents
 
-/// The FocusStudy Focus filter (spec "The filter intent"). It is compiled into the app target only, and it is the only file that imports `AppIntents`.
+/// The FocusStudy Focus filter (spec "The filter intent"). It is compiled into the app and into the App Intents extension, and `FocusFilterEntry` of each target runs the call
+/// (2026-11-16 extension design, decision 9). The extension entry point also imports `AppIntents`.
 /// The system calls `perform()` with the default values when the Focus turns off, so the default `false` means "no session".
 struct FocusStudyFilter: SetFocusFilterIntent {
     static let title: LocalizedStringResource = "집중 시간"
@@ -11,7 +12,7 @@ struct FocusStudyFilter: SetFocusFilterIntent {
     }
     @MainActor func perform() async throws -> some IntentResult {
         // The arrival time is taken before any lock attempt (2026-11-16 extension design, "Call order across processes").
-        await FocusRuntime.focusFilterDidChange(startsSession: startsSession, calledAt: Date())
+        await FocusFilterEntry.didChange(startsSession: startsSession, calledAt: Date())
         return .result()
     }
     /// `current` for the activation check: `notFound` counts as off; any other error changes nothing.

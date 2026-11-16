@@ -435,3 +435,7 @@ Follow `AGENTS.md` and [README verification](../../README.md#실행과-검증).
 - An upper bound for `focusSeconds` in the valid-value rule.
 - The layout, the fonts and the sample numbers of the gallery preview, within the visual approval.
 - Where the test of the `FocusActivity` source list lives and how it reads `project.yml`.
+
+## Focus filter extension reconciliation: 2026-11-16
+
+No rule of this design changes. The App Intents extension never writes `TodaySnapshot/today.json`; the app stays the only writer, so a session that the extension ends appears in the widget after the next app refresh ([Focus filter extension design](2026-11-16-focus-filter-extension-design.md), decision 26).

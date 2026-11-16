@@ -179,3 +179,7 @@ Existing focus/break/deadline rules, everyday-layer independence, and the iOS 17
 No completion notification, home widget, interactive session control, server, or push transport is added to this scope.
 Reconciliation (2026-11-14, #124): a read-only home screen widget is added by the [home widget design](2026-11-13-home-widget-design.md); it has no control, and the other items of this line stay out of scope.
 The decision contract defines fallback, stale-content limits, privacy, and implementation/device verification gates.
+
+## Focus filter extension reconciliation: 2026-11-16
+
+The focus selection is stored in `FocusSelection/selection.json` in the App Group, not in the app container, so that the App Intents extension can start a session ([Focus filter extension design](2026-11-16-focus-filter-extension-design.md), decisions 12, 16 and 18). The Report extension still has no App Group access, and the widget still reads only the today snapshot.

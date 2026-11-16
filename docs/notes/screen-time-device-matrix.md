@@ -486,6 +486,25 @@ Session times come from a copy of the device store taken at 00:07 on 2026-11-16;
 
 With the time zone and clock checks above, this covers the done-when of #12.
 
+## Focus filter extension: not yet run (#152)
+
+The device steps of the [extension design](../specs/2026-11-16-focus-filter-extension-design.md#physical-device-verification); every row is unverified until a signed build runs on a device.
+
+| Step                                                                                    | Result     |
+| --------------------------------------------------------------------------------------- | ---------- |
+| 1. Which process runs each call, with the app running and closed                        | Unverified |
+| 2. App closed, Focus on: a session starts and the selection is shielded                 | Unverified |
+| 3. App closed, Focus off before the base length: `.earlyExit`                           | Unverified |
+| 4. Focus on past the base length: a rollover, restrictions stay                         | Unverified |
+| 5. Focus off after a rollover: `.expired` with the focused time, streak and widget      | Unverified |
+| 6. A break inside an open session, then Focus off during the break                      | Unverified |
+| 7. "집중 종료" during an open session, then Focus off and on starts a new session       | Unverified |
+| 8. Focus on before the first unlock after a restart                                     | Unverified |
+| 9. Live Activity: none while closed, appears on open, counts up past the base length    | Unverified |
+| 10. Migration over the current build keeps the selection and a 40-minute length         | Unverified |
+| 11. Call order: Focus on, then open the app and turn the Focus off within a second      | Unverified |
+| Whether an ended focus interval stays registered, so a lost rollover is not interrupted | Unverified |
+
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 
 이슈 #17의 검토 결과다.

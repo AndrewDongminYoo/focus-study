@@ -101,3 +101,7 @@ Record adoption and its limits in #41; [implementation #74](https://github.com/A
 The decision PR closes only #41; #39 and unrelated decisions remain open.
 The implementation issue must distinguish adoption from release readiness and preserve failed feasibility results as a reason to defer shipment.
 The original adoption PR #75 changed documentation only; implementation #74 requires the technical and visual gates above.
+
+## Focus filter extension reconciliation: 2026-11-16
+
+A Focus filter session past its base length has the phase `openFocus`: the activity counts up from `focusStart` and shows no planned time of day, because a rollover is not a planned end ([Focus filter extension design](2026-11-16-focus-filter-extension-design.md), decision 25). Every other row of [State and time projection](#state-and-time-projection) is unchanged. A session that the extension starts has no activity until the app comes to the foreground.

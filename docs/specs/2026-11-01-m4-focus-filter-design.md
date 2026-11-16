@@ -462,6 +462,15 @@ Forbidden promises:
 Reconciliation (2026-11-09, issue #84): the guide screen now shows this content as icon rows: numbered rows with a bold short title for the setup steps, one short row for each notification that can still come through, and one icon row for each fact under "알아 둘 점".
 Every content item above and every forbidden promise still applies; `App/FocusGuideView.swift` is the authority for the shipped copy.
 
+## Focus filter extension reconciliation: 2026-11-16
+
+The [Focus filter extension design](2026-11-16-focus-filter-extension-design.md) (#152) is the authority where it differs from this document; the shipped code in #163, #164 and #165 and the extension target that adds this section follow it.
+
+- Decision 14 ("in the main app target, not in a new App Intents extension") and the constraint "No new product target": the intent type, the handler and the lock sections now also compile into the App Intents extension `FocusStudyIntents`, because on iOS 27.0.1 `perform()` never ran while the app was not running (device record of 2026-11-15).
+- Decision 1 ("No endless timer"): a session that the filter started continues after its focus length until the Focus turns off; it rolls over by one base length at each focus end, and ends as `.expired` with the focused time once the base length is reached.
+- [Activation check](#activation-check-app-launch-and-foreground) step 3 ("never starts or ends a session"): the clear now ends the session that was open for that marker.
+- Decision 20 of the new design: a filter start refuses only on `denied`; `unknown` starts, because a fresh extension process reads `notDetermined`.
+
 ## Superseded lines
 
 The implementation PR adds dated reconciliation sections (it does not rewrite the original lines) for these:
