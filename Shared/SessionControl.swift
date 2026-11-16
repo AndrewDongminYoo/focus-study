@@ -547,9 +547,12 @@ final class SessionControl {
         return true
     }
     /// The end of a session that was open, with the reason order of decision 4: `denied`, the deadline, the base length reached, else the person's end.
+    /// Every end of an open session converges here, so the missing-registration rule of the reconcile holds on each path:
+    /// the read-failure cleanup cleared the shield and stopped monitoring, so that time is never counted.
     private func endOpen(_ envelope: inout ControlEnvelope, locked: LockedControl, now: Date, authorized: AccessState) throws {
         guard var session = envelope.session else { return }
         if authorized == .denied { try end(&envelope, locked: locked, reason: .authorizationRevoked, now: now); return }
+        if !monitoring.isRegistered(id: session.id) { try end(&envelope, locked: locked, reason: .recoveryInterrupted, now: now); return }
         if session.timedEnd(at: now, timing: timing) == .deadlineMissed { try end(&envelope, locked: locked, reason: .deadlineMissed, now: now); return }
         let focused = session.openFocused(at: now)
         guard let base = session.baseLength, focused >= base else { try end(&envelope, locked: locked, reason: .earlyExit, now: now); return }

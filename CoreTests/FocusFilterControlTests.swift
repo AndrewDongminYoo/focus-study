@@ -756,16 +756,23 @@ final class FocusFilterControlTests: XCTestCase {
     }
     func testAMissingRegistrationStillEndsAnOpenSessionAsInterrupted() throws {
         // The read-failure cleanup clears the shield and stops monitoring; a later section must not roll that session over or count its time.
-        for focusOff in [false, true] {
+        // Every end of an open session converges on `endOpen`, so each caller is covered: a callback, Focus off, the activation check and "집중 종료".
+        for path in ["didEnd", "focusOff", "check", "finish"] {
             let world = FilterWorld(), engine = engine(world)
             let session = try openStart(engine, world)
+            let marker = try XCTUnwrap(world.state.envelope.filterActivation)
             world.failReads = true
             XCTAssertThrowsError(try engine.reconcile(now: at(100), authorized: .approved))
             world.failReads = false
             XCTAssertFalse(world.state.focusShield)
-            if focusOff { try engine.endFromFocusFilter(now: at(2000), authorized: .approved) } else { try didEnd(engine, session, at: at(1600)) }
+            switch path {
+            case "didEnd": try didEnd(engine, session, at: at(1600))
+            case "focusOff": try engine.endFromFocusFilter(now: at(2000), authorized: .approved)
+            case "check": try engine.clearFilterActivation(matching: marker, now: at(2000))
+            default: try engine.finish(id: session.id, reason: .earlyExit, now: at(2000))
+            }
             let ended = try storedSession(world)
-            XCTAssertEqual(ended.phase, .terminal, "\(focusOff)"); XCTAssertEqual(ended.reason, .recoveryInterrupted, "\(focusOff)"); XCTAssertEqual(ended.length, 1500, "\(focusOff)")
+            XCTAssertEqual(ended.phase, .terminal, path); XCTAssertEqual(ended.reason, .recoveryInterrupted, path); XCTAssertEqual(ended.length, 1500, path)
         }
     }
     func testFocusOffAfterTheDeadlineIsDeadlineMissed() throws {
