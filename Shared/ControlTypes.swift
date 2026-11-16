@@ -25,6 +25,26 @@ public struct ControlSession: Codable, Equatable {
     /// Set once in the save of `preparing`. A missing value (an M3 or earlier session) means `manual`.
     public var origin: SessionOrigin?
     public var isFilterStarted: Bool { origin == .focusFilter }
+    /// The `filterActivation` that started this session; set once in the save of `preparing`, `nil` for `manual` (2026-11-16 extension design).
+    public var activation: UUID?
+    /// The focus length at the start of a `focusFilter` session, the chunk of each rollover; `nil` for `manual` and earlier sessions.
+    public var baseLength: TimeInterval?
+    /// One week: the bound of a stored length and of the rollovers (spec decision 8). It equals `TodaySnapshot.maxFocusSeconds`, which the widget compiles without this file.
+    public static let maxLength: TimeInterval = 7 * 86_400
+    /// The spec rule "Length validation", shared by the store and the Live Activity projection.
+    public var hasValidLength: Bool {
+        guard length.isFinite else { return false }
+        guard let baseLength else { return FocusLength.isAllowed(seconds: length) }
+        guard baseLength.isFinite, FocusLength.isAllowed(seconds: baseLength), length <= Self.maxLength else { return false }
+        if (phase == .ending || phase == .terminal) && reason == .expired { return length >= baseLength - 0.01 }
+        let multiple = (length / baseLength).rounded()
+        return multiple >= 1 && abs(multiple * baseLength - length) < 0.01
+    }
+    /// The open focused time (spec decision 5): `focused(at:)` without the cap at `length`, within the one-week bound.
+    public func openFocused(at now: Date) -> TimeInterval {
+        let openPause = pausedAt.map { max(0, now.timeIntervalSince($0)) } ?? 0
+        return min(Self.maxLength, max(0, now.timeIntervalSince(startedAt) - (pausedSeconds ?? 0) - openPause))
+    }
     public var activityName: String { ActivityNames.focus(id: id) }
     public func breakActivityName(index: Int) -> String { ActivityNames.focusBreak(id: id, index: index) }
     public init(startedAt: Date, length: TimeInterval = 1500, id: UUID = UUID()) {
@@ -58,7 +78,15 @@ public struct ControlSession: Codable, Equatable {
     }
 }
 /// `filterActivation` is the Focus activation that the filter path has seen; the next off call clears it. It outlives the session.
-struct ControlEnvelope: Codable { var schemaVersion = 2; var session: ControlSession?; var filterActivation: UUID? }
+/// `filterCallAt` is the arrival time of the newest filter call or activation-check clear that a section accepted (spec "Call order across processes").
+struct ControlEnvelope: Codable {
+    var schemaVersion = 2; var session: ControlSession?; var filterActivation: UUID?; var filterCallAt: Date?
+    /// The session is open: filter-started, and the activation that started it is still the stored one.
+    var sessionIsOpen: Bool {
+        guard let session, session.isFilterStarted, let activation = session.activation else { return false }
+        return activation == filterActivation
+    }
+}
 /// Why a Focus on call started no session.
 enum FocusFilterRefusal: String, Codable { case access, selection, busy, history, error }
 enum FocusFilterStart: Equatable { case started(ControlSession), repeated, refused(FocusFilterRefusal) }

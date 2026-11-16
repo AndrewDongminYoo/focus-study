@@ -55,7 +55,7 @@ private struct FileControl: LockedControl {
         guard value.schemaVersion == 1 || value.schemaVersion == 2 else { throw ControlIssue.unsupportedSchema }
         if let session = value.session {
             guard session.startedAt.timeIntervalSince1970.isFinite,
-                  FocusLength.isAllowed(seconds: session.length),
+                  session.hasValidLength,
                   (session.phase == .terminal || session.phase == .ending) == (session.reason != nil && session.observedAt != nil),
                   Self.hasValidBreakShape(session)
             else { throw ControlIssue.invalidState }

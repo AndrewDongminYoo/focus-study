@@ -19,6 +19,13 @@ final class FocusActivityTests: XCTestCase {
         XCTAssertEqual(projection.content.focusRemaining, 1220)
         XCTAssertEqual(projection.content.checkedAt, now)
     }
+    func testRolledOverOpenSessionIsProjected() throws {
+        var value = ControlSession(startedAt: Date(timeIntervalSince1970: 1000), length: 3600)
+        value.phase = .active; value.origin = .focusFilter; value.activation = UUID(); value.baseLength = 1800
+        XCTAssertNotNil(FocusActivityProjection.make(session: value, now: now, timing: .standard))
+        value.expiresAt = Date(timeIntervalSince1970: 1000 + 2000)
+        XCTAssertNil(FocusActivityProjection.make(session: value, now: now, timing: .standard), "a length outside the rule is not displayed")
+    }
     func testBreakProjectionKeepsFocusFrozenAndUsesScheduledBreakBoundary() throws {
         var value = session(.onBreak)
         value.pausedAt = Date(timeIntervalSince1970: 1300)
