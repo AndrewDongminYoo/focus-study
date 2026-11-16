@@ -29,6 +29,9 @@ public struct ControlSession: Codable, Equatable {
     public var activation: UUID?
     /// The focus length at the start of a `focusFilter` session, the chunk of each rollover; `nil` for `manual` and earlier sessions.
     public var baseLength: TimeInterval?
+    /// `true` from the App Intents extension's save of `active` until a section in the app container applies the focus shield (2026-11-16 shield amendment, decision 4).
+    /// Valid only in `active`; `nil` means no pending shield.
+    public var shieldPending: Bool?
     /// One week: the bound of a stored length and of the rollovers (spec decision 8). It equals `TodaySnapshot.maxFocusSeconds`, which the widget compiles without this file.
     public static let maxLength: TimeInterval = 7 * 86_400
     /// The spec rule "Length validation", shared by the store and the Live Activity projection.
@@ -165,7 +168,23 @@ enum ActivityNames {
     }
 }
 /// Clears `focusSession` only; the everyday layer has its own store.
-protocol ShieldClient { func clear() }
+protocol ShieldClient {
+    func clear()
+    /// Whether the store holds a shield. A requirement, so that `any ShieldClient` reaches the conforming type's value.
+    var hasShield: Bool { get }
+}
+extension ShieldClient {
+    /// Clients without a readable store never trigger the repair's lift (2026-11-16 shield amendment, decision 11).
+    var hasShield: Bool { false }
+}
+/// Which process an engine runs in (2026-11-16 shield amendment, decision 1).
+enum ShieldRole {
+    /// The app or the Monitor, which write every ManagedSettings store.
+    /// `applyFocusSelection` applies the focus selection of the App Group and returns `true` only when the store matches it.
+    case appContainer(applyFocusSelection: () -> Bool)
+    /// The App Intents extension, whose ManagedSettings stores are in its own container: it never calls a store and writes no registration marker.
+    case intentsExtension
+}
 /// The session-scoped selection copy that lets the Monitor re-block without the app.
 protocol BreakSelectionStore {
     /// Applies the copy and returns `true` only when the store matches it.

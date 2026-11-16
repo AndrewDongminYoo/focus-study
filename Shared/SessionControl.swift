@@ -16,10 +16,19 @@ final class SessionControl {
     let calendar: Calendar
     /// Counts focus activity registrations, so that a callback section knows whether it already registered one.
     private var focusRegistrations = 0
+    /// `nil` in the App Intents extension, which never calls a ManagedSettings store (2026-11-16 shield amendment, decision 1).
+    private let applyFocusSelection: (() -> Bool)?
+    private var writesShields: Bool { applyFocusSelection != nil }
+    /// Every process constructor passes `role`; the default serves the host tests, whose engines have no App Group selection.
     init(store: any ControlStore, monitoring: any MonitoringClient, shield: any ShieldClient, breakSelection: any BreakSelectionStore,
-         everyday: any EverydayLayerStore, timing: BreakTiming = .standard, calendar: Calendar = .autoupdatingCurrent) {
+         everyday: any EverydayLayerStore, timing: BreakTiming = .standard, calendar: Calendar = .autoupdatingCurrent,
+         role: ShieldRole = .appContainer(applyFocusSelection: { false })) {
         self.store = store; self.baseMonitoring = monitoring; self.shield = shield; self.breakSelection = breakSelection
         self.everyday = everyday; self.timing = timing; self.calendar = calendar
+        switch role {
+        case .appContainer(let apply): applyFocusSelection = apply
+        case .intentsExtension: applyFocusSelection = nil
+        }
     }
     func start(now: Date, length: TimeInterval = 1500, authorized: () -> AccessState, apply: () -> Void, matches: () -> Bool) throws -> ControlSession {
         try section(now: now) { locked in
@@ -231,7 +240,8 @@ final class SessionControl {
         try section(now: now) { locked in
             var envelope = try read(locked)
             try cleanup(&envelope, locked: locked, now: now)
-            guard var session = envelope.session, session.id == id, session.phase == .active, session.breaksLeft > 0,
+            // A session whose shield is pending cannot carry the flag into `waiting`; the repair at the end of this section shields it, so a second request can start the break.
+            guard var session = envelope.session, session.id == id, session.phase == .active, session.breaksLeft > 0, session.shieldPending == nil,
                   session.timedEnd(at: now, timing: timing) == nil else { throw ControlIssue.breakUnavailable }
             let breaks = session.breaksTaken ?? 0
             session.phase = .waiting; session.pausedAt = now
@@ -275,7 +285,7 @@ final class SessionControl {
                 breakSelection.remove(id: id)
                 throw error
             }
-            shield.clear()
+            if writesShields { shield.clear() }
         }
     }
     /// An early return first commits the re-block, then transition 5 resumes focus.
@@ -387,10 +397,13 @@ final class SessionControl {
     private func read(_ locked: LockedControl) throws -> ControlEnvelope {
         do { return try locked.load() }
         catch {
-            shield.clear()
-            // No envelope, so no everyday convergence step runs: an empty envelope would apply the everyday shield again.
-            // The everyday activities stay, so that a later callback can apply the layer when `control.json` is readable.
-            everyday.clearShield()
+            // The extension's stores are not the app's, so it only stops the registrations (2026-11-16 shield amendment, decision 1).
+            if writesShields {
+                shield.clear()
+                // No envelope, so no everyday convergence step runs: an empty envelope would apply the everyday shield again.
+                // The everyday activities stay, so that a later callback can apply the layer when `control.json` is readable.
+                everyday.clearShield()
+            }
             // Metadata is unavailable. Stop only this app's UUID-namespaced registrations.
             // Their absence lets a later process detect cleanup instead of trusting stale active metadata.
             for id in Set(monitoring.registeredSessionIDs) { monitoring.stop(id: id) }
@@ -410,15 +423,21 @@ final class SessionControl {
             try locked.save(envelope)
             try monitoring.register(id: session.id, start: session.startedAt, end: session.expiresAt)
             guard monitoring.isRegistered(id: session.id), authorized() == .approved else { throw ControlIssue.verificationFailed }
-            apply()
-            guard matches(), authorized() == .approved else { throw ControlIssue.verificationFailed }
+            if writesShields {
+                apply()
+                guard matches(), authorized() == .approved else { throw ControlIssue.verificationFailed }
+            } else {
+                // The Monitor applies and verifies the shield in `intervalDidStart` of this activity (2026-11-16 shield amendment, decisions 4 and 5).
+                session.shieldPending = true
+            }
             session.phase = .active; envelope.session = session
             try locked.save(envelope)
             return session
         } catch {
             // Keep the lock until rollback completes: a newer session cannot be cleared here.
-            shield.clear(); monitoring.stop(id: session.id)
-            session.phase = .terminal; session.reason = .startFailed; session.observedAt = now
+            if writesShields { shield.clear() }
+            monitoring.stop(id: session.id)
+            session.phase = .terminal; session.reason = .startFailed; session.observedAt = now; session.shieldPending = nil
             envelope.session = session
             try? locked.save(envelope)
             throw error
@@ -471,8 +490,10 @@ final class SessionControl {
         try overwriteAndSave(&envelope, to: session, locked: locked, now: now)
     }
     /// Transition 4: `onBreak` → `breakOver`. A break without an end must not happen.
+    /// The extension skips it: its restore would apply the copy in its own container and commit `breakOver` with no shield in force.
+    /// The break activity's warning or the app re-blocks instead (2026-11-16 shield amendment, decision 1).
     private func reBlock(_ envelope: inout ControlEnvelope, locked: LockedControl, now: Date, endingEarly: Bool = false) throws {
-        guard var session = envelope.session, session.phase == .onBreak else { return }
+        guard writesShields, var session = envelope.session, session.phase == .onBreak else { return }
         if let reason = session.timedEnd(at: now, timing: timing) { try end(&envelope, locked: locked, reason: reason, now: now); return }
         guard breakSelection.restoreShield(id: session.id) else { try end(&envelope, locked: locked, reason: .recoveryInterrupted, now: now); return }
         // Both layers come back before the save of `breakOver`: the blocking rule without its break line. A failure here changes no M2 step.
@@ -500,12 +521,15 @@ final class SessionControl {
         guard var session = envelope.session else { return }
         // A stored `ending` keeps the reason and the time it was saved with, so a retry cannot pair a measured length with another reason.
         if session.phase != .ending { session.reason = reason; session.observedAt = now }
-        session.phase = .ending
+        // The store accepts a pending shield only in `active`.
+        session.phase = .ending; session.shieldPending = nil
         envelope.session = session
         // A disk failure must not prevent releasing our own restrictions.
         var writeError: Error?
         do { try locked.save(envelope) } catch { writeError = error }
-        shield.clear(); monitoring.stop(id: session.id)
+        // In the extension, the Monitor's `intervalDidEnd` of the stopped activity lifts the shield (2026-11-16 shield amendment, decision 8).
+        if writesShields { shield.clear() }
+        monitoring.stop(id: session.id)
         breakSelection.remove(id: session.id)
         // Convergence steps 1 and 3 only, after the focus release: the everyday layer blocks again by its schedule, also after a break.
         // The registrations wait for the end of the section, so this step cannot delay the focus part.
@@ -617,7 +641,7 @@ final class SessionControl {
     /// A lock holder that does not run through `section`: its read-failure stops go through a marker wrapper without a section time.
     private func holding<T>(_ body: (LockedControl) throws -> T) throws -> T {
         try store.withExclusiveAccess { locked in
-            sectionMonitoring = store.registrationMarkers.map { MarkedMonitoring(base: baseMonitoring, markers: $0) }
+            sectionMonitoring = markerStore.map { MarkedMonitoring(base: baseMonitoring, markers: $0) }
             defer { sectionMonitoring = nil }
             return try body(locked)
         }
@@ -628,17 +652,39 @@ final class SessionControl {
         try store.withExclusiveAccess(timeout: lockTimeout) { base in
             let locked = TrackedControl(base, access: access, now: now)
             // Set after the lock is held. This reset runs after the convergence below, so the convergence registers through the wrapper too.
-            sectionMonitoring = store.registrationMarkers.map { MarkedMonitoring(base: baseMonitoring, markers: $0, now: now, calendar: calendar) }
+            sectionMonitoring = markerStore.map { MarkedMonitoring(base: baseMonitoring, markers: $0, now: now, calendar: calendar) }
             defer { sectionMonitoring = nil }
             defer { if let stored = locked.stored { converge(stored, access: locked.access, mayRegister: mayRegister, now: now) } }
+            // Declared after the convergence, so it runs before it, also when the body threw.
+            defer { repairShield(locked) }
             return try body(locked)
+        }
+    }
+    /// An extension section writes no marker: it cannot decide a shield, so a Monitor callback must wait for its lock (2026-11-16 shield amendment, decision 9).
+    private var markerStore: (any RegistrationMarkerStore)? { writesShields ? store.registrationMarkers : nil }
+    /// Decision 11 of the 2026-11-16 shield amendment, after the section's own steps: it recovers a lost `intervalDidStart` or `intervalDidEnd` of the Monitor.
+    /// With no running session stored, the focus shield is lifted; this is also decision 8, for a callback of an ended or removed session.
+    /// A callback of another running session changes nothing.
+    private func repairShield(_ locked: TrackedControl) {
+        guard let applyFocusSelection, var envelope = locked.stored else { return }
+        if var session = envelope.session, session.phase == .active, session.shieldPending == true {
+            if applyFocusSelection() {
+                session.shieldPending = nil; envelope.session = session
+                // A failed save keeps the flag with the shield on; the next section applies and saves again.
+                try? locked.save(envelope)
+            } else {
+                // As the M1 rollback: `end` lifts what the apply wrote.
+                try? end(&envelope, locked: locked, reason: .startFailed, now: locked.now)
+            }
+        } else if !(envelope.session.map { Self.isRunning($0.phase) } ?? false), shield.hasShield {
+            shield.clear()
         }
     }
     /// The spec "Everyday convergence". It never throws, so it can never stop a focus step.
     private func converge(_ envelope: ControlEnvelope, access: AccessState, mayRegister: Bool, now: Date) {
-        // Step 1.
+        // Step 1. The extension registers and stops the everyday activities, but leaves the store to the app container (2026-11-16 shield amendment, decision 10).
         let schedule: EverydaySchedule?
-        do { schedule = try everyday.load() } catch { everyday.clearShield(); return }
+        do { schedule = try everyday.load() } catch { if writesShields { everyday.clearShield() }; return }
         // Step 2. Every stop names its activity: an empty list would stop the focus and break activities too.
         let expected = schedule.map { $0.enabled ? Self.everydayActivities($0) : [] } ?? []
         if access == .denied {
@@ -666,11 +712,13 @@ final class SessionControl {
     }
     /// Convergence steps 1 and 3, for the end of a session.
     private func convergeStore(_ envelope: ControlEnvelope, access: AccessState, now: Date) {
+        guard writesShields else { return }
         let schedule: EverydaySchedule?
         do { schedule = try everyday.load() } catch { everyday.clearShield(); return }
         setEverydayStore(schedule, envelope: envelope, access: access, now: now)
     }
     private func setEverydayStore(_ schedule: EverydaySchedule?, envelope: ControlEnvelope, access: AccessState, now: Date) {
+        guard writesShields else { return }
         if EverydayRules.blocks(schedule: schedule, session: envelope.session, authorized: access, now: now, calendar: calendar) {
             // A store that still does not match keeps what was applied; the status reports it.
             if !everyday.storeMatches() { _ = everyday.applyStored() }
