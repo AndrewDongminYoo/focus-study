@@ -44,6 +44,7 @@ Use these current documentation paths:
 - [M2 implementation plan](docs/plans/2026-11-01-m2-break-pass.md)
 - [M3 implementation plan](docs/plans/2026-11-01-m3-schedule-layer.md)
 - [M4 implementation plan](docs/plans/2026-11-01-m4-focus-filter.md)
+- [Focus filter extension implementation plan](docs/plans/2026-11-16-focus-filter-extension.md)
 - [Implementation decisions](docs/implementation-ledger.md)
 - [Review regressions](docs/notes/independent-review.md)
 - [Physical-device acceptance](docs/notes/screen-time-device-matrix.md)
