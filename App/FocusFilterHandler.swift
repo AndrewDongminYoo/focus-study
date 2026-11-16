@@ -113,7 +113,8 @@ enum ControlChangeNotification {
             case .stale: log("on stale"); return false
             }
         } catch {
-            settings.recordFilterRefusal(.error, at: now()); log("on error"); return false
+            // The refusal changed the shared display values, so the observers reload them.
+            settings.recordFilterRefusal(.error, at: now()); log("on error"); return true
         }
     }
     private func end(calledAt: Date) async -> Bool {

@@ -124,6 +124,7 @@ import SwiftData
         let rig = rig(); rig.store.failRead = true
         await rig.handler.focusDidChange(startsSession: true)
         XCTAssertEqual(rig.services.settings.lastFilterRefusal?.reason, .error); XCTAssertTrue(rig.applied.value.isEmpty)
+        XCTAssertEqual(rig.posts.value, 1, "the recorded refusal is a change that observers reload")
     }
     func testLockTimeoutIsRetriedFourTimesWithAFreshTime() async throws {
         let base = Date(timeIntervalSinceNow: -100)
