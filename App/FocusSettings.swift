@@ -29,6 +29,13 @@ import Observation
             storedLength = newValue; shared.set(newValue, forKey: Keys.length)
         }
     }
+    /// Reads the shared values again after another process, such as the App Intents extension, changed them (2026-11-16 extension design, decision 21).
+    func reloadShared() {
+        storedLength = Self.allowed(readLength()) ?? FocusLength.defaultMinutes
+        if let raw = string(Keys.refusal), let reason = FocusFilterRefusal(rawValue: raw), let at = object(Keys.refusalTime) as? Date {
+            lastFilterRefusal = (reason, at)
+        } else { lastFilterRefusal = nil }
+    }
     /// An allowed length is stored in the App Group. The extension refuses with `error` when a selection exists without one (decision 16).
     /// Without a separate App Group store (tests and fixtures) the length is always the app's own, so it counts as stored.
     var hasStoredLength: Bool { shared === defaults || Self.allowed(shared.object(forKey: Keys.length) as? Int) != nil }

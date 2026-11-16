@@ -310,9 +310,27 @@ import SwiftData
         await rig.handler.focusDidChange(startsSession: true, calledAt: Date())
         XCTAssertNil(stored(rig)); XCTAssertTrue(rig.applied.value.isEmpty)
         XCTAssertEqual(rig.services.settings.lastFilterRefusal?.reason, .error)
+        XCTAssertNotNil(rig.store.envelope.filterActivation, "the refusal uses the activation, as every refusal does")
         rig.services.settings.lengthMinutes = 30
+        await rig.handler.focusDidChange(startsSession: false, calledAt: Date())
         await rig.handler.focusDidChange(startsSession: true, calledAt: Date())
         XCTAssertEqual(stored(rig)?.phase, .active); XCTAssertEqual(stored(rig)?.baseLength, 1800)
+    }
+    func testAStaleCallWithoutAStoredLengthRecordsNothing() async throws {
+        let rig = rig(shared: UserDefaults(suiteName: UUID().uuidString)!), t0 = Date()
+        await rig.handler.focusDidChange(startsSession: false, calledAt: t0.addingTimeInterval(20))
+        await rig.handler.focusDidChange(startsSession: true, calledAt: t0.addingTimeInterval(10))
+        XCTAssertNil(rig.services.settings.lastFilterRefusal); XCTAssertNil(rig.store.envelope.filterActivation)
+    }
+    func testReloadSharedReadsARefusalThatAnotherProcessWrote() {
+        let shared = UserDefaults(suiteName: UUID().uuidString)!, defaults = UserDefaults(suiteName: UUID().uuidString)!
+        let app = FocusSettings(defaults: defaults, shared: shared), other = FocusSettings(defaults: defaults, shared: shared)
+        other.recordFilterRefusal(.selection, at: Date(timeIntervalSince1970: 1000)); other.lengthMinutes = 40
+        XCTAssertNil(app.lastFilterRefusal)
+        app.reloadShared()
+        XCTAssertEqual(app.lastFilterRefusal?.reason, .selection); XCTAssertEqual(app.lengthMinutes, 40)
+        other.clearFilterRefusal(); app.reloadShared()
+        XCTAssertNil(app.lastFilterRefusal)
     }
     func testActivationCheckStoresTheTimeBeforeItReadsTheFocus() async throws {
         let clock = Box(Date()), rig = rig(now: { clock.value })

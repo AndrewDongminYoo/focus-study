@@ -94,16 +94,16 @@ enum ControlChangeNotification {
         let length = settings.lengthSeconds, counts = services.selection.counts, frozen = services.selection.selection
         let selectionReady = (try? SelectionValidator.validate(appCount: counts.apps, webCount: counts.websites, categoryCount: counts.categories)) != nil
         // A selection with no stored length is a damaged migration: never start with a length the person did not choose (2026-11-16 extension design, decision 16).
-        if counts.apps + counts.websites > 0, !settings.hasStoredLength {
-            settings.recordFilterRefusal(.error, at: now()); log("on error length"); return false
-        }
+        // The engine orders this refusal like any other, so a stale call cannot record it.
+        let inputRefusal: FocusFilterRefusal? = counts.apps + counts.websites > 0 && !settings.hasStoredLength ? .error : nil
         // Step 2: a failure here does not stop step 3, which refuses with `history` while a terminal session stays.
         await importPendingTerminal()
         // Steps 3 and 4.
         do {
             let result = try await retryingLock {
                 try self.engine.startFromFocusFilter(now: self.now(), length: length, authorized: { self.services.authorization.accessState() }, selectionReady: selectionReady,
-                                                     apply: { self.services.applySelection(frozen) }, matches: { self.services.matchesSelection(frozen) }, calledAt: calledAt)
+                                                     apply: { self.services.applySelection(frozen) }, matches: { self.services.matchesSelection(frozen) }, calledAt: calledAt,
+                                                     inputRefusal: inputRefusal)
             }
             switch result {
             case .started: settings.clearFilterRefusal(); log("on started"); return true

@@ -881,4 +881,19 @@ final class FocusFilterControlTests: XCTestCase {
         XCTAssertEqual(world.state.envelope.filterCallAt, at(40))
         XCTAssertEqual(try onCall(engine, world, at: at(41), calledAt: at(30)), .stale)
     }
+    func testAnInputRefusalIsOrderedAndSetsTheMarker() throws {
+        let world = FilterWorld(), engine = engine(world)
+        let refuse: (Date, Date) throws -> FocusFilterStart = { now, calledAt in
+            try engine.startFromFocusFilter(now: now, length: 1500, authorized: { .approved }, selectionReady: true, apply: { world.apply() },
+                                            matches: { world.state.focusShield }, calledAt: calledAt, inputRefusal: .error)
+        }
+        XCTAssertEqual(try refuse(at(20), at(20)), .refused(.error))
+        XCTAssertNotNil(world.state.envelope.filterActivation); XCTAssertNil(world.state.envelope.session); assertNoFocusEffects(world, "input refusal")
+        XCTAssertTrue(try engine.endFromFocusFilter(now: at(40), authorized: .approved, calledAt: at(40)))
+        XCTAssertEqual(try refuse(at(41), at(30)), .stale, "an older call is stale before its input refusal")
+        XCTAssertNil(world.state.envelope.filterActivation)
+        let denied = FilterWorld(), deniedEngine = self.engine(denied)
+        XCTAssertEqual(try deniedEngine.startFromFocusFilter(now: at(1), length: 1500, authorized: { .denied }, selectionReady: true, apply: {}, matches: { true },
+                                                         inputRefusal: .error), .refused(.access), "access is checked first")
+    }
 }
