@@ -515,6 +515,20 @@ So an end that the app or the Monitor runs for a session that the extension star
 That path was not run on purpose. The filter was removed from the Focus on the device the same evening, and nothing in the archive shows a shield left in either container: the extension wrote nothing to `everydayLayer` and cleared its `focusSession`.
 The design needs an amendment so that only processes of the app container apply and clear shields (#152).
 
+Probe the same evening, with a DEBUG build of `aa1b47e` plus a probe commit on the local branch `probe/152-extension-monitor`, which is not pushed, installed over the app and launched with `--screen-time-diagnostics --filter-probe on`.
+While the probe flag exists, a Focus filter call in either process registers or stops a 16-minute `probe.<UUID>` interval only, and the Monitor logs a probe callback without running the engine; no session and no shield.
+The filter was added to the Work Focus again and the app was closed; the Focus was turned on at 20:06:23 and off at 20:07:35.
+
+| Check                                                                   | Result                                                                                                                                                            |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Which process ran the calls                                             | The extension, both times (`will use extension if available`)                                                                                                     |
+| Does the app's Monitor receive an interval that the extension registers | Yes: `FocusMonitor` logged `FILTER_PROBE monitor didStart probe.5DEF5A4D-…` at 20:06:24.114, and `didEnd` at 20:07:35.806 when the extension stopped the interval |
+| Does the extension see its own interval                                 | Yes: `visible=1` right after the registration                                                                                                                     |
+
+So an interval that the extension registers belongs to the app, and the first candidate of the amendment (the extension stores the session and registers the interval, and the Monitor applies the shield) has the callbacks it needs.
+A manual session that the app's start button began at 20:06:03 (`START_LATENCY`) ran during the probe; it shielded in the app's container, the probe did not touch it, and it was ended in the app.
+After the probe the filter was removed from the Focus and the app was launched with `--filter-probe off`; the flag file is outside the part of the App Group that `devicectl` lists, so its removal was not checked.
+
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 
 이슈 #17의 검토 결과다.
