@@ -6,13 +6,13 @@ import SwiftData
 @MainActor enum FocusFilterEntry {
     private static let pause: (TimeInterval) async -> Void = { try? await Task.sleep(nanoseconds: UInt64($0 * 1_000_000_000)) }
     private static var engine: SessionControl?
-    private static var handler: FocusFilterHandler?
+    private static var history: SessionHistory?
     private static let authorization = AuthorizationService()
     private static let settings = FocusSettings.app()
 
     static func didChange(startsSession: Bool, calledAt: Date) async {
         do {
-            if startsSession { try await loadHandler().focusDidChange(startsSession: true, calledAt: calledAt); return }
+            if startsSession { try await makeHandler().focusDidChange(startsSession: true, calledAt: calledAt); return }
             // The off call needs only the engine and the access status, as in the app, so a failed selection or SwiftData load cannot keep a session running.
             await FocusFilterHandler.end(engine: try loadEngine(), authorization: authorization, settings: settings, now: Date.init, pause: pause, calledAt: calledAt)
         } catch {
@@ -29,18 +29,24 @@ import SwiftData
         engine = created
         return created
     }
-    private static func loadHandler() throws -> FocusFilterHandler {
-        if let handler { return handler }
+    private static func loadHistory(engine: SessionControl) throws -> SessionHistory {
+        if let history { return history }
+        let container = try ModelContainer(for: SessionRecord.self, configurations: ModelConfiguration(cloudKitDatabase: .none))
+        let created = SessionHistory(context: ModelContext(container), acknowledge: engine.acknowledgeTerminal)
+        history = created
+        return created
+    }
+    /// A new handler for each on call, with the selection and the shared settings read again: the process can outlive a call,
+    /// and the person can change the selection or the focus length in the app, or the app can finish the migration, between two calls.
+    /// The engine and the history store stay one per process.
+    private static func makeHandler() throws -> FocusFilterHandler {
         let engine = try loadEngine(), shield = ScreenTimeShield()
+        settings.reloadShared()
         // No private selection exists in the extension's container: the app migrates it (decision 17).
         let selection = try SelectionRepository(directory: GroupConfiguration.container().appendingPathComponent("FocusSelection", isDirectory: true))
         var services = FocusServices(authorization: authorization, selection: selection, engine: engine, applySelection: shield.apply, matchesSelection: shield.matches)
         services.settings = settings
-        let container = try ModelContainer(for: SessionRecord.self, configurations: ModelConfiguration(cloudKitDatabase: .none))
-        let history = SessionHistory(context: ModelContext(container), acknowledge: engine.acknowledgeTerminal)
         // The app stays the only writer of the today snapshot (decision 26), and no screen of this process refreshes.
-        let created = FocusFilterHandler(services: services, history: history, refresh: {}, pause: pause, writesTodaySnapshot: false)
-        handler = created
-        return created
+        return FocusFilterHandler(services: services, history: try loadHistory(engine: engine), refresh: {}, pause: pause, writesTodaySnapshot: false)
     }
 }
