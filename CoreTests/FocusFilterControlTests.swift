@@ -180,7 +180,8 @@ final class FocusFilterControlTests: XCTestCase {
     }
     func testRefusalsSetTheMarkerAndStartNothing() throws {
         var cases: [(String, FilterWorld, AccessState, Bool, FocusFilterRefusal)] = [
-            ("access", FilterWorld(), .denied, true, .access), ("unknown access", FilterWorld(), .unknown, true, .access),
+            // `unknown` no longer refuses (2026-11-16 extension design, decision 20); `testFilterStartAcceptsUnknownAccess` covers it.
+            ("access", FilterWorld(), .denied, true, .access),
             ("selection", FilterWorld(), .approved, false, .selection),
         ]
         for phase in [SessionPhase.preparing, .active, .waiting, .onBreak, .breakOver, .ending] {
@@ -407,10 +408,11 @@ final class FocusFilterControlTests: XCTestCase {
     // MARK: Guards across sequences
 
     func testOneSessionPerActivationAcrossSequences() throws {
-        // On, S1 completes by time, the import removes it, a repeated on call.
+        // On, S1 completes (an open session rolls over, so "집중 종료" after the base length ends it), the import removes it, a repeated on call.
         let world = FilterWorld(), engine = engine(world)
         let s1 = try XCTUnwrap(started(try on(engine, world, at: t0)))
-        XCTAssertEqual(try engine.reconcile(now: at(1500), authorized: .approved).session?.reason, .expired)
+        try engine.finish(id: s1.id, reason: .earlyExit, now: at(1500))
+        XCTAssertEqual(world.state.envelope.session?.reason, .expired)
         try engine.acknowledgeTerminal(id: s1.id)
         XCTAssertEqual(try on(engine, world, at: at(1510)), .repeated); XCTAssertNil(world.state.envelope.session)
         // Then off, then on: S2 starts.
@@ -423,14 +425,21 @@ final class FocusFilterControlTests: XCTestCase {
         XCTAssertEqual(try on(refusedEngine, refused, at: t0, access: .denied), .refused(.access))
         XCTAssertEqual(try on(refusedEngine, refused, at: at(10)), .repeated); XCTAssertNil(refused.state.envelope.session)
 
-        // On, S1 starts, the off call is lost, S1 ends by time, the app opens and checks, the next on starts S2.
+        // On, S1 starts, the off call is lost, so S1 rolls over at its focus end (2026-11-16 extension design).
+        // With the check, the app ends S1 and, after the import, the next on starts S2; without it, the next on is a repeated call and S1 keeps running.
         for checked in [true, false] {
             let lost = FilterWorld(), lostEngine = self.engine(lost)
             let first = try XCTUnwrap(started(try on(lostEngine, lost, at: t0)))
-            try lostEngine.reconcile(now: at(1500), authorized: .approved); try lostEngine.acknowledgeTerminal(id: first.id)
-            if checked, let marker = try lostEngine.snapshot().filterActivation { try lostEngine.clearFilterActivation(matching: marker, now: at(1600)) }
+            try lostEngine.reconcile(now: at(1500), authorized: .approved)
+            XCTAssertEqual(lost.state.envelope.session?.phase, .active)
+            if checked, let marker = try lostEngine.snapshot().filterActivation {
+                try lostEngine.clearFilterActivation(matching: marker, now: at(1600))
+                XCTAssertEqual(lost.state.envelope.session?.reason, .expired); try lostEngine.acknowledgeTerminal(id: first.id)
+            }
             let next = try on(lostEngine, lost, at: at(1700))
-            if checked { XCTAssertNotNil(started(next)) } else { XCTAssertEqual(next, .repeated); XCTAssertNil(lost.state.envelope.session) }
+            if checked { XCTAssertNotNil(started(next)) } else {
+                XCTAssertEqual(next, .repeated); XCTAssertEqual(lost.state.envelope.session?.id, first.id); XCTAssertEqual(lost.state.envelope.session?.phase, .active)
+            }
         }
 
         // The off call of one activation arrives after the on call of the next: it ends S2 and clears the marker.
@@ -602,7 +611,8 @@ final class FocusFilterControlTests: XCTestCase {
                      rule: { session, _ in session?.phase == .active && session?.origin == .manual }),
             Scenario(name: "activation check", setup: filterSession, run: { engine, world in
                 try engine.clearFilterActivation(matching: world.state.envelope.filterActivation!, now: self.at(200))
-            }, now: at(201), rule: { session, _ in session?.phase == .active }),
+            // The check ends a session that was open for its marker (2026-11-16 extension design, "Activation check").
+            }, now: at(201), rule: { session, marker in (session?.phase == .active && marker != nil) || (session?.phase == .terminal && marker == nil) }),
         ]
         for scenario in scenarios {
             // Exit pass: a new engine starts from each recorded state, reconciles, then gets a repeated on call.
@@ -635,5 +645,153 @@ final class FocusFilterControlTests: XCTestCase {
                 assertGapTable(thrown, scenario.thrown ?? scenario.rule, "\(scenario.name) throw \(offset)")
             }
         }
+    }
+
+    // MARK: Open sessions (2026-11-16 Focus filter extension design)
+
+    private func didEnd(_ engine: SessionControl, _ session: ControlSession, at now: Date) throws {
+        try engine.handleCallback(activityName: session.activityName, kind: .didEnd, now: now, authorized: .approved)
+    }
+    private func openStart(_ engine: SessionControl, _ world: FilterWorld) throws -> ControlSession {
+        try XCTUnwrap(started(try on(engine, world, at: t0)))
+    }
+    private func storedSession(_ world: FilterWorld) throws -> ControlSession { try XCTUnwrap(world.state.envelope.session) }
+    private func assertEnded(_ world: FilterWorld, _ reason: EndReason, length: TimeInterval, _ context: String, file: StaticString = #filePath, line: UInt = #line) throws {
+        let session = try XCTUnwrap(world.state.envelope.session, context, file: file, line: line)
+        XCTAssertEqual(session.phase, .terminal, context, file: file, line: line)
+        XCTAssertEqual(session.reason, reason, context, file: file, line: line)
+        XCTAssertEqual(session.length, length, accuracy: 0.001, context, file: file, line: line)
+        XCTAssertTrue(session.hasValidLength, context, file: file, line: line)
+        XCTAssertFalse(world.state.focusShield, context, file: file, line: line)
+    }
+    func testOnCallStoresActivationAndBaseLength() throws {
+        let world = FilterWorld(), engine = engine(world)
+        let session = try openStart(engine, world)
+        XCTAssertEqual(session.activation, world.state.envelope.filterActivation)
+        XCTAssertNotNil(session.activation); XCTAssertEqual(session.baseLength, 1500)
+        XCTAssertTrue(world.state.envelope.sessionIsOpen)
+    }
+    func testOpenSessionRollsOverAtItsFocusEnd() throws {
+        let world = FilterWorld(), engine = engine(world)
+        let session = try openStart(engine, world)
+        try didEnd(engine, session, at: at(1500))
+        let after = try storedSession(world)
+        XCTAssertEqual(after.phase, .active); XCTAssertEqual(after.length, 3000)
+        XCTAssertEqual(world.state.focus[session.id], at(3000)); XCTAssertTrue(world.state.focusShield)
+    }
+    func testLateCallbackCatchesUpInOneSection() throws {
+        let world = FilterWorld(), engine = engine(world)
+        let session = try openStart(engine, world)
+        try didEnd(engine, session, at: at(4000))
+        XCTAssertEqual(try storedSession(world).length, 4500); XCTAssertEqual(world.state.focus[session.id], at(4500))
+    }
+    func testManualSessionAndClearedActivationDoNotRollOver() throws {
+        let manualWorld = FilterWorld(), manualEngine = engine(manualWorld)
+        let manualSession = try manual(manualEngine, manualWorld, at: t0)
+        try didEnd(manualEngine, manualSession, at: at(1500))
+        try assertEnded(manualWorld, .expired, length: 1500, "manual")
+        let world = FilterWorld(), engine = engine(world)
+        let session = try openStart(engine, world)
+        world.state.envelope.filterActivation = nil
+        try didEnd(engine, session, at: at(1500))
+        try assertEnded(world, .expired, length: 1500, "cleared activation")
+    }
+    func testDeadlineBeforeTheFocusEndIsNotRolledOver() throws {
+        let world = FilterWorld(), engine = engine(world)
+        let session = try openStart(engine, world)
+        var paused = try storedSession(world); paused.pausedSeconds = 900; world.state.envelope.session = paused
+        try didEnd(engine, session, at: at(2100))
+        try assertEnded(world, .deadlineMissed, length: 1500, "deadline first")
+    }
+    func testRolloverStopsAtTheOneWeekBound() throws {
+        let world = FilterWorld(), engine = engine(world)
+        let session = try openStart(engine, world)
+        let length = (ControlSession.maxLength / 1500).rounded(.down) * 1500
+        var long = try storedSession(world); long.expiresAt = t0.addingTimeInterval(length); world.state.envelope.session = long
+        try didEnd(engine, session, at: t0.addingTimeInterval(length))
+        try assertEnded(world, .expired, length: length, "bound")
+    }
+    func testRolloverRegistrationFailureEndsTheSessionAsExpired() throws {
+        let world = FilterWorld(), engine = engine(world)
+        let session = try openStart(engine, world)
+        world.failRegister = true
+        try didEnd(engine, session, at: at(1600))
+        try assertEnded(world, .expired, length: 1600, "registration failed")
+    }
+    func testThrownSaveAfterTheRolloverRegistrationCatchesUpLater() throws {
+        let world = FilterWorld(), engine = engine(world)
+        let session = try openStart(engine, world)
+        world.throwAtEffect = world.effects + 1
+        XCTAssertThrowsError(try didEnd(engine, session, at: at(1500)))
+        XCTAssertEqual(try storedSession(world).length, 1500); XCTAssertEqual(world.state.focus[session.id], at(3000))
+        try didEnd(engine, session, at: at(3000))
+        let after = try storedSession(world)
+        XCTAssertEqual(after.phase, .active); XCTAssertEqual(after.length, 4500); XCTAssertTrue(world.state.focusShield)
+    }
+    func testFocusOffBeforeTheBaseLengthIsAnEarlyExit() throws {
+        let world = FilterWorld(), engine = engine(world)
+        _ = try openStart(engine, world)
+        try engine.endFromFocusFilter(now: at(600), authorized: .approved)
+        try assertEnded(world, .earlyExit, length: 1500, "before base")
+        XCTAssertNil(world.state.envelope.filterActivation)
+    }
+    func testFocusOffAfterARolloverRecordsTheFocusedTime() throws {
+        let world = FilterWorld(), engine = engine(world)
+        let session = try openStart(engine, world)
+        try didEnd(engine, session, at: at(1500))
+        try engine.endFromFocusFilter(now: at(2000), authorized: .approved)
+        try assertEnded(world, .expired, length: 2000, "after rollover")
+    }
+    func testFocusOffAfterALostRolloverRecordsTheUncappedTime() throws {
+        for hidden in [false, true] {
+            let world = FilterWorld(), engine = engine(world)
+            _ = try openStart(engine, world)
+            world.hideRegistration = hidden
+            try engine.endFromFocusFilter(now: at(2400), authorized: .approved)
+            try assertEnded(world, .expired, length: 2400, "lost rollover, activity hidden \(hidden)")
+        }
+    }
+    func testFocusOffAfterTheDeadlineIsDeadlineMissed() throws {
+        let world = FilterWorld(), engine = engine(world)
+        _ = try openStart(engine, world)
+        var paused = try storedSession(world); paused.pausedSeconds = 900; world.state.envelope.session = paused
+        try engine.endFromFocusFilter(now: at(2200), authorized: .approved)
+        try assertEnded(world, .deadlineMissed, length: 1500, "deadline")
+    }
+    func testFocusOffDuringABreakExcludesTheOpenPause() throws {
+        let world = FilterWorld(), engine = engine(world)
+        let session = try openStart(engine, world)
+        try didEnd(engine, session, at: at(1500))
+        _ = try engine.requestBreak(id: session.id, now: at(1600))
+        try engine.startBreak(id: session.id, now: at(1615), saveSelection: { try world.saveCopy(session.id) })
+        try engine.endFromFocusFilter(now: at(1700), authorized: .approved)
+        try assertEnded(world, .expired, length: 1600, "on break")
+    }
+    func testActivationCheckEndsAnOpenSession() throws {
+        for (offset, reason, length) in [(600.0, EndReason.earlyExit, 1500.0), (2000, .expired, 2000)] {
+            let world = FilterWorld(), engine = engine(world)
+            _ = try openStart(engine, world)
+            let marker = try XCTUnwrap(world.state.envelope.filterActivation)
+            try engine.clearFilterActivation(matching: marker, now: at(offset))
+            try assertEnded(world, reason, length: length, "check at \(offset)")
+            XCTAssertNil(world.state.envelope.filterActivation)
+        }
+    }
+    func testPersonEndOfAnOpenSessionKeepsTheMarker() throws {
+        for (offset, reason, length) in [(600.0, EndReason.earlyExit, 1500.0), (2000, .expired, 2000)] {
+            let world = FilterWorld(), engine = engine(world)
+            let session = try openStart(engine, world)
+            let marker = world.state.envelope.filterActivation
+            try engine.finish(id: session.id, reason: .earlyExit, now: at(offset))
+            try assertEnded(world, reason, length: length, "finish at \(offset)")
+            XCTAssertEqual(world.state.envelope.filterActivation, marker)
+        }
+    }
+    func testFilterStartAcceptsUnknownAccess() throws {
+        let denied = FilterWorld(), deniedEngine = engine(denied)
+        let world = FilterWorld(), unknownEngine = engine(world)
+        XCTAssertNotNil(started(try on(unknownEngine, world, at: t0, access: .unknown)))
+        XCTAssertTrue(world.state.focusShield)
+        XCTAssertEqual(try on(deniedEngine, denied, at: t0, access: .denied), .refused(.access))
     }
 }
