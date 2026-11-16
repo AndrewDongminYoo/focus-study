@@ -43,6 +43,15 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertEqual(app.buttons["todaySummary"].label, "오늘 집중 25분 · 1회")
         captureReport(app, name: "timer-screen-after-sessions")
     }
+    func testOpenFocusSessionCountsUpPastItsBaseLength() {
+        let app = app("open-focus")
+        let clock = app.staticTexts["countdown"]
+        XCTAssertTrue(clock.waitForExistence(timeout: ready))
+        XCTAssertTrue(clock.label.hasPrefix("집중한 시간 27분"), clock.label)
+        XCTAssertEqual(app.staticTexts["sessionStatus"].label, "집중 모드를 끌 때까지 이어져요")
+        XCTAssertTrue(app.buttons["end"].exists)
+        captureReport(app, name: "timer-open-focus")
+    }
     func testLengthSettingAppliesToNextSession() {
         let app = app()
         XCTAssertTrue(app.buttons["settingsButton"].waitForExistence(timeout: 8)); app.buttons["settingsButton"].tap()

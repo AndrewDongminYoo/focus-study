@@ -4,6 +4,7 @@ extension FocusActivityContent {
     var planTitle: String {
         switch phase {
         case .focus: return focusEnd == targetAt ? "집중 종료 예정" : "세션 마감 예정"
+        case .openFocus: return "집중 모드를 끌 때까지"
         case .waiting: return "앱에서 계속해 주세요"
         case .onBreak: return "쉬는 시간 종료 예정"
         case .breakOver: return "집중 복귀 마감"
@@ -12,6 +13,7 @@ extension FocusActivityContent {
     var compactTitle: String {
         switch phase {
         case .focus: return focusEnd == targetAt ? "집중 예정" : "세션 마감"
+        case .openFocus: return "집중 중"
         case .waiting: return "앱에서"
         case .onBreak: return "휴식 끝"
         case .breakOver: return "복귀 마감"
@@ -29,6 +31,13 @@ struct FocusActivityCountdown: View {
         if isStale || content.targetAt == nil || (content.targetAt ?? .distantPast) <= Date() {
             Text(compact ? "확인" : "앱에서 확인해 주세요")
                 .font(compact ? .caption : .headline).accessibilityIdentifier("activityStale")
+        } else if content.phase == .openFocus, let start = content.focusStart {
+            Text(timerInterval: start...Date.distantFuture, countsDown: false, showsHours: true)
+                .font(compact ? .system(.caption, design: .rounded, weight: .semibold) : .system(.largeTitle, design: .rounded, weight: .semibold))
+                .monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
+                .accessibilityLabel("집중한 시간")
+                .accessibilityValue(Text(timerInterval: start...Date.distantFuture, countsDown: false, showsHours: true))
+                .accessibilityIdentifier("activityCountUp").accessibilityAddTraits(.updatesFrequently)
         } else if let target = content.targetAt {
             Text(timerInterval: content.checkedAt...max(content.checkedAt, target), countsDown: true, showsHours: false)
                 .font(compact ? .system(.caption, design: .rounded, weight: .semibold) : .system(.largeTitle, design: .rounded, weight: .semibold))
@@ -55,7 +64,8 @@ struct FocusActivityCard: View {
             HStack(alignment: .firstTextBaseline) {
                 FocusActivityCountdown(content: content, isStale: needsConfirmation)
                 Spacer(minLength: 8)
-                if let target = content.targetAt {
+                // A rollover is not a planned end, so the count-up shows no time of day.
+                if let target = content.targetAt, content.phase != .openFocus {
                     Text(target, style: .time).font(.headline).monospacedDigit()
                         .accessibilityLabel("예정 시각").accessibilityValue(Text(target, style: .time))
                 }

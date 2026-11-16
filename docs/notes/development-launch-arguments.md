@@ -18,6 +18,7 @@ Debug 빌드의 scheme 설정에서 Launch Arguments에 넣어 특정 화면이�
 | `--ui-testing startup-failure --selected`      | 세션이 진행 중일 때 저장소가 처음 한 번 실패하는 복구 화면                                                                   |
 | `--ui-testing onboarding`                      | 설정을 마치지 않은 새 사용자의 온보딩                                                                                        |
 | `--ui-testing expiring`                        | 앱을 띄울 때 만료 3초 전의 세션을 만들어 완료 화면을 보여 줍니다. 완료를 닫고 다시 시작한 세션은 설정한 길이만큼 진행됩니다. |
+| `--ui-testing open-focus`                      | 집중 모드로 시작해 정한 집중 시간을 2분 넘긴 세션을 만들어, 집중한 시간이 늘어나는 타이머 화면을 보여 줍니다.                |
 | `--ui-testing ending-soon`                     | 시작 버튼을 누르면 집중 종료 10초 전부터 세션을 시작합니다.                                                                  |
 | `--ui-testing history`                         | 오늘 날짜에 25분·50분 완료, 집중 종료, 마감 초과 기록을 넣은 기록 화면입니다. 자정 직후에도 기록은 오늘에 속합니다.          |
 | `--ui-testing streak --selected`               | 오늘과 그 전 이틀에 완료, 사흘 전에 집중 종료, 나흘 전에 완료 기록을 넣습니다. 자정 직후에도 `연속 집중 3일`을 보여 줍니다.  |

@@ -222,6 +222,12 @@ extension FocusRuntime {
             let length = services.settings.lengthSeconds
             _ = try services.engine.start(now: Date().addingTimeInterval(-(length - 3)), length: length, authorized: { .approved }, apply: {}, matches: { true })
         }
+        if arguments.contains("open-focus") {
+            // A Focus filter session two minutes past its base length; the launch refresh rolls it over and the timer counts up (2026-11-16 extension design).
+            let length = services.settings.lengthSeconds
+            _ = try services.engine.startFromFocusFilter(now: Date().addingTimeInterval(-(length + 120)), length: length, authorized: { .approved }, selectionReady: true,
+                                                         apply: {}, matches: { true })
+        }
         var attempts = 0
         return FocusRuntime(recovery: StartupRecovery(engine: services.engine), accessState: services.authorization.accessState, holder: FocusRuntimeHolder(engine: services.engine, authorization: services.authorization, settings: services.settings, activityDidChange: services.activityDidChange) {
             attempts += 1

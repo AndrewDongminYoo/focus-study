@@ -6,7 +6,7 @@ struct FocusGuideView: View {
     var body: some View {
         List {
             Section("하는 일") {
-                FocusGuideRow(icon: "moon.fill", title: "고른 집중 모드를 켜면 집중을 시작해요", detail: "정한 집중 시간과 제한할 앱을 그대로 써요.")
+                FocusGuideRow(icon: "moon.fill", title: "고른 집중 모드를 켜면 집중을 시작해요", detail: "제한할 앱은 그대로 쓰고, 정한 집중 시간이 지나도 집중 모드를 끌 때까지 이어져요.")
                 FocusGuideRow(icon: "bell.fill", title: "알림은 iOS가 정해요", detail: "그 집중 모드의 알림 설정을 따라요. 이 앱은 알림이나 집중 모드 설정을 바꾸지 않아요.")
                 Text("허용한 사람과 앱이 아니어도 이런 알림은 올 수 있어요.")
                     .font(.subheadline).foregroundStyle(FocusTheme.Palette.secondaryText)

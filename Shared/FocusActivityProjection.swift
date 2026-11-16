@@ -19,7 +19,7 @@ struct FocusActivityProjection: Equatable {
         let phase: FocusActivityContent.Phase
         let target: Date?
         switch session.phase {
-        case .active: phase = .focus; target = min(session.focusEnd, deadline)
+        case .active: phase = Self.countsUp(session, now: now) ? .openFocus : .focus; target = min(session.focusEnd, deadline)
         case .waiting: phase = .waiting; target = nil
         case .onBreak:
             guard let end = session.breakEndsAt, end.timeIntervalSince1970.isFinite else { return nil }
@@ -31,6 +31,12 @@ struct FocusActivityProjection: Equatable {
         }
         return FocusActivityProjection(sessionID: session.id, content: FocusActivityContent(
             phase: phase, checkedAt: now, targetAt: target, deadline: deadline,
-            focusRemaining: TimeRules.remaining(session: session, now: now), focusEnd: phase == .focus ? session.focusEnd : nil))
+            focusRemaining: TimeRules.remaining(session: session, now: now), focusEnd: phase == .focus ? session.focusEnd : nil,
+            focusStart: phase == .openFocus ? now.addingTimeInterval(-session.openFocused(at: now)) : nil))
+    }
+    /// The rule of the timer screen (`FocusModel.openElapsed`): a filter session with an activation that reached its base length.
+    static func countsUp(_ session: ControlSession, now: Date) -> Bool {
+        guard session.activation != nil, let base = session.baseLength else { return false }
+        return session.openFocused(at: now) >= base
     }
 }
