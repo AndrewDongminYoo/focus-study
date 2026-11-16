@@ -19,11 +19,17 @@ enum ScreenTimeAccess {
     }
 }
 enum GroupConfiguration {
+    private static var identifier: String? { Bundle.main.object(forInfoDictionaryKey: "FocusAppGroupIdentifier") as? String }
     static func directory() throws -> URL {
-        guard let identifier = Bundle.main.object(forInfoDictionaryKey: "FocusAppGroupIdentifier") as? String,
-              let url = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: identifier) else { throw ControlIssue.io }
-        return url.appendingPathComponent("SessionControl", isDirectory: true)
+        try container().appendingPathComponent("SessionControl", isDirectory: true)
     }
+    /// The App Group container; the focus selection is `FocusSelection/` inside it (2026-11-16 extension design, decision 12).
+    static func container() throws -> URL {
+        guard let identifier, let url = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: identifier) else { throw ControlIssue.io }
+        return url
+    }
+    /// The App Group defaults for the focus length and the display-only filter values (decisions 13 and 14).
+    static func sharedDefaults() -> UserDefaults? { identifier.flatMap(UserDefaults.init(suiteName:)) }
 }
 final class ScreenTimeMonitoring: MonitoringClient {
     private let center = DeviceActivityCenter()
