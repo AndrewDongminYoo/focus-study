@@ -37,12 +37,17 @@ final class SessionControl {
     // MARK: Focus filter
 
     /// The spec "Filter start", step 3. One activation starts at most one session: a refusal also stores the marker.
-    func startFromFocusFilter(now: Date, length: TimeInterval, authorized: () -> AccessState, selectionReady: Bool, apply: () -> Void, matches: () -> Bool) throws -> FocusFilterStart {
+    /// `calledAt` is the arrival time of the call (2026-11-16 extension design, "Call order across processes"); `nil` skips the order check.
+    func startFromFocusFilter(now: Date, length: TimeInterval, authorized: () -> AccessState, selectionReady: Bool, apply: () -> Void, matches: () -> Bool,
+                              calledAt: Date? = nil) throws -> FocusFilterStart {
         try section(now: now) { locked in
             var envelope = try read(locked)
             try cleanup(&envelope, locked: locked, now: now)
-            // A repeated call of the same activation makes no change of its own.
-            guard envelope.filterActivation == nil else { return .repeated }
+            // A call that arrived before an accepted one makes no change of its own.
+            if Self.isStale(calledAt, envelope) { return .stale }
+            if let calledAt { envelope.filterCallAt = calledAt }
+            // A repeated call of the same activation makes no change of its own; it stores only its arrival time.
+            guard envelope.filterActivation == nil else { try saveCallTime(envelope, locked: locked); return .repeated }
             envelope.filterActivation = UUID()
             locked.access = authorized()
             let refusal: FocusFilterRefusal?
@@ -60,12 +65,19 @@ final class SessionControl {
         }
     }
     /// The spec "Filter end". The Focus-off rule ends only a `focusFilter` session; a manual one ends only for the reasons of any reconcile.
-    func endFromFocusFilter(now: Date, authorized: AccessState) throws {
+    /// Returns `false` for a stale call, which changes nothing of its own.
+    @discardableResult
+    func endFromFocusFilter(now: Date, authorized: AccessState, calledAt: Date? = nil) throws -> Bool {
         try section(now: now, access: authorized) { locked in
             var envelope = try read(locked)
             // Turning the Focus off is the person's end, so it must still lift the restrictions of a filter-started session when the cleanup or the reconcile cannot save (#53).
             var caught: Error?
             do { try cleanup(&envelope, locked: locked, now: now) } catch { caught = error }
+            if Self.isStale(calledAt, envelope) {
+                if let caught { throw caught }
+                return false
+            }
+            if let calledAt { envelope.filterCallAt = calledAt }
             // Openness is decided before the marker is cleared and kept for the rest of the section (2026-11-16 extension design, "Filter end").
             let wasOpen = envelope.sessionIsOpen
             // Every later save of this section writes the cleared marker.
@@ -83,9 +95,12 @@ final class SessionControl {
                     try end(&envelope, locked: locked, reason: reason, now: now)
                 }
             } else if let caught { throw caught }
-            if var stored = locked.stored, stored.filterActivation != nil {
-                stored.filterActivation = nil; try locked.save(stored)
+            if var stored = locked.stored, stored.filterActivation != nil || (calledAt != nil && stored.filterCallAt != calledAt) {
+                stored.filterActivation = nil
+                if let calledAt { stored.filterCallAt = calledAt }
+                try locked.save(stored)
             }
+            return true
         }
     }
     /// The spec "Activation check", step 3: clears the marker only while it is still the one that the caller read.
@@ -96,7 +111,8 @@ final class SessionControl {
             try cleanup(&envelope, locked: locked, now: now)
             guard envelope.filterActivation == id else { return }
             let wasOpen = envelope.sessionIsOpen
-            envelope.filterActivation = nil
+            // The time of the check makes an on call that arrived before it stale (spec "Call order across processes", step 4).
+            envelope.filterActivation = nil; envelope.filterCallAt = max(envelope.filterCallAt ?? now, now)
             if wasOpen, let session = envelope.session, Self.isRunning(session.phase) {
                 try endOpen(&envelope, locked: locked, now: now, authorized: .unknown)
             } else {
@@ -495,6 +511,19 @@ final class SessionControl {
     }
 
     // MARK: Open sessions (2026-11-16 Focus filter extension design)
+
+    /// A call is stale when an accepted call arrived later. Equal times keep the lock order, and a missing time on either side makes no call stale.
+    static func isStale(_ calledAt: Date?, _ envelope: ControlEnvelope) -> Bool {
+        guard let calledAt, let stored = envelope.filterCallAt else { return false }
+        return stored > calledAt
+    }
+    /// The save of an accepted call that changes nothing else.
+    private func saveCallTime(_ envelope: ControlEnvelope, locked: TrackedControl) throws {
+        // `stored` is the envelope of the last load or save of this section, so the save keeps whatever the cleanup saved.
+        guard var stored = locked.stored, stored.filterCallAt != envelope.filterCallAt else { return }
+        stored.filterCallAt = envelope.filterCallAt
+        try locked.save(stored)
+    }
 
     static func isRunning(_ phase: SessionPhase) -> Bool { [.active, .waiting, .onBreak, .breakOver].contains(phase) }
     /// The spec "Rollover": `true` when the section rolled the session over or ended it, so the reconcile stops.

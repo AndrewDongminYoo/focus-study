@@ -73,6 +73,7 @@ enum FocusFilterReading: Equatable { case on, off, unknown }
             case .started: settings.clearFilterRefusal(); log("on started")
             case .repeated: log("on repeated")
             case .refused(let reason): settings.recordFilterRefusal(reason, at: now()); log("on refused \(reason)")
+            case .stale: log("on stale")
             }
         } catch {
             settings.recordFilterRefusal(.error, at: now()); log("on error")

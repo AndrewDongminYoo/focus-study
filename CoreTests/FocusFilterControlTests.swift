@@ -794,4 +794,56 @@ final class FocusFilterControlTests: XCTestCase {
         XCTAssertTrue(world.state.focusShield)
         XCTAssertEqual(try on(deniedEngine, denied, at: t0, access: .denied), .refused(.access))
     }
+
+    // MARK: Call order across processes (2026-11-16 Focus filter extension design)
+
+    private func onCall(_ engine: SessionControl, _ world: FilterWorld, at now: Date, calledAt: Date) throws -> FocusFilterStart {
+        try engine.startFromFocusFilter(now: now, length: 1500, authorized: { .approved }, selectionReady: true, apply: { world.apply() },
+                                        matches: { world.state.focusShield }, calledAt: calledAt)
+    }
+    func testAStaleOnCallChangesNothingOfItsOwn() throws {
+        let world = FilterWorld(), engine = engine(world)
+        XCTAssertTrue(try engine.endFromFocusFilter(now: at(20), authorized: .approved, calledAt: at(20)))
+        XCTAssertEqual(world.state.envelope.filterCallAt, at(20))
+        world.log = []; let saves = world.saved.count
+        XCTAssertEqual(try onCall(engine, world, at: at(21), calledAt: at(10)), .stale)
+        XCTAssertNil(world.state.envelope.session); XCTAssertNil(world.state.envelope.filterActivation)
+        XCTAssertEqual(world.saved.count, saves); assertNoFocusEffects(world, "stale on")
+    }
+    func testAStaleOffCallLeavesTheSessionRunning() throws {
+        let world = FilterWorld(), engine = engine(world)
+        _ = try XCTUnwrap(started(try onCall(engine, world, at: at(20), calledAt: at(20))))
+        let before = world.state.envelope
+        XCTAssertFalse(try engine.endFromFocusFilter(now: at(21), authorized: .approved, calledAt: at(10)))
+        XCTAssertEqual(world.state.envelope.session, before.session); XCTAssertEqual(world.state.envelope.filterActivation, before.filterActivation)
+        XCTAssertTrue(world.state.focusShield)
+    }
+    func testEqualArrivalTimesKeepTheLockOrder() throws {
+        let world = FilterWorld(), engine = engine(world)
+        XCTAssertTrue(try engine.endFromFocusFilter(now: at(20), authorized: .approved, calledAt: at(20)))
+        XCTAssertNotNil(started(try onCall(engine, world, at: at(21), calledAt: at(20))))
+    }
+    func testActivationCheckMakesAnEarlierOnCallStale() throws {
+        let world = FilterWorld(), engine = engine(world)
+        _ = try XCTUnwrap(started(try onCall(engine, world, at: at(20), calledAt: at(20))))
+        let marker = try XCTUnwrap(world.state.envelope.filterActivation)
+        try engine.clearFilterActivation(matching: marker, now: at(60))
+        try engine.acknowledgeTerminal(id: try XCTUnwrap(world.state.envelope.session?.id))
+        XCTAssertEqual(try onCall(engine, world, at: at(61), calledAt: at(30)), .stale)
+        XCTAssertNil(world.state.envelope.session)
+    }
+    func testAMissingCallTimeMakesNoCallStale() throws {
+        let world = FilterWorld(), engine = engine(world)
+        XCTAssertNotNil(started(try onCall(engine, world, at: at(20), calledAt: at(5))))
+        XCTAssertEqual(world.state.envelope.filterCallAt, at(5))
+        XCTAssertTrue(try engine.endFromFocusFilter(now: at(30), authorized: .approved))
+        XCTAssertEqual(world.state.envelope.session?.reason, .earlyExit)
+    }
+    func testAnAcceptedRepeatedCallStoresItsTime() throws {
+        let world = FilterWorld(), engine = engine(world)
+        _ = try XCTUnwrap(started(try onCall(engine, world, at: at(20), calledAt: at(20))))
+        XCTAssertEqual(try onCall(engine, world, at: at(40), calledAt: at(40)), .repeated)
+        XCTAssertEqual(world.state.envelope.filterCallAt, at(40))
+        XCTAssertEqual(try onCall(engine, world, at: at(41), calledAt: at(30)), .stale)
+    }
 }
