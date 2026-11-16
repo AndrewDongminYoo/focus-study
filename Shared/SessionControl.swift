@@ -532,8 +532,9 @@ final class SessionControl {
               now >= before.focusEnd, before.focusEnd <= before.deadline(timing: timing) else { return false }
         var next = before
         while next.focusEnd <= now, next.length + base <= ControlSession.maxLength { next.expiresAt = next.expiresAt.addingTimeInterval(base) }
-        // At the one-week bound the timed end of the reconcile ends the session as `.expired`.
-        guard next.focusEnd > now, let end = focusActivityEnd(next) else { return false }
+        // At the one-week bound the timed end of the reconcile ends the session as `.expired`, with the length that the catch-up reached.
+        guard next.focusEnd > now else { envelope.session = next; return false }
+        guard let end = focusActivityEnd(next) else { return false }
         do { try registerFocus(next, end: end) }
         catch {
             // Step 5: without a callback at its next change the session does not keep its restrictions; the base length was reached, so it counts.

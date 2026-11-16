@@ -711,6 +711,12 @@ final class FocusFilterControlTests: XCTestCase {
         try didEnd(engine, session, at: t0.addingTimeInterval(length))
         try assertEnded(world, .expired, length: length, "bound")
     }
+    func testALateCallbackThatReachesTheBoundKeepsTheCaughtUpLength() throws {
+        let world = FilterWorld(), engine = engine(world)
+        let session = try openStart(engine, world)
+        try didEnd(engine, session, at: t0.addingTimeInterval(ControlSession.maxLength))
+        try assertEnded(world, .expired, length: (ControlSession.maxLength / 1500).rounded(.down) * 1500, "late callback at the bound")
+    }
     func testRolloverRegistrationFailureEndsTheSessionAsExpired() throws {
         let world = FilterWorld(), engine = engine(world)
         let session = try openStart(engine, world)
