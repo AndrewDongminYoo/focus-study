@@ -81,7 +81,7 @@ The person expects the restrictions to stay for as long as the Focus stays on, a
 ### Live Activity
 
 24. An extension cannot start a Live Activity: ActivityKit starts one only from the app in the foreground (`[UNCERTAIN]` for an App Intents extension; device step 9). So a session that the extension starts has no Live Activity until the app comes to the foreground, where the existing coordinator starts it from the stored state.
-25. For an open session after its base length, the Live Activity shows the focused time counting up from its last confirmed value, with no planned end. A rollover is not a planned end and is never displayed as one. Until the base length, the projection of the [Live Activity decision](2026-11-06-live-activity-decision.md) applies unchanged.
+25. For an open session after its base length, the Live Activity shows the focused time counting up from its last confirmed value, with no planned end. A rollover is not a planned end and is never displayed as one. The projection checks the session with the rule of [Length validation](#length-validation), not with `FocusLength.isAllowed` alone. Until the base length, the projection of the [Live Activity decision](2026-11-06-live-activity-decision.md) applies unchanged.
 
 ### Home widget
 
@@ -99,6 +99,23 @@ The person expects the restrictions to stay for as long as the Focus stays on, a
 
 - `ControlEnvelope.schemaVersion` stays `2`. Both new session fields are optional, so a file of an earlier build decodes without them, and an earlier build drops them on its next save. A session without `activation` is never open, so it ends by time as in M4.
 - `Shared/` computes "open" from the envelope: `session.isFilterStarted && session.activation != nil && session.activation == envelope.filterActivation`.
+
+### Length validation
+
+Today `FileControl.load()` (`Shared/SharedControlStore.swift`) and `FocusActivityProjection.make` require `FocusLength.isAllowed(seconds: session.length)`, the selectable 25 to 50 minutes.
+A rollover (length = a multiple of the base length) and an `.expired` end of an open session (length = the open focused time) break that check, and a failed load clears the shields and stops monitoring.
+So one `Shared/` rule replaces the check in both places:
+
+| Stored session                                          | Valid when                                                                                                                       |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `baseLength == nil` (manual, or an earlier session)     | `FocusLength.isAllowed(seconds: length)`, as today.                                                                              |
+| `baseLength != nil`, any phase except the two below     | `FocusLength.isAllowed(seconds: baseLength)`, and `length` is a whole multiple of `baseLength` (1 or more), within 0.01 seconds. |
+| `baseLength != nil`, `ending` or `terminal`, `.expired` | `FocusLength.isAllowed(seconds: baseLength)`, and `baseLength <= length <= TodaySnapshot.maxFocusSeconds` (one week).            |
+
+- A finite check on `length` comes first in every row.
+- The upper bound in the third row keeps a damaged file from reaching history with an unbounded duration; it is the bound that the widget snapshot already uses.
+- `.earlyExit` never follows a rollover, because a rollover needs the base length to be reached and the end then gives `.expired` (decision 4), so its length stays a multiple.
+- An earlier build without this rule reads a rolled-over or finalized open session as invalid and clears it, with its shields. That happens only after a downgrade, which this project does not ship; the M4 [Earlier builds](2026-11-01-m4-focus-filter-design.md#earlier-builds) rule is otherwise unchanged.
 
 ## Side artifacts
 
@@ -217,7 +234,7 @@ On the iPhone 16 Pro with the signed Debug build, after the signing approval:
 
 ## Verification
 
-- Host tests (`Shared/`): rollover in `active` at the focus end, catch-up after a late callback, no rollover for a manual session or a session whose activation was cleared, deadline before the focus end, rollover registration failure, the reason order of decision 4, `expiresAt` of decision 5 (including a Focus off after a lost rollover, which records the uncapped time), a filter start with `unknown` access that passes both verification reads and one with `denied` that rolls back, decoding a version 2 file without the new fields.
+- Host tests (`Shared/`): rollover in `active` at the focus end, catch-up after a late callback, no rollover for a manual session or a session whose activation was cleared, deadline before the focus end, rollover registration failure, the reason order of decision 4, `expiresAt` of decision 5 (including a Focus off after a lost rollover, which records the uncapped time), a filter start with `unknown` access that passes both verification reads and one with `denied` that rolls back, a save and reload through `FileControl` after a rollover and after an `.expired` finalization (each row of [Length validation](#length-validation), and a length outside it that throws), the Live Activity projection of a rolled-over session, decoding a version 2 file without the new fields.
 - The separate-process race check, because rollover adds a write to an existing callback.
 - SDK tests for the migration and for the App Group stores.
 - UI tests with fixtures for the count-up timer screen and the completion card of an open session.
