@@ -179,6 +179,18 @@ final class ExtensionShieldTests: XCTestCase {
         try app.reconcile(now: t0.addingTimeInterval(30), authorized: .unknown)
         XCTAssertTrue(appShield.on); XCTAssertEqual(appShield.clears, 0)
     }
+    func testRepairDoesNotShieldAPendingSessionWhoseFailedEndStoppedIt() throws {
+        let memory = MemoryControlStore(), shield = ContainerShield(forbidden: false)
+        var session = ControlSession(startedAt: t0); session.phase = .active; session.shieldPending = true; session.origin = .focusFilter
+        memory.envelope = ControlEnvelope(session: session)
+        try monitoring.register(id: session.id, start: t0, end: t0.addingTimeInterval(1500))
+        let app = SessionControl(store: memory, monitoring: monitoring, shield: shield, breakSelection: appCopies, everyday: appEveryday,
+                                 role: .appContainer(applyFocusSelection: { shield.on = true; return true }))
+        memory.failAllWrites = true
+        XCTAssertThrowsError(try app.finish(id: session.id, reason: .earlyExit, now: t0.addingTimeInterval(60)))
+        XCTAssertFalse(monitoring.isRegistered(id: session.id))
+        XCTAssertFalse(shield.on, "no callback is left to lift a shield that the repair applies after the cleanup")
+    }
     func testBreakRequestOfAPendingSessionWaitsForTheRepair() throws {
         let session = try filterOn(extensionEngine(), at: t0)
         let app = appEngine()

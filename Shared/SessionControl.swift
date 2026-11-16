@@ -530,6 +530,8 @@ final class SessionControl {
         // In the extension, the Monitor's `intervalDidEnd` of the stopped activity lifts the shield (2026-11-16 shield amendment, decision 8).
         if writesShields { shield.clear() }
         monitoring.stop(id: session.id)
+        // When both saves fail, `stored` keeps the running session; the repair must not shield it again without its callbacks.
+        (locked as? TrackedControl)?.released = true
         breakSelection.remove(id: session.id)
         // Convergence steps 1 and 3 only, after the focus release: the everyday layer blocks again by its schedule, also after a break.
         // The registrations wait for the end of the section, so this step cannot delay the focus part.
@@ -666,7 +668,7 @@ final class SessionControl {
     /// With no running session stored, the focus shield is lifted; this is also decision 8, for a callback of an ended or removed session.
     /// A callback of another running session changes nothing.
     private func repairShield(_ locked: TrackedControl) {
-        guard let applyFocusSelection, var envelope = locked.stored else { return }
+        guard let applyFocusSelection, !locked.released, var envelope = locked.stored else { return }
         if var session = envelope.session, session.phase == .active, session.shieldPending == true {
             if applyFocusSelection() {
                 session.shieldPending = nil; envelope.session = session
@@ -733,6 +735,8 @@ private final class TrackedControl: LockedControl {
     var access: AccessState
     /// The wall clock of the section, which the everyday blocking rule uses also where a step ends a session at a recorded time.
     let now: Date
+    /// `true` after an end of this section cleared the shield and stopped the session's monitoring, also when its saves failed.
+    var released = false
     init(_ base: LockedControl, access: AccessState, now: Date) { self.base = base; self.access = access; self.now = now }
     func load() throws -> ControlEnvelope { let envelope = try base.load(); stored = envelope; return envelope }
     func save(_ envelope: ControlEnvelope) throws { try base.save(envelope); stored = envelope }
