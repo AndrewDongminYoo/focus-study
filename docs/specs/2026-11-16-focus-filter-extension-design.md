@@ -54,6 +54,7 @@ The person expects the restrictions to stay for as long as the Focus stays on, a
    Both run the same handler on the same App Group state under the same `control.lock`, so the process that runs a call does not change the result.
    `[UNCERTAIN]` Whether the system accepts the same `SetFocusFilterIntent` type in the app and in an extension, and which one it picks while the app runs. Device step 1 records it. If the build or the system refuses the duplicate, the type moves to the extension only, and the app reads `current` through a shared file of the type that has no `perform()` side effect; the builder raises that change before making it.
 10. The extension compiles `Shared/`, `Integration/` (Screen Time adapters and App Group files), the filter handler, the history store types and the today rules. It compiles no SwiftUI view and nothing of `Report/`.
+    - Reconciliation (2026-11-16, #152): the extension compiles the shield adapters but never calls a ManagedSettings store, because its stores are in its own container; the Monitor and the app write every shield, as the [shield amendment](2026-11-16-extension-shield-amendment.md#roles) says.
 11. The extension has these entitlements: the App Group `group.kr.donminzzi.focusStudy` and `com.apple.developer.family-controls`. No other capability. The Family Controls distribution entitlement is requested per bundle identifier before an App Store release (see the [privacy and distribution review](../notes/screen-time-device-matrix.md) of #17); a development build does not need it.
 
 ### Data that moves to the App Group
@@ -71,6 +72,7 @@ The person expects the restrictions to stay for as long as the Focus stays on, a
 19. A fresh extension process is expected to read `notDetermined` until it calls `requestAuthorization`: the Monitor process read `notDetermined` with access approved (#115), and a revocation in Settings also read `notDetermined` (#118). So the access value in the extension is usually `unknown`.
 20. The filter start treats `unknown` as "not proven denied": it does not refuse with `access`, and the two access reads inside the M1 start steps (after the registration and after the shield, `SessionControl.begin`) accept `unknown` as well. They still fail on `denied`, and the registration check (`isRegistered`) and the shield check (`matches`) stay as they are, so the start proves its restrictions without proving access. If shields or registration fail, the M1 rollback records "시작 실패" (`.startFailed`). Only `denied` refuses with `access`. This changes the access-state rule "an action that needs access refuses on `unknown`" for the filter start only. The reason: a refusal on `unknown` would refuse every background start.
     `[UNCERTAIN]` Whether `requestAuthorization(for: .individual)` in the extension returns at once without UI for an approved app. The builder may call it before the read only if a device check shows no prompt; otherwise the extension does not call it.
+    - Reconciliation (2026-11-16, #152): the access rule stays; in the extension, the shield check (`matches`) moves to the Monitor's `intervalDidStart`, as the [shield amendment](2026-11-16-extension-shield-amendment.md#start-in-the-extension) says.
 
 ### App screens
 
@@ -151,6 +153,7 @@ The M4 [filter start](2026-11-01-m4-focus-filter-design.md#filter-start-focus-on
 - Step 3.8 saves `preparing` with `activation = filterActivation` (the new marker of step 3.3) and `baseLength = focus length`.
 - Step 5 posts the Darwin notification (decision 21) instead of calling the app's model when the process is the extension.
 - The today snapshot write of the 2026-11-14 reconciliation runs only in the app process (decision 26).
+- Reconciliation (2026-11-16, #152): in the extension, the start skips the shield steps and saves `active` with `shieldPending`; the Monitor applies the shield, as the [shield amendment](2026-11-16-extension-shield-amendment.md#start-in-the-extension) says.
 
 ### Rollover
 
@@ -169,6 +172,7 @@ The Monitor's `didEnd` of the focus activity runs this through its existing reco
 The M4 [filter end](2026-11-01-m4-focus-filter-design.md#filter-end-focus-off), with step 4 changed: a filter-started session that is not `terminal` ends with the reason of decision 4, and with the `expiresAt` of decision 5 for `.expired`.
 The section decides whether the stored session is open before step 2 clears the marker, and keeps that decision for the rest of the section. For a session that was open, the reconcile of step 3 neither rolls it over nor ends it with the timed `.expired`; it can still end it as `.deadlineMissed` or `.authorizationRevoked`. Step 4 then ends it with the reason of decision 4 and the open focused time of decision 5, so a lost rollover does not shorten the recorded time.
 The #53 guarantee (the off call releases a filter-started session after a caught cleanup or reconcile error) applies unchanged, with the reason order of decision 4.
+Reconciliation (2026-11-16, #152): in the extension, the end clears no shield; the Monitor's `intervalDidEnd` of the stopped activity lifts it, as the [shield amendment](2026-11-16-extension-shield-amendment.md#end-in-the-extension) says.
 
 ### Activation check
 
