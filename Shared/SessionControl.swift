@@ -443,9 +443,8 @@ final class SessionControl {
         if authorized == .denied { try end(&envelope, locked: locked, reason: .authorizationRevoked, now: now); return }
         if s.phase == .preparing { try end(&envelope, locked: locked, reason: .recoveryInterrupted, now: now); return }
         if clockChanged { try end(&envelope, locked: locked, reason: .clockChanged, now: now); return }
-        // An open session past its focus end may find its ended activity gone; the rollover registers it again, or the Focus-off end follows.
-        let pastOpenEnd = open && s.baseLength != nil && s.phase == .active && now >= s.focusEnd
-        if !pastOpenEnd, !monitoring.isRegistered(id: s.id) { try end(&envelope, locked: locked, reason: .recoveryInterrupted, now: now); return }
+        // Also for an open session: a missing registration can be the read-failure cleanup, which cleared the shield, so a rollover must not continue it.
+        if !monitoring.isRegistered(id: s.id) { try end(&envelope, locked: locked, reason: .recoveryInterrupted, now: now); return }
         // The app was not there to start the break, so the wait is cancelled as of its end plus the grace.
         if s.phase == .waiting, let waitEndsAt = s.waitEndsAt, now >= waitEndsAt.addingTimeInterval(timing.staleWaitGrace) {
             try closeWait(&envelope, locked: locked, now: now)

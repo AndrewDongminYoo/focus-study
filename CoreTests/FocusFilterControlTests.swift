@@ -749,12 +749,23 @@ final class FocusFilterControlTests: XCTestCase {
         try assertEnded(world, .expired, length: 2000, "after rollover")
     }
     func testFocusOffAfterALostRolloverRecordsTheUncappedTime() throws {
-        for hidden in [false, true] {
+        let world = FilterWorld(), engine = engine(world)
+        _ = try openStart(engine, world)
+        try engine.endFromFocusFilter(now: at(2400), authorized: .approved)
+        try assertEnded(world, .expired, length: 2400, "lost rollover")
+    }
+    func testAMissingRegistrationStillEndsAnOpenSessionAsInterrupted() throws {
+        // The read-failure cleanup clears the shield and stops monitoring; a later section must not roll that session over or count its time.
+        for focusOff in [false, true] {
             let world = FilterWorld(), engine = engine(world)
-            _ = try openStart(engine, world)
-            world.hideRegistration = hidden
-            try engine.endFromFocusFilter(now: at(2400), authorized: .approved)
-            try assertEnded(world, .expired, length: 2400, "lost rollover, activity hidden \(hidden)")
+            let session = try openStart(engine, world)
+            world.failReads = true
+            XCTAssertThrowsError(try engine.reconcile(now: at(100), authorized: .approved))
+            world.failReads = false
+            XCTAssertFalse(world.state.focusShield)
+            if focusOff { try engine.endFromFocusFilter(now: at(2000), authorized: .approved) } else { try didEnd(engine, session, at: at(1600)) }
+            let ended = try storedSession(world)
+            XCTAssertEqual(ended.phase, .terminal, "\(focusOff)"); XCTAssertEqual(ended.reason, .recoveryInterrupted, "\(focusOff)"); XCTAssertEqual(ended.length, 1500, "\(focusOff)")
         }
     }
     func testFocusOffAfterTheDeadlineIsDeadlineMissed() throws {
