@@ -493,7 +493,9 @@ final class SessionControl {
     /// Transition 6, in the order of the 2026-10-26 design plus the break artifacts.
     private func end(_ envelope: inout ControlEnvelope, locked: LockedControl, reason: EndReason, now: Date) throws {
         guard var session = envelope.session else { return }
-        session.phase = .ending; session.reason = reason; session.observedAt = now
+        // A stored `ending` keeps the reason and the time it was saved with, so a retry cannot pair a measured length with another reason.
+        if session.phase != .ending { session.reason = reason; session.observedAt = now }
+        session.phase = .ending
         envelope.session = session
         // A disk failure must not prevent releasing our own restrictions.
         var writeError: Error?

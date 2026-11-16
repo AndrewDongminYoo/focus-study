@@ -811,6 +811,17 @@ final class FocusFilterControlTests: XCTestCase {
             XCTAssertEqual(world.state.envelope.filterActivation, marker)
         }
     }
+    func testARetryOfAnEndingOpenSessionKeepsItsSavedReason() throws {
+        // "집중 종료" saves `ending` as `.expired` with the focused time, then the save of `terminal` fails; the app retries with `.earlyExit`.
+        let world = FilterWorld(), engine = engine(world)
+        let session = try openStart(engine, world)
+        world.throwAtEffect = world.effects + 1
+        XCTAssertThrowsError(try engine.finish(id: session.id, reason: .earlyExit, now: at(2000)))
+        XCTAssertEqual(world.state.envelope.session?.phase, .ending); XCTAssertEqual(world.state.envelope.session?.reason, .expired)
+        try engine.finish(id: session.id, reason: .earlyExit, now: at(2010))
+        try assertEnded(world, .expired, length: 2000, "retry")
+        XCTAssertEqual(world.state.envelope.session?.observedAt, at(2000))
+    }
     func testFilterStartAcceptsUnknownAccess() throws {
         let denied = FilterWorld(), deniedEngine = engine(denied)
         let world = FilterWorld(), unknownEngine = engine(world)
