@@ -107,14 +107,17 @@ final class SessionControl {
     }
     /// The spec "Activation check", step 3: clears the marker only while it is still the one that the caller read.
     /// It never starts a session; it ends a session that was open for that marker, as a Focus off would (2026-11-16 extension design).
-    func clearFilterActivation(matching id: UUID, now: Date) throws {
+    /// `now` is the time of the section, which the end of an open session and the everyday convergence use; `calledAt` is the time before the read of the Focus,
+    /// which only the call order uses (spec "Call order across processes", step 4). Without `calledAt`, `now` serves both.
+    func clearFilterActivation(matching id: UUID, now: Date, calledAt: Date? = nil) throws {
         try section(now: now) { locked in
             var envelope = try read(locked)
             try cleanup(&envelope, locked: locked, now: now)
             guard envelope.filterActivation == id else { return }
             let wasOpen = envelope.sessionIsOpen
             // The time of the check makes an on call that arrived before it stale (spec "Call order across processes", step 4).
-            envelope.filterActivation = nil; envelope.filterCallAt = max(envelope.filterCallAt ?? now, now)
+            let checkedAt = calledAt ?? now
+            envelope.filterActivation = nil; envelope.filterCallAt = max(envelope.filterCallAt ?? checkedAt, checkedAt)
             if wasOpen, let session = envelope.session, Self.isRunning(session.phase) {
                 try endOpen(&envelope, locked: locked, now: now, authorized: .unknown)
             } else {

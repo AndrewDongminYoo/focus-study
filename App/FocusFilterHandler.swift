@@ -84,7 +84,8 @@ enum ControlChangeNotification {
         let value = await reading()
         log("check \(value)")
         guard value == .off else { return }
-        _ = try? await retryingLock { try self.engine.clearFilterActivation(matching: marker, now: checkedAt) }
+        // Each attempt passes its own time for the end of an open session; `checkedAt` orders the call only.
+        _ = try? await retryingLock { try self.engine.clearFilterActivation(matching: marker, now: self.now(), calledAt: checkedAt) }
     }
 
     /// Returns whether the call changed the stored state.

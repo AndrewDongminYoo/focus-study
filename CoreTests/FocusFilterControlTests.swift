@@ -896,4 +896,13 @@ final class FocusFilterControlTests: XCTestCase {
         XCTAssertEqual(try deniedEngine.startFromFocusFilter(now: at(1), length: 1500, authorized: { .denied }, selectionReady: true, apply: {}, matches: { true },
                                                          inputRefusal: .error), .refused(.access), "access is checked first")
     }
+    func testTheActivationCheckEndsWithTheSectionTimeAndOrdersWithTheCheckTime() throws {
+        let world = FilterWorld(), engine = engine(world)
+        _ = try XCTUnwrap(started(try onCall(engine, world, at: at(0), calledAt: at(0))))
+        let marker = try XCTUnwrap(world.state.envelope.filterActivation)
+        // The check read the Focus before the base length; the section runs after it.
+        try engine.clearFilterActivation(matching: marker, now: at(1600), calledAt: at(1490))
+        XCTAssertEqual(world.state.envelope.session?.reason, .expired); XCTAssertEqual(world.state.envelope.session?.length, 1600)
+        XCTAssertEqual(world.state.envelope.filterCallAt, at(1490))
+    }
 }
