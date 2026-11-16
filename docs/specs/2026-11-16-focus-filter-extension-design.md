@@ -45,7 +45,7 @@ The person expects the restrictions to stay for as long as the Focus stays on, a
 5. The **open focused time** at `end` is `end - startedAt - pausedSeconds - openPause`, not capped at `length`. `focused(at:)` caps at `length`, so it would drop the time after a lost rollover, while the restrictions stayed on. An open session that ends as `.expired` stores `expiresAt = startedAt + open focused time` in its `ending` save, so `length` is the focused time. This applies to every end of a session that was open at the start of the section: the Focus off call, the activation check and "집중 종료". History, the today summary, the widget snapshot and the streak then read the real focused time with no change to `SessionRecord` (`focusDuration = expiresAt - startedAt`). This is the M2 meaning of `expiresAt`: start plus focus time, never moved by breaks.
 6. A session that is no longer open (its activation was cleared, see [Activation check](#activation-check)) ends by time at its current focus end as `.expired`, with the same `expiresAt` rule. So it ends at most one chunk later, never at once in the middle of a chunk.
 7. A manual session never rolls over, also while a Focus with this filter is on.
-8. No upper limit on the number of rollovers. The person can always end the session with "집중 종료" (decision 3), and a lost off call is repaired by the activation check when the app opens. A limit would lift the restrictions while the Focus is still on, against decision 2.
+8. One bound on the session, not on the Focus: a rollover runs only while the new `length` stays at or below `TodaySnapshot.maxFocusSeconds` (one week), the bound that [Length validation](#length-validation) and the widget snapshot already use. At that bound the session ends by time at its last focus end as `.expired`, as in decision 6, and the open focused time of decision 5 is capped at the same bound. No smaller limit: the person can always end the session with "집중 종료" (decision 3), a lost off call is repaired by the activation check when the app opens, and a shorter limit would lift the restrictions while the Focus is still on, against decision 2.
 
 ### Where the filter runs
 
@@ -106,11 +106,11 @@ Today `FileControl.load()` (`Shared/SharedControlStore.swift`) and `FocusActivit
 A rollover (length = a multiple of the base length) and an `.expired` end of an open session (length = the open focused time) break that check, and a failed load clears the shields and stops monitoring.
 So one `Shared/` rule replaces the check in both places:
 
-| Stored session                                          | Valid when                                                                                                                       |
-| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `baseLength == nil` (manual, or an earlier session)     | `FocusLength.isAllowed(seconds: length)`, as today.                                                                              |
-| `baseLength != nil`, any phase except the two below     | `FocusLength.isAllowed(seconds: baseLength)`, and `length` is a whole multiple of `baseLength` (1 or more), within 0.01 seconds. |
-| `baseLength != nil`, `ending` or `terminal`, `.expired` | `FocusLength.isAllowed(seconds: baseLength)`, and `baseLength <= length <= TodaySnapshot.maxFocusSeconds` (one week).            |
+| Stored session                                          | Valid when                                                                                                                                                                    |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `baseLength == nil` (manual, or an earlier session)     | `FocusLength.isAllowed(seconds: length)`, as today.                                                                                                                           |
+| `baseLength != nil`, any phase except the two below     | `FocusLength.isAllowed(seconds: baseLength)`, and `length` is a whole multiple of `baseLength` (1 or more), within 0.01 seconds, and at most `TodaySnapshot.maxFocusSeconds`. |
+| `baseLength != nil`, `ending` or `terminal`, `.expired` | `FocusLength.isAllowed(seconds: baseLength)`, and `baseLength <= length <= TodaySnapshot.maxFocusSeconds` (one week).                                                         |
 
 - A finite check on `length` comes first in every row.
 - The upper bound in the third row keeps a damaged file from reaching history with an unbounded duration; it is the bound that the widget snapshot already uses.
@@ -142,8 +142,8 @@ The M4 [filter start](2026-11-01-m4-focus-filter-design.md#filter-start-focus-on
 
 Part of the M2 reconcile order, before the timed end:
 
-1. If the stored session is open, `active`, and `now >= focusEnd`, and `focusEnd <= deadline`:
-2. Add `baseLength` to `expiresAt` until `focusEnd > now`. A late callback catches up in one section.
+1. If the stored session is open, `active`, and `now >= focusEnd`, and `focusEnd <= deadline`, and `length + baseLength <= TodaySnapshot.maxFocusSeconds` (decision 8):
+2. Add `baseLength` to `expiresAt` until `focusEnd > now`, but never past the bound of decision 8. A late callback catches up in one section. If the bound stops the catch-up while `focusEnd <= now`, the section skips steps 3 and 4 and the timed end of the reconcile ends the session as `.expired` (decision 8).
 3. Register the focus activity with the new end (`min(focusEnd, deadline)`, as `focusActivityEnd` computes).
 4. Save the session.
 5. If step 3 throws: end the session with M2 transition 6 and `.expired`, with `expiresAt` set by decision 5 from the session before step 2. The base length was reached, so the session counts; its restrictions lift while the Focus may still be on. This keeps the M2 invariant that a session without a callback at its next change does not keep its restrictions.
