@@ -167,3 +167,7 @@ The [M2 design](2026-11-01-m2-break-pass-design.md) and the code that implements
 The line above that says the active timer screen shows "the existing "중도 종료" button with its confirmation" records the M1 decision and no longer describes current behavior.
 The button with identifier `end` now reads "집중 종료" in every session phase, and its confirmation says that the session gives no focus time.
 The timer screen also shows the break button, the waiting screen, the break countdown, and "다시 집중하기" with the time left to complete before the deadline.
+
+## Focus filter extension reconciliation: 2026-11-16
+
+The focus length is stored in the App Group defaults, and both the app and the App Intents extension read it ([Focus filter extension design](2026-11-16-focus-filter-extension-design.md), decisions 13 and 16). The app moves the value of an earlier build on its first launch, before the selection.

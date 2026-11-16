@@ -39,7 +39,7 @@ xcodebuild build -project FocusStudy.xcodeproj -scheme FocusStudy -configuration
 | 경합 검사       | 실제 파일 잠금을 쓰는 두 프로세스에서 지난 세션의 콜백이 새 세션을 바꾸지 못하는지     |
 | `FocusSDKTests` | Screen Time adapter, 저장소, 화면 모델                                                 |
 | `FocusUITests`  | DEBUG 합성 데이터로 실행한 화면 흐름                                                   |
-| Release 빌드    | 개발용 코드를 뺀 App, Monitor, Report, Activity의 기기용 컴파일                        |
+| Release 빌드    | 개발용 코드를 뺀 App, Monitor, Report, Activity, Intents의 기기용 컴파일               |
 
 경합 검사는 다음 열두 줄을 출력해야 합니다.
 
