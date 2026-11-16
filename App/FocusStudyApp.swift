@@ -17,6 +17,7 @@ import SwiftData
     }
 }
 @MainActor private struct FocusBootstrap: View {
+    @State private var changeObservation: ControlChangeNotification.Observation?
     @State private var model: FocusModel?
     @State private var container: ModelContainer?
     @State private var runtime: FocusRuntime?
@@ -81,6 +82,10 @@ import SwiftData
         let loaded = FocusModel(services: services, context: ModelContext(created))
         // A filter call in this process refreshes the screen that is shown.
         runtime.holder.refreshScreens = { [weak loaded] in loaded?.refresh() }
+        // A filter call in another process, such as the App Intents extension, posts a Darwin notification instead (2026-11-16 extension design, decision 21).
+        changeObservation = ControlChangeNotification.Observation { [weak loaded] in
+            loaded?.services.settings.reloadShared(); loaded?.refresh(); runtime.holder.notifyActivity()
+        }
         model = loaded
         Task { await runtime.checkActivation() }
     }

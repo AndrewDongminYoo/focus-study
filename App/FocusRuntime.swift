@@ -25,9 +25,12 @@ import os
         return built
     }
     /// `FocusStudyFilter.perform()` delegates here.
-    static func focusFilterDidChange(startsSession: Bool) async {
-        do { try await process().holder.focusDidChange(startsSession: startsSession) }
-        catch { if startsSession { FocusSettings.app().recordFilterRefusal(.error, at: Date()) } }
+    static func focusFilterDidChange(startsSession: Bool, calledAt: Date) async {
+        do { try await process().holder.focusDidChange(startsSession: startsSession, calledAt: calledAt) }
+        catch {
+            guard startsSession else { return }
+            FocusSettings.app().recordFilterRefusal(.error, at: Date()); ControlChangeNotification.post()
+        }
     }
     /// The activation check on launch and foreground. A fixture runtime never reads a real Focus.
     func checkActivation() async {

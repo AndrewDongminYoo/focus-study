@@ -3,6 +3,28 @@ import Foundation
 /// What `FocusStudyFilter.current` says about the Focus, mapped so that the handler and its tests do not import `AppIntents`.
 enum FocusFilterReading: Equatable { case on, off, unknown }
 
+/// A data-free Darwin notification after a filter call that changed the stored state, so a running app refreshes its screens
+/// when another process, such as the App Intents extension, ran the call (2026-11-16 extension design, decision 21).
+enum ControlChangeNotification {
+    static let name = "kr.donminzzi.focusStudy.control-changed"
+    static func post() {
+        CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), CFNotificationName(name as CFString), nil, nil, true)
+    }
+    /// Keeps the observer registered until the returned object is released.
+    final class Observation {
+        let action: @MainActor () -> Void
+        init(_ action: @escaping @MainActor () -> Void) {
+            self.action = action
+            CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), Unmanaged.passUnretained(self).toOpaque(), { _, observer, _, _, _ in
+                guard let observer else { return }
+                let observation = Unmanaged<Observation>.fromOpaque(observer).takeUnretainedValue()
+                DispatchQueue.main.async { MainActor.assumeIsolated { observation.action() } }
+            }, ControlChangeNotification.name as CFString, nil, .deliverImmediately)
+        }
+        deinit { CFNotificationCenterRemoveEveryObserver(CFNotificationCenterGetDarwinNotifyCenter(), Unmanaged.passUnretained(self).toOpaque()) }
+    }
+}
+
 /// The work of a Focus filter call in the app process (spec "Filter start", "Filter end" and "Activation check").
 /// It never requests a permission: it only reads the authorization status.
 @MainActor final class FocusFilterHandler {
@@ -13,18 +35,25 @@ enum FocusFilterReading: Equatable { case on, off, unknown }
     private let refresh: () -> Void
     private let now: () -> Date
     private let pause: (TimeInterval) async -> Void
+    private let postChange: () -> Void
+    /// Only the app writes the today snapshot (2026-11-16 extension design, decision 26); the extension passes `false`.
+    private let writesTodaySnapshot: Bool
     init(services: FocusServices, history: any SessionHistoryProviding, refresh: @escaping () -> Void, now: @escaping () -> Date = Date.init,
-         pause: @escaping (TimeInterval) async -> Void) {
+         pause: @escaping (TimeInterval) async -> Void, postChange: @escaping () -> Void = ControlChangeNotification.post, writesTodaySnapshot: Bool = true) {
         self.services = services; self.history = history; self.refresh = refresh; self.now = now; self.pause = pause
+        self.postChange = postChange; self.writesTodaySnapshot = writesTodaySnapshot
     }
     private var settings: FocusSettings { services.settings }
     private var engine: SessionControl { services.engine }
 
-    func focusDidChange(startsSession: Bool) async {
+    /// `calledAt` is the arrival time that `perform()` takes before any lock attempt (spec "Call order across processes"); `nil` takes the time here.
+    func focusDidChange(startsSession: Bool, calledAt: Date? = nil) async {
+        let arrival = calledAt ?? now()
         await Self.serially {
-            if startsSession { await self.start() } else { await self.end() }
+            let changed = startsSession ? await self.start(calledAt: arrival) : await self.end(calledAt: arrival)
+            if changed { self.postChange() }
             self.refresh()
-            if startsSession { self.writeTodaySnapshot() }
+            if startsSession, self.writesTodaySnapshot { self.writeTodaySnapshot() }
         }
     }
     /// The last part of step 5 of the on call: today's records through the handler's own history, for a background launch with no model.
@@ -50,52 +79,67 @@ enum FocusFilterReading: Equatable { case on, off, unknown }
     /// Step 3 of the activation check clears only on `.off`; `notFound` maps to `.off` in `FocusStudyFilter.reading()`.
     func checkActivation(reading: () async -> FocusFilterReading) async {
         guard let marker = try? engine.snapshot().filterActivation else { return }
+        // The time before the read, so an on call that arrived before the check is stale after it (spec "Call order across processes", step 4).
+        let checkedAt = now()
         let value = await reading()
         log("check \(value)")
         guard value == .off else { return }
-        _ = try? await retryingLock { try self.engine.clearFilterActivation(matching: marker, now: self.now()) }
+        // Each attempt passes its own time for the end of an open session; `checkedAt` orders the call only.
+        _ = try? await retryingLock { try self.engine.clearFilterActivation(matching: marker, now: self.now(), calledAt: checkedAt) }
     }
 
-    private func start() async {
+    /// Returns whether the call changed the stored state.
+    private func start(calledAt: Date) async -> Bool {
         // Step 1: the inputs, read outside the lock.
         services.authorization.refresh()
         let length = settings.lengthSeconds, counts = services.selection.counts, frozen = services.selection.selection
         let selectionReady = (try? SelectionValidator.validate(appCount: counts.apps, webCount: counts.websites, categoryCount: counts.categories)) != nil
+        // A selection with no stored length is a damaged migration: never start with a length the person did not choose (2026-11-16 extension design, decision 16).
+        // The engine orders this refusal like any other, so a stale call cannot record it.
+        let inputRefusal: FocusFilterRefusal? = counts.apps + counts.websites > 0 && !settings.hasStoredLength ? .error : nil
         // Step 2: a failure here does not stop step 3, which refuses with `history` while a terminal session stays.
         await importPendingTerminal()
         // Steps 3 and 4.
         do {
             let result = try await retryingLock {
                 try self.engine.startFromFocusFilter(now: self.now(), length: length, authorized: { self.services.authorization.accessState() }, selectionReady: selectionReady,
-                                                     apply: { self.services.applySelection(frozen) }, matches: { self.services.matchesSelection(frozen) })
+                                                     apply: { self.services.applySelection(frozen) }, matches: { self.services.matchesSelection(frozen) }, calledAt: calledAt,
+                                                     inputRefusal: inputRefusal)
             }
             switch result {
-            case .started: settings.clearFilterRefusal(); log("on started")
-            case .repeated: log("on repeated")
-            case .refused(let reason): settings.recordFilterRefusal(reason, at: now()); log("on refused \(reason)")
-            case .stale: log("on stale")
+            case .started: settings.clearFilterRefusal(); log("on started"); return true
+            case .repeated: log("on repeated"); return false
+            case .refused(let reason): settings.recordFilterRefusal(reason, at: now()); log("on refused \(reason)"); return true
+            // A call that arrived before an accepted one stores no refusal: it describes a Focus state that is already gone.
+            case .stale: log("on stale"); return false
             }
         } catch {
-            settings.recordFilterRefusal(.error, at: now()); log("on error")
+            // The refusal changed the shared display values, so the observers reload them.
+            settings.recordFilterRefusal(.error, at: now()); log("on error"); return true
         }
     }
-    private func end() async {
-        await Self.performEnd(engine: engine, authorization: services.authorization, settings: settings, now: now, pause: pause)
+    private func end(calledAt: Date) async -> Bool {
+        await Self.performEnd(engine: engine, authorization: services.authorization, settings: settings, now: now, pause: pause, calledAt: calledAt)
     }
     /// The off call needs only the engine and the access status, so a failed selection or SwiftData load cannot keep a filter session running.
     /// It waits for the earlier Focus calls of the process, as `focusDidChange` does.
     static func end(engine: SessionControl, authorization: any AuthorizationProviding, settings: FocusSettings, now: @escaping () -> Date,
-                    pause: @escaping (TimeInterval) async -> Void) async {
-        await serially { await performEnd(engine: engine, authorization: authorization, settings: settings, now: now, pause: pause) }
+                    pause: @escaping (TimeInterval) async -> Void, calledAt: Date? = nil, postChange: @escaping () -> Void = ControlChangeNotification.post) async {
+        let arrival = calledAt ?? now()
+        await serially {
+            if await performEnd(engine: engine, authorization: authorization, settings: settings, now: now, pause: pause, calledAt: arrival) { postChange() }
+        }
     }
+    /// Returns whether the call was accepted; a stale call changes nothing of its own.
     private static func performEnd(engine: SessionControl, authorization: any AuthorizationProviding, settings: FocusSettings, now: @escaping () -> Date,
-                                   pause: (TimeInterval) async -> Void) async {
+                                   pause: (TimeInterval) async -> Void, calledAt: Date) async -> Bool {
         authorization.refresh()
         do {
             // Each attempt reads the access value again, so a retry after a lock timeout uses the value after the pause.
-            try await retryingLock(pause: pause) { try engine.endFromFocusFilter(now: now(), authorized: authorization.accessState()) }
-            log("off done", settings: settings, at: now())
-        } catch { log("off error", settings: settings, at: now()) }
+            let accepted = try await retryingLock(pause: pause) { try engine.endFromFocusFilter(now: now(), authorized: authorization.accessState(), calledAt: calledAt) }
+            log(accepted ? "off done" : "off stale", settings: settings, at: now())
+            return accepted
+        } catch { log("off error", settings: settings, at: now()); return false }
     }
     /// The first part of `FocusModel.refresh()`: reconcile, snapshot and the import of a terminal session.
     private func importPendingTerminal() async {
