@@ -176,7 +176,9 @@ extension FocusServices {
                 breakSelection.copies.insert(session.id)
             }
         }
-        let engine = SessionControl(store: store, monitoring: monitoring, shield: FixtureShield(), breakSelection: breakSelection, everyday: everyday, timing: timing, calendar: calendar)
+        let engine = SessionControl(store: store, monitoring: monitoring, shield: FixtureShield(), breakSelection: breakSelection, everyday: everyday, timing: timing, calendar: calendar,
+                                    // Fixtures start only manual sessions, which never have a pending shield.
+                                    role: .appContainer(applyFocusSelection: { false }))
         let onboarding = arguments.contains("onboarding")
         var services = FocusServices(authorization: FixtureAuthorization(denied: arguments.contains("denied"), notRequested: arguments.contains("not-requested") || onboarding, checking: arguments.contains("checking")), selection: FixtureSelection(selected: arguments.contains("--selected") && !onboarding), engine: engine, applySelection: { _ in }, matchesSelection: { _ in true }, isFixture: true)
         services.saveBreakSelection = { _, id in breakSelection.copies.insert(id) }

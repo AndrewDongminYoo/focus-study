@@ -32,4 +32,17 @@ final class BreakSelectionFileTests: XCTestCase {
         XCTAssertFalse(file.exists(id: b)); XCTAssertTrue(FileManager.default.fileExists(atPath: unrelated.path))
         XCTAssertFalse(file.restoreShield(id: b))
     }
+    /// The App Group selection read of a pending shield (2026-11-16 shield amendment, decision 5): every case that returns before the apply.
+    /// A readable selection with tokens would apply a real shield, so it is left to the device steps.
+    func testGroupSelectionThatCannotShieldAppliesNothing() throws {
+        let container = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: container) }
+        let shield = ScreenTimeShield(), folder = container.appendingPathComponent("FocusSelection", isDirectory: true)
+        XCTAssertFalse(shield.applyGroupSelection(container: container), "missing file")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try Data("not json".utf8).write(to: folder.appendingPathComponent("selection.json"))
+        XCTAssertFalse(shield.applyGroupSelection(container: container), "unreadable file")
+        try JSONEncoder().encode(FamilyActivitySelection(includeEntireCategory: true)).write(to: folder.appendingPathComponent("selection.json"))
+        XCTAssertFalse(shield.applyGroupSelection(container: container), "empty selection")
+    }
 }

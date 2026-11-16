@@ -126,7 +126,20 @@ final class ScreenTimeShield: ShieldClient {
     func matches(_ selection: FamilyActivitySelection) -> Bool {
         (store.shield.applications ?? []) == selection.applicationTokens && (store.shield.webDomains ?? []) == selection.webDomainTokens
     }
+    var hasShield: Bool { store.shield.applications != nil || store.shield.webDomains != nil }
     func clear() { store.clearAllSettings() }
+    /// Applies the focus selection of the App Group, `FocusSelection/selection.json` in `container`, and returns `true` only when the store matches it.
+    /// The app and the Monitor shield a session that the App Intents extension started with it (2026-11-16 shield amendment, decision 5).
+    /// A missing, unreadable or empty selection applies nothing and returns `false`.
+    func applyGroupSelection(container: URL) -> Bool {
+        let url = container.appendingPathComponent("FocusSelection", isDirectory: true).appendingPathComponent("selection.json")
+        guard let data = try? Data(contentsOf: url), let stored = try? JSONDecoder().decode(FamilyActivitySelection.self, from: data) else { return false }
+        var selection = FamilyActivitySelection(includeEntireCategory: true)
+        selection.applicationTokens = stored.applicationTokens; selection.webDomainTokens = stored.webDomainTokens
+        guard !selection.applicationTokens.isEmpty || !selection.webDomainTokens.isEmpty else { return false }
+        apply(selection)
+        return matches(selection)
+    }
 }
 /// The everyday layer's own store; the focus layer never writes it.
 final class ScreenTimeEverydayShield {

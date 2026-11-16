@@ -22,8 +22,11 @@ final class FocusMonitor: DeviceActivityMonitor {
             let store = SharedControlStore(directory: directory), monitoring = ScreenTimeMonitoring()
             let breakSelection = BreakSelectionFile(directory: directory, shield: shield)
             let everyday = EverydayLayerFile(directory: directory, shield: ScreenTimeEverydayShield())
+            // The Monitor applies and lifts the shields of the sessions that the App Intents extension starts and ends (2026-11-16 shield amendment, decisions 2, 5 and 8).
+            let container = directory.deletingLastPathComponent()
+            let role = ShieldRole.appContainer(applyFocusSelection: { shield.applyGroupSelection(container: container) })
             // Every name reaches the engine: the everyday convergence depends only on the stored files and the time.
-            let engine = SessionControl(store: store, monitoring: monitoring, shield: shield, breakSelection: breakSelection, everyday: everyday)
+            let engine = SessionControl(store: store, monitoring: monitoring, shield: shield, breakSelection: breakSelection, everyday: everyday, role: role)
             // The callback's process lock has been released before this task reads/publishes.
             defer { Self.synchronizeActivity(engine: engine) }
             #if DEBUG
@@ -31,7 +34,7 @@ final class FocusMonitor: DeviceActivityMonitor {
             // The recorder gets a fixed activity kind and never the name, so the one public string of a line holds fixed values and numbers only.
             if let timing = MonitorTimingRecorder.begin(directory: directory, activity: MonitorTimingActivity(activityName: activity.rawValue), kind: kind,
                                                         emit: { line in Self.timingLog.notice("\(line, privacy: .public)") }) {
-                let timed = timing.engine(store: store, monitoring: monitoring, shield: shield, breakSelection: breakSelection, everyday: everyday)
+                let timed = timing.engine(store: store, monitoring: monitoring, shield: shield, breakSelection: breakSelection, everyday: everyday, role: role)
                 try timing.run {
                     try timed.handleCallbackRetryingLock(activityName: activity.rawValue, kind: kind, now: Date.init,
                                                          authorized: { timing.access { ScreenTimeAccess.current() } })

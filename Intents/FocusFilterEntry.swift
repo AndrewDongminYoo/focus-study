@@ -23,9 +23,10 @@ import SwiftData
     private static func loadEngine() throws -> SessionControl {
         if let engine { return engine }
         let group = try GroupConfiguration.directory(), shield = ScreenTimeShield()
+        // This process's ManagedSettings stores are in its own container, so the engine never calls them (2026-11-16 shield amendment, decision 1).
         let created = SessionControl(store: SharedControlStore(directory: group), monitoring: ScreenTimeMonitoring(), shield: shield,
                                      breakSelection: BreakSelectionFile(directory: group, shield: shield),
-                                     everyday: EverydayLayerFile(directory: group, shield: ScreenTimeEverydayShield()))
+                                     everyday: EverydayLayerFile(directory: group, shield: ScreenTimeEverydayShield()), role: .intentsExtension)
         engine = created
         return created
     }

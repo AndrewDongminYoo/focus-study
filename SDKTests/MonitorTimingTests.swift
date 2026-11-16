@@ -354,7 +354,7 @@ private final class TimingFixture {
         let timing = try XCTUnwrap(MonitorTimingRecorder.begin(directory: directory, activity: MonitorTimingActivity(activityName: activityName), kind: kind, now: now, number: { number }) {
             emitted.append(TimingLine(raw: $0, insideLock: self.store.isLocked))
         })
-        let engine = timing.engine(store: store, monitoring: monitoring, shield: shield, breakSelection: breakSelection, everyday: everyday)
+        let engine = timing.engine(store: store, monitoring: monitoring, shield: shield, breakSelection: breakSelection, everyday: everyday, role: .appContainer(applyFocusSelection: { false }))
         try timing.run {
             try engine.handleCallbackRetryingLock(activityName: activityName, kind: kind, now: { self.now }, authorized: { timing.access(self.read) },
                                                   sleep: { _ in self.sleeps += 1 })

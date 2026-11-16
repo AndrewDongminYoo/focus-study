@@ -110,12 +110,13 @@ final class MonitorTimingRecorder {
 
     /// The engine of this callback: every value goes to the engine through a wrapper that forwards each call once.
     func engine(store: any ControlStore, monitoring: any MonitoringClient, shield: any ShieldClient, breakSelection: any BreakSelectionStore,
-                everyday: any EverydayLayerStore) -> SessionControl {
+                everyday: any EverydayLayerStore, role: ShieldRole) -> SessionControl {
         // The engine puts its marker wrapper around the timed client, so a `register` or `stop` time has no marker write or delete in it.
+        // `role` has no default here, so that the timed Monitor applies a pending shield as the plain one does.
         SessionControl(store: TimedControlStore(base: store, recorder: self),
                        monitoring: DiagnosticMonitoring(base: monitoring, didMeasure: { [self] operation, duration in recordCall(operation, duration) }),
                        shield: TimedShield(base: shield, recorder: self), breakSelection: TimedBreakSelection(base: breakSelection, recorder: self),
-                       everyday: TimedEverydayLayer(base: everyday, recorder: self))
+                       everyday: TimedEverydayLayer(base: everyday, recorder: self), role: role)
     }
     /// The whole callback, from the flag read to the return or throw of `body`, which is the call of `handleCallbackRetryingLock`.
     func run(_ body: () throws -> Void) throws {
@@ -233,6 +234,7 @@ private final class TimedShield: ShieldClient {
     private let recorder: MonitorTimingRecorder
     init(base: any ShieldClient, recorder: MonitorTimingRecorder) { self.base = base; self.recorder = recorder }
     func clear() { recorder.call(.clearShield, base.clear) }
+    var hasShield: Bool { base.hasShield }
 }
 /// `apply_shield` is the read of the copy, the apply and the match.
 private final class TimedBreakSelection: BreakSelectionStore {
