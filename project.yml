@@ -40,6 +40,8 @@ targets:
         embed: true
       - target: FocusReport
         embed: true
+      - target: FocusStudyIntents
+        embed: true
   FocusMonitor:
     type: app-extension
     platform: iOS
@@ -65,6 +67,29 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: kr.donminzzi.focusStudy.report
         INFOPLIST_FILE: Configuration/Report-Info.plist
         CODE_SIGN_ENTITLEMENTS: Configuration/Report.entitlements
+        APPLICATION_EXTENSION_API_ONLY: YES
+        TARGETED_DEVICE_FAMILY: "1"
+  # The App Intents extension that runs the Focus filter while the app is not running (2026-11-16 extension design, decisions 9 to 11).
+  FocusStudyIntents:
+    type: extensionkit-extension
+    platform: iOS
+    sources:
+      - Intents
+      - Shared
+      - Integration
+      - App/AuthorizationService.swift
+      - App/FocusFilterHandler.swift
+      - App/FocusServices.swift
+      - App/FocusSettings.swift
+      - App/FocusStudyFilter.swift
+      - App/SelectionRepository.swift
+      - App/SessionRecord.swift
+      - App/TodaySnapshotWriter.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: kr.donminzzi.focusStudy.intents
+        INFOPLIST_FILE: Configuration/Intents-Info.plist
+        CODE_SIGN_ENTITLEMENTS: Configuration/Intents.entitlements
         APPLICATION_EXTENSION_API_ONLY: YES
         TARGETED_DEVICE_FAMILY: "1"
   FocusActivity:
@@ -98,6 +123,7 @@ targets:
         App/SessionRecord.swift,
         App/EverydaySettingsModel.swift,
         App/FocusModel.swift,
+        App/FocusServices.swift,
         App/AuthorizationService.swift,
         App/FocusFilterHandler.swift,
         App/FocusRuntimeHolder.swift,

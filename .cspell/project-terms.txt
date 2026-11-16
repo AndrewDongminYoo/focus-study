@@ -24,6 +24,7 @@ dsym
 ENABLE_STRICT_OBJC_MSGSEND
 exclamationmark.circle
 exclamationmark.triangle
+extensionkit
 focusstudy
 gearshape
 GENERATE_INFOPLIST_FILE
