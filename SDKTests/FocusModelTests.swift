@@ -629,7 +629,8 @@ import SwiftData
         await handler.focusDidChange(startsSession: false)
         XCTAssertEqual(try engine.snapshot().session?.reason, .expired)
         model.refresh()
-        XCTAssertEqual(model.completedSessionID, s2.id); XCTAssertEqual(model.completedLength, 1800)
+        // An open session records its focused time, here about 1900 seconds, not the 1800-second base (2026-11-16 extension design, decision 5).
+        XCTAssertEqual(model.completedSessionID, s2.id); XCTAssertEqual(try XCTUnwrap(model.completedLength), 1900, accuracy: 5)
         XCTAssertNil(model.services.settings.pendingCompletion)
     }
     func testNoBreakActionAfterThirdBreak() {
