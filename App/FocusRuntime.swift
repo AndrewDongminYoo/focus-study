@@ -27,7 +27,7 @@ import os
     /// `FocusStudyFilter.perform()` delegates here.
     static func focusFilterDidChange(startsSession: Bool) async {
         do { try await process().holder.focusDidChange(startsSession: startsSession) }
-        catch { if startsSession { FocusSettings().recordFilterRefusal(.error, at: Date()) } }
+        catch { if startsSession { FocusSettings.app().recordFilterRefusal(.error, at: Date()) } }
     }
     /// The activation check on launch and foreground. A fixture runtime never reads a real Focus.
     func checkActivation() async {
@@ -72,17 +72,21 @@ import os
         }
         #endif
         // One settings object for the screens and the filter, so that a refusal recorded by the filter updates the guide that is shown.
-        let settings = FocusSettings()
+        let settings = FocusSettings.app()
         // One writer per process, so its first write check asks for one reload; `group` is `SessionControl/` inside the container.
         let todaySnapshot = TodaySnapshotWriter(container: group.deletingLastPathComponent()) { WidgetCenter.shared.reloadTimelines(ofKind: TodaySnapshot.widgetKind) }
         return FocusRuntime(recovery: StartupRecovery(engine: engine), accessState: authorization.accessState, holder: FocusRuntimeHolder(engine: engine, authorization: authorization, settings: settings, activityDidChange: activityDidChange) {
-            let directory = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent("PrivateSelection")
+            // The length moves first and the selection only after it, so an App Group selection always has a length next to it (2026-11-16 extension design, decision 16).
+            let lengthMoved = settings.migrateToAppGroup()
+            let legacy = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent("PrivateSelection")
+            let selection = try SelectionRepository(directory: GroupConfiguration.container().appendingPathComponent("FocusSelection", isDirectory: true),
+                                                    legacyDirectory: legacy, migrate: lengthMoved)
             #if DEBUG
             let applySelection: (FamilyActivitySelection) -> Void = diagnostics == nil ? shield.apply : { selection in measureScreenTime(.applyShield, report: logTiming) { shield.apply(selection) } }
             #else
             let applySelection: (FamilyActivitySelection) -> Void = shield.apply
             #endif
-            var services = FocusServices(authorization: authorization, selection: try SelectionRepository(directory: directory), engine: engine, applySelection: applySelection, matchesSelection: shield.matches)
+            var services = FocusServices(authorization: authorization, selection: selection, engine: engine, applySelection: applySelection, matchesSelection: shield.matches)
             services.settings = settings
             services.activityDidChange = activityDidChange
             services.saveBreakSelection = { try breakSelection.save($0, id: $1) }
