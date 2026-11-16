@@ -89,15 +89,16 @@ The person expects the restrictions to stay for as long as the Focus stays on, a
 
 ## Stored values
 
-| Value            | Where                              | Type            | Meaning                                                                                                    |
-| ---------------- | ---------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------- |
-| `activation`     | `ControlSession` in `control.json` | `UUID?`         | The `filterActivation` that started this session. Set once in the save of `preparing`; `nil` for `manual`. |
-| `baseLength`     | `ControlSession` in `control.json` | `TimeInterval?` | The focus length at the start of a `focusFilter` session; `nil` for `manual` and for earlier sessions.     |
-| Focus selection  | App Group `FocusSelection/`        | file            | Moved from the app container (decision 12).                                                                |
-| Focus length     | App Group `UserDefaults`           | `Int` minutes   | Moved from `UserDefaults.standard` (decision 13).                                                          |
-| Refusal and card | App Group `UserDefaults`           | as in M4        | Moved from `UserDefaults.standard` (decision 14).                                                          |
+| Value            | Where                               | Type            | Meaning                                                                                                                                                         |
+| ---------------- | ----------------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `activation`     | `ControlSession` in `control.json`  | `UUID?`         | The `filterActivation` that started this session. Set once in the save of `preparing`; `nil` for `manual`.                                                      |
+| `baseLength`     | `ControlSession` in `control.json`  | `TimeInterval?` | The focus length at the start of a `focusFilter` session; `nil` for `manual` and for earlier sessions.                                                          |
+| `filterCallAt`   | `ControlEnvelope` in `control.json` | `Date?`         | The arrival time of the newest filter call or activation-check clear that a section accepted (see [Call order across processes](#call-order-across-processes)). |
+| Focus selection  | App Group `FocusSelection/`         | file            | Moved from the app container (decision 12).                                                                                                                     |
+| Focus length     | App Group `UserDefaults`            | `Int` minutes   | Moved from `UserDefaults.standard` (decision 13).                                                                                                               |
+| Refusal and card | App Group `UserDefaults`            | as in M4        | Moved from `UserDefaults.standard` (decision 14).                                                                                                               |
 
-- `ControlEnvelope.schemaVersion` stays `2`. Both new session fields are optional, so a file of an earlier build decodes without them, and an earlier build drops them on its next save. A session without `activation` is never open, so it ends by time as in M4.
+- `ControlEnvelope.schemaVersion` stays `2`. The two new session fields and `filterCallAt` are optional, so a file of an earlier build decodes without them, and an earlier build drops them on its next save. A session without `activation` is never open, so it ends by time as in M4. A missing `filterCallAt` makes no call stale. Every section of this build, in every process, saves the envelope that it decoded, so the Monitor keeps `filterCallAt` as it keeps the marker.
 - `Shared/` computes "open" from the envelope: `session.isFilterStarted && session.activation != nil && session.activation == envelope.filterActivation`.
 
 ### Length validation
@@ -128,6 +129,19 @@ The focus selection file is not a side artifact of a session: it exists while a 
 
 Every section is one `withExclusiveAccess` section on `control.lock`, reads the envelope again, runs the M2 cleanup and ends with the M3 everyday convergence, as every section does.
 A section is the same in the app, in the extension and in the Monitor.
+
+### Call order across processes
+
+`FocusFilterHandler.serially` orders the calls of one process only. With the type in two targets (decision 9), an on call in the extension can pause between lock retries while an off call in the app runs to the end; the on call would then start a session after the Focus turned off, with no later call to end it.
+So the order is kept in the stored state, under the same lock as the session:
+
+1. Each filter call takes its arrival time `calledAt` from the wall clock when `perform()` begins, before any lock attempt, and passes it to every section of the call.
+2. A section of a filter call first runs the M2 cleanup, then compares: if the stored `filterCallAt` is later than `calledAt`, the call is stale. The section makes no change of its own and returns `stale`; only the cleanup can save, as for a repeated call. A stale call stores no refusal and does not post the Darwin notification.
+3. Otherwise the section sets `filterCallAt = calledAt` in the same save as its own change, or in a save of its own when it changes nothing else.
+4. The activation check takes its time before it reads `current`, and `clearFilterActivation(matching:)` stores it in `filterCallAt` in the save that clears the marker. So an on call that arrived before the check and runs after it is stale.
+5. Two calls with the same `calledAt` keep the order in which they take the lock.
+
+The comparison uses the wall clock, so a manual clock change between two calls can reverse their order: a clock moved back makes the next call look stale. The direction is looser (a Focus change is ignored until the next one), and the person can still start or end a session in the app. A clock moved forward makes an old call look new, which is the order of today. Device step 11 records the interleaving.
 
 ### Filter start (Focus on)
 
@@ -231,11 +245,13 @@ On the iPhone 16 Pro with the signed Debug build, after the signing approval:
 8. A Focus on before the first unlock after a restart: what the extension reads, and the stored refusal.
 9. Live Activity: none while the app stays closed; it appears when the app opens; after the base length it counts up.
 10. Migration: update over the current build with a saved selection and a 40-minute focus length; both values survive, and the private file is gone.
+11. Call order: with the app closed, turn the Focus on and, within a second, open the app and turn the Focus off; no session remains, and the logs show whether a stale call was rejected.
 
 ## Verification
 
 - Host tests (`Shared/`): rollover in `active` at the focus end, catch-up after a late callback, no rollover for a manual session or a session whose activation was cleared, deadline before the focus end, rollover registration failure, the reason order of decision 4, `expiresAt` of decision 5 (including a Focus off after a lost rollover, which records the uncapped time), a filter start with `unknown` access that passes both verification reads and one with `denied` that rolls back, a save and reload through `FileControl` after a rollover and after an `.expired` finalization (each row of [Length validation](#length-validation), and a length outside it that throws), the Live Activity projection of a rolled-over session, decoding a version 2 file without the new fields.
-- The separate-process race check, because rollover adds a write to an existing callback.
+- The separate-process race check, because rollover adds a write to an existing callback, and a two-process run in which an on call with an earlier `calledAt` takes the lock after an off call with a later one and is rejected as stale.
+- Host tests for the call order: a stale on call and a stale off call change nothing of their own, an activation-check clear makes an earlier on call stale, and an equal `calledAt` keeps the lock order.
 - SDK tests for the migration and for the App Group stores.
 - UI tests with fixtures for the count-up timer screen and the completion card of an open session.
 - An unsigned device Release build of every target, because the target configuration changes.
