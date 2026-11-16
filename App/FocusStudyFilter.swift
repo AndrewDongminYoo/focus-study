@@ -10,7 +10,8 @@ struct FocusStudyFilter: SetFocusFilterIntent {
         DisplayRepresentation(title: startsSession ? LocalizedStringResource("집중 시작 켬") : LocalizedStringResource("집중 시작 끔"))
     }
     @MainActor func perform() async throws -> some IntentResult {
-        await FocusRuntime.focusFilterDidChange(startsSession: startsSession)
+        // The arrival time is taken before any lock attempt (2026-11-16 extension design, "Call order across processes").
+        await FocusRuntime.focusFilterDidChange(startsSession: startsSession, calledAt: Date())
         return .result()
     }
     /// `current` for the activation check: `notFound` counts as off; any other error changes nothing.

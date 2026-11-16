@@ -36,6 +36,8 @@ import SwiftData
         let selection: ModelTestSelection
         let pauses: Box<[TimeInterval]>
         let refreshes: Box<Int>
+        /// Darwin notifications that the handler posted after a call that changed the stored state.
+        let posts: Box<Int>
         let applied: Box<[FamilyActivitySelection]>
         /// Runs inside the injected pause, so a test can send a second call while the first one waits to retry.
         let onPause: Box<(@MainActor () async -> Void)?>
@@ -48,20 +50,20 @@ import SwiftData
         for authorization in authorizations { XCTAssertEqual(authorization.requests, 0) }
         authorizations = []
     }
-    private func rig(now: @escaping () -> Date = Date.init) -> Rig {
+    private func rig(now: @escaping () -> Date = Date.init, shared: UserDefaults? = nil) -> Rig {
         let store = ModelTestStore(), shield = ModelTestShield(), authorization = RecordingAuthorization(), selection = ModelTestSelection()
         authorizations.append(authorization)
         let engine = SessionControl(store: store, monitoring: ModelTestMonitoring(), shield: shield, breakSelection: ModelTestBreakSelection(), everyday: ModelTestEverydayLayer())
         let applied = Box<[FamilyActivitySelection]>([])
         var services = FocusServices(authorization: authorization, selection: selection, engine: engine,
                                      applySelection: { applied.value.append($0); shield.applied = true }, matchesSelection: { _ in shield.applied }, isFixture: true)
-        services.settings = FocusSettings(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        services.settings = FocusSettings(defaults: UserDefaults(suiteName: UUID().uuidString)!, shared: shared)
         let history = FilterTestHistory(acknowledge: engine.acknowledgeTerminal)
-        let pauses = Box<[TimeInterval]>([]), refreshes = Box(0), onPause = Box<(@MainActor () async -> Void)?>(nil)
+        let pauses = Box<[TimeInterval]>([]), refreshes = Box(0), posts = Box(0), onPause = Box<(@MainActor () async -> Void)?>(nil)
         let handler = FocusFilterHandler(services: services, history: history, refresh: { refreshes.value += 1 }, now: now,
-                                         pause: { pauses.value.append($0); await onPause.value?() })
+                                         pause: { pauses.value.append($0); await onPause.value?() }, postChange: { posts.value += 1 })
         return Rig(handler: handler, services: services, store: store, shield: shield, history: history, authorization: authorization, selection: selection,
-                   pauses: pauses, refreshes: refreshes, applied: applied, onPause: onPause)
+                   pauses: pauses, refreshes: refreshes, posts: posts, applied: applied, onPause: onPause)
     }
     private func stored(_ rig: Rig) -> ControlSession? { rig.store.envelope.session }
 
@@ -133,8 +135,8 @@ import SwiftData
             await rig.handler.focusDidChange(startsSession: true)
             XCTAssertEqual(rig.pauses.value, Array(repeating: FocusFilterHandler.retryPause, count: 4), "\(timeouts)")
             if timeouts == 4 {
-                // The reconcile read time 1; the start attempts read times 2 to 6, and the fifth attempt started the session.
-                XCTAssertEqual(stored(rig)?.startedAt, base.addingTimeInterval(6)); XCTAssertNil(rig.services.settings.lastFilterRefusal)
+                // The arrival time is time 1 and the reconcile read time 2; the start attempts read times 3 to 7, and the fifth attempt started the session.
+                XCTAssertEqual(stored(rig)?.startedAt, base.addingTimeInterval(7)); XCTAssertNil(rig.services.settings.lastFilterRefusal)
             } else {
                 XCTAssertNil(stored(rig)); XCTAssertEqual(rig.services.settings.lastFilterRefusal?.reason, .error)
             }
@@ -278,13 +280,55 @@ import SwiftData
         }
         var refreshed = 0
         holder.refreshScreens = { refreshed += 1 }
-        try await holder.focusDidChange(startsSession: false)
+        try await holder.focusDidChange(startsSession: false, calledAt: Date())
         XCTAssertEqual(builds, 0, "the off call must not need the selection or the SwiftData store")
         XCTAssertEqual(stored(rig)?.phase, .terminal); XCTAssertEqual(stored(rig)?.reason, .earlyExit)
         XCTAssertNil(rig.store.envelope.filterActivation); XCTAssertFalse(rig.shield.applied)
         XCTAssertEqual(refreshed, 1)
         // The on call still needs the storage, so it throws and `FocusRuntime` stores `error`.
-        do { try await holder.focusDidChange(startsSession: true); XCTFail("the on call must throw") } catch {}
+        do { try await holder.focusDidChange(startsSession: true, calledAt: Date()); XCTFail("the on call must throw") } catch {}
         XCTAssertEqual(builds, 1)
+    }
+
+    // MARK: 2026-11-16 Focus filter extension design
+
+    func testAcceptedCallsPostAChangeAndAStaleCallDoesNot() async throws {
+        let rig = rig(), t0 = Date()
+        await rig.handler.focusDidChange(startsSession: false, calledAt: t0.addingTimeInterval(20))
+        XCTAssertEqual(rig.posts.value, 1, "an accepted off call")
+        await rig.handler.focusDidChange(startsSession: true, calledAt: t0.addingTimeInterval(10))
+        XCTAssertNil(stored(rig), "the older on call is stale")
+        XCTAssertNil(rig.services.settings.lastFilterRefusal, "a stale call stores no refusal")
+        XCTAssertEqual(rig.posts.value, 1, "a stale call posts nothing")
+        await rig.handler.focusDidChange(startsSession: true, calledAt: t0.addingTimeInterval(30))
+        XCTAssertEqual(stored(rig)?.phase, .active); XCTAssertEqual(rig.posts.value, 2)
+        await rig.handler.focusDidChange(startsSession: true, calledAt: t0.addingTimeInterval(40))
+        XCTAssertEqual(rig.posts.value, 2, "a repeated call changes no session")
+    }
+    func testASelectionWithoutAStoredLengthRefusesWithError() async throws {
+        let rig = rig(shared: UserDefaults(suiteName: UUID().uuidString)!)
+        await rig.handler.focusDidChange(startsSession: true, calledAt: Date())
+        XCTAssertNil(stored(rig)); XCTAssertTrue(rig.applied.value.isEmpty)
+        XCTAssertEqual(rig.services.settings.lastFilterRefusal?.reason, .error)
+        rig.services.settings.lengthMinutes = 30
+        await rig.handler.focusDidChange(startsSession: true, calledAt: Date())
+        XCTAssertEqual(stored(rig)?.phase, .active); XCTAssertEqual(stored(rig)?.baseLength, 1800)
+    }
+    func testActivationCheckStoresTheTimeBeforeItReadsTheFocus() async throws {
+        let clock = Box(Date()), rig = rig(now: { clock.value })
+        await rig.handler.focusDidChange(startsSession: true, calledAt: clock.value)
+        let before = clock.value.addingTimeInterval(5); clock.value = before
+        await rig.handler.checkActivation(reading: { clock.value = before.addingTimeInterval(60); return .off })
+        XCTAssertEqual(rig.store.envelope.filterCallAt, before)
+    }
+    func testOnlyTheAppProcessWritesTheTodaySnapshot() async throws {
+        for writes in [true, false] {
+            let rig = rig(), written = Box(0)
+            var services = rig.services
+            services.writeTodaySnapshot = { _ in written.value += 1 }
+            let handler = FocusFilterHandler(services: services, history: rig.history, refresh: {}, pause: { _ in }, writesTodaySnapshot: writes)
+            await handler.focusDidChange(startsSession: true, calledAt: Date())
+            XCTAssertEqual(written.value, writes ? 1 : 0, "\(writes)")
+        }
     }
 }

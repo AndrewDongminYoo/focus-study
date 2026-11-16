@@ -39,10 +39,10 @@ import SwiftData
     }
     /// The on call needs the selection and the history store, so it throws when they cannot load.
     /// The off call runs on the engine alone, as the error screen's end does, so a storage failure cannot keep a filter session running.
-    func focusDidChange(startsSession: Bool) async throws {
+    func focusDidChange(startsSession: Bool, calledAt: Date = Date()) async throws {
         defer { notifyActivity() }
-        if startsSession { return try await filterHandler().focusDidChange(startsSession: true) }
-        await FocusFilterHandler.end(engine: engine, authorization: authorization, settings: settings, now: Date.init, pause: Self.pause)
+        if startsSession { return try await filterHandler().focusDidChange(startsSession: true, calledAt: calledAt) }
+        await FocusFilterHandler.end(engine: engine, authorization: authorization, settings: settings, now: Date.init, pause: Self.pause, calledAt: calledAt)
         refreshScreens?()
     }
 }
