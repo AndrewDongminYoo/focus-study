@@ -42,6 +42,7 @@ parallelizable
 parallelizeBuildables
 person.crop.circle.badge.exclamationmark
 readback
+runningboardd
 SDKROOT
 showsdks
 simctl
@@ -70,3 +71,4 @@ XCUIDevice
 XCUIElement
 xcuserdata
 xcuserstate
+xpcservice
