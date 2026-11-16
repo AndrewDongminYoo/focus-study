@@ -486,24 +486,48 @@ Session times come from a copy of the device store taken at 00:07 on 2026-11-16;
 
 With the time zone and clock checks above, this covers the done-when of #12.
 
-## Focus filter extension: not yet run (#152)
+## Focus filter extension: first run 2026-11-16, stopped (#152)
 
-The device steps of the [extension design](../specs/2026-11-16-focus-filter-extension-design.md#physical-device-verification); every row is unverified until a signed build runs on a device.
+The device steps of the [extension design](../specs/2026-11-16-focus-filter-extension-design.md#physical-device-verification).
+On the iPhone 16 Pro with iOS 27.0.1, a signed Debug build of `aa1b47e` (#166) was installed over the existing app at 19:08 +09:00 with `devicectl device install app`; `-allowProvisioningUpdates` created the development profile of `kr.donminzzi.focusStudy.intents`, approved for this build, and the signed extension carries only the App Group and `com.apple.developer.family-controls`.
+The app was opened once and closed; then, with the app not running, the Work Focus with the filter option on was turned on at 19:13:48 and off at 19:14:14.
+The results below come from one `log collect` archive; the values on screen were not reported.
 
-| Step                                                                                    | Result     |
-| --------------------------------------------------------------------------------------- | ---------- |
-| 1. Which process runs each call, with the app running and closed                        | Unverified |
-| 2. App closed, Focus on: a session starts and the selection is shielded                 | Unverified |
-| 3. App closed, Focus off before the base length: `.earlyExit`                           | Unverified |
-| 4. Focus on past the base length: a rollover, restrictions stay                         | Unverified |
-| 5. Focus off after a rollover: `.expired` with the focused time, streak and widget      | Unverified |
-| 6. A break inside an open session, then Focus off during the break                      | Unverified |
-| 7. "집중 종료" during an open session, then Focus off and on starts a new session       | Unverified |
-| 8. Focus on before the first unlock after a restart                                     | Unverified |
-| 9. Live Activity: none while closed, appears on open, counts up past the base length    | Unverified |
-| 10. Migration over the current build keeps the selection and a 40-minute length         | Unverified |
-| 11. Call order: Focus on, then open the app and turn the Focus off within a second      | Unverified |
-| Whether an ended focus interval stays registered, so a lost rollover is not interrupted | Unverified |
+| Step                                                                                    | Result                                                                                                                                                                                                                                        |
+| --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Which process runs each call, with the app running and closed                        | App closed: the extension ran both calls (`donotdisturbd`: `Failed to find process state for application bundle; will use extension if available`, then `Executing prepared action on kr.donminzzi.focusStudy.intents`). App running: not run |
+| 2. App closed, Focus on: a session starts and the selection is shielded                 | The extension set `shield.applications` and `shield.webDomains` at 19:13:49; the store is in the container `kr.donminzzi.focusStudy.intents` (see below). The shield on screen was not reported                                               |
+| 3. App closed, Focus off before the base length: `.earlyExit`                           | The extension cleared its `focusSession` store at 19:14:14. The end reason was not read: the record waits for the app's next import, and `SessionControl/` cannot be copied from the device                                                   |
+| 4. Focus on past the base length: a rollover, restrictions stay                         | Unverified                                                                                                                                                                                                                                    |
+| 5. Focus off after a rollover: `.expired` with the focused time, streak and widget      | Unverified                                                                                                                                                                                                                                    |
+| 6. A break inside an open session, then Focus off during the break                      | Unverified                                                                                                                                                                                                                                    |
+| 7. "집중 종료" during an open session, then Focus off and on starts a new session       | Unverified                                                                                                                                                                                                                                    |
+| 8. Focus on before the first unlock after a restart                                     | Unverified                                                                                                                                                                                                                                    |
+| 9. Live Activity: none while closed, appears on open, counts up past the base length    | Unverified                                                                                                                                                                                                                                    |
+| 10. Migration over the current build keeps the selection and a 40-minute length         | Unverified                                                                                                                                                                                                                                    |
+| 11. Call order: Focus on, then open the app and turn the Focus off within a second      | Unverified                                                                                                                                                                                                                                    |
+| Whether an ended focus interval stays registered, so a lost rollover is not interrupted | Unverified                                                                                                                                                                                                                                    |
+
+Finding that stopped the run: ManagedSettings keeps one store per container.
+The app writes `focusSession` and `everydayLayer` in the container `kr.donminzzi.focusStudy`, and the extension wrote and cleared `focusSession` in the container `kr.donminzzi.focusStudy.intents`; the same store name is a different store.
+So an end that the app or the Monitor runs for a session that the extension started (`집중 종료`, a break, a timed end) clears only its own container and leaves the extension's shield on.
+`[UNCERTAIN]` Whether the DeviceActivity registration of the extension is visible to the app and reaches the app's Monitor. One sign that it does: `runningboardd` logged a `launch request for xpcservice<kr.donminzzi.focusStudy.monitor>` at 19:13:48.954, after `Invoking FocusStudyFilter.perform()` at 48.887 (the registration comes first in the start steps) and before the shield writes at 49.058. The Monitor logs nothing without its DEBUG timing flag, so the archive does not show which callback ran. If it is not visible, opening the app ends that session as `.recoveryInterrupted`, and the next Focus off finds no running session, so nothing clears the extension's shield.
+That path was not run on purpose. The filter was removed from the Focus on the device the same evening, and nothing in the archive shows a shield left in either container: the extension wrote nothing to `everydayLayer` and cleared its `focusSession`.
+The design needs an amendment so that only processes of the app container apply and clear shields (#152).
+
+Probe the same evening, with a DEBUG build of `aa1b47e` plus a probe commit on the local branch `probe/152-extension-monitor`, which is not pushed, installed over the app and launched with `--screen-time-diagnostics --filter-probe on`.
+While the probe flag exists, a Focus filter call in either process registers or stops a 16-minute `probe.<UUID>` interval only, and the Monitor logs a probe callback without running the engine; no session and no shield.
+The filter was added to the Work Focus again and the app was closed; the Focus was turned on at 20:06:23 and off at 20:07:35.
+
+| Check                                                                   | Result                                                                                                                                                            |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Which process ran the calls                                             | The extension, both times (`will use extension if available`)                                                                                                     |
+| Does the app's Monitor receive an interval that the extension registers | Yes: `FocusMonitor` logged `FILTER_PROBE monitor didStart probe.5DEF5A4D-…` at 20:06:24.114, and `didEnd` at 20:07:35.806 when the extension stopped the interval |
+| Does the extension see its own interval                                 | Yes: `visible=1` right after the registration                                                                                                                     |
+
+So an interval that the extension registers belongs to the app, and the first candidate of the amendment (the extension stores the session and registers the interval, and the Monitor applies the shield) has the callbacks it needs.
+A manual session that the app's start button began at 20:06:03 (`START_LATENCY`) ran during the probe; it shielded in the app's container, the probe did not touch it, and it was ended in the app.
+After the probe the filter was removed from the Focus and the app was launched with `--filter-probe off`; the flag file is outside the part of the App Group that `devicectl` lists, so its removal was not checked.
 
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 
