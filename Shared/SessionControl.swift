@@ -397,13 +397,14 @@ final class SessionControl {
     private func read(_ locked: LockedControl) throws -> ControlEnvelope {
         do { return try locked.load() }
         catch {
-            // The extension's stores are not the app's, so it only stops the registrations (2026-11-16 shield amendment, decision 1).
-            if writesShields {
-                shield.clear()
-                // No envelope, so no everyday convergence step runs: an empty envelope would apply the everyday shield again.
-                // The everyday activities stay, so that a later callback can apply the layer when `control.json` is readable.
-                everyday.clearShield()
-            }
+            // The extension leaves this cleanup to the app container: its stores are not the app's (2026-11-16 shield amendment, decision 1),
+            // and a stop made after its lock could remove a registration that the app makes for the same running session in between
+            // (2026-11-17 lock-order amendment, reconciliation of decision 5).
+            guard writesShields else { throw error }
+            shield.clear()
+            // No envelope, so no everyday convergence step runs: an empty envelope would apply the everyday shield again.
+            // The everyday activities stay, so that a later callback can apply the layer when `control.json` is readable.
+            everyday.clearShield()
             // Metadata is unavailable. Stop only this app's UUID-namespaced registrations.
             // Their absence lets a later process detect cleanup instead of trusting stale active metadata.
             for id in Set(monitoring.registeredSessionIDs) { monitoring.stop(id: id) }

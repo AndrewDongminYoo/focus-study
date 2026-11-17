@@ -203,21 +203,42 @@ final class ExtensionShieldTests: XCTestCase {
         let a = UUID(), b = UUID(), revision = UUID()
         try monitoring.register(id: a, start: t0, end: t0.addingTimeInterval(1500))
         try monitoring.register(id: b, start: t0, end: t0.addingTimeInterval(1500))
+        try monitoring.registerBreak(id: a, index: 1, start: t0, end: t0.addingTimeInterval(900), warning: 180)
         try monitoring.registerBreak(id: b, index: 1, start: t0, end: t0.addingTimeInterval(900), warning: 180)
         try monitoring.registerEveryday(revision: revision, part: .range, start: 0, end: 60)
         let deferred = DeferredStopMonitoring(base: monitoring)
-        deferred.stop(id: a); deferred.stopBreak(id: b, index: 1); deferred.stopEveryday(revision: revision, part: .range)
-        XCTAssertFalse(deferred.isRegistered(id: a)); XCTAssertTrue(deferred.isRegistered(id: b))
-        XCTAssertFalse(deferred.isBreakRegistered(id: b, index: 1)); XCTAssertTrue(deferred.registeredEveryday.isEmpty)
-        XCTAssertEqual(Set(deferred.registeredSessionIDs), [b])
+        deferred.stop(id: a); deferred.stop(id: b)
+        deferred.stopBreak(id: b, index: 1); deferred.stopEveryday(revision: revision, part: .range)
+        XCTAssertFalse(deferred.isRegistered(id: a)); XCTAssertFalse(deferred.isBreakRegistered(id: a, index: 1))
+        XCTAssertTrue(deferred.registeredSessionIDs.isEmpty); XCTAssertTrue(deferred.registeredBreaks.isEmpty)
+        XCTAssertEqual(deferred.stops, [a, b])
         // Nothing is stopped before the flush.
-        XCTAssertTrue(monitoring.isRegistered(id: a)); XCTAssertTrue(monitoring.isBreakRegistered(id: b, index: 1))
+        XCTAssertTrue(monitoring.isRegistered(id: a)); XCTAssertTrue(monitoring.isBreakRegistered(id: a, index: 1))
         // A new registration of a recorded name cancels its stop.
-        try deferred.register(id: a, start: t0, end: t0.addingTimeInterval(3000))
+        try deferred.register(id: b, start: t0, end: t0.addingTimeInterval(3000))
         deferred.flush()
-        XCTAssertTrue(monitoring.isRegistered(id: a)); XCTAssertTrue(monitoring.isRegistered(id: b))
-        XCTAssertFalse(monitoring.isBreakRegistered(id: b, index: 1)); XCTAssertTrue(monitoring.registeredEveryday.isEmpty)
+        XCTAssertFalse(monitoring.isRegistered(id: a)); XCTAssertFalse(monitoring.isBreakRegistered(id: a, index: 1))
+        XCTAssertTrue(monitoring.isRegistered(id: b)); XCTAssertTrue(monitoring.isBreakRegistered(id: b, index: 1))
+        // A break or everyday name can be registered again by another process, so neither stop is ever made.
+        XCTAssertEqual(monitoring.registeredEveryday.map(\.revision), [revision])
         XCTAssertEqual(deferred.stops, [])
+    }
+    func testExtensionLeavesAnOrphanBreakAndTheReadFailureCleanupToTheAppContainer() throws {
+        let observing = LockObservingMonitoring(base: monitoring, store: store)
+        let engine = SessionControl(store: store, monitoring: observing, shield: ContainerShield(forbidden: true), breakSelection: ContainerBreakSelection(forbidden: true),
+                                    everyday: ContainerEveryday(forbidden: true), role: .intentsExtension)
+        // A waiting session whose interrupted break start left break activity 1 registered.
+        var session = ControlSession(startedAt: t0); session.phase = .waiting; session.pausedAt = t0.addingTimeInterval(100); session.waitEndsAt = t0.addingTimeInterval(115)
+        try store.withExclusiveAccess { try $0.save(ControlEnvelope(session: session)) }
+        try monitoring.register(id: session.id, start: t0, end: t0.addingTimeInterval(1500))
+        try monitoring.registerBreak(id: session.id, index: 1, start: t0.addingTimeInterval(115), end: t0.addingTimeInterval(1015), warning: 180)
+        try engine.reconcile(now: t0.addingTimeInterval(110), authorized: .unknown)
+        XCTAssertTrue(monitoring.isBreakRegistered(id: session.id, index: 1), "the app may register the same name again before a deferred stop")
+        // An unreadable control file: the extension stops nothing; the app container cleans up inside its own lock.
+        try Data("broken".utf8).write(to: directory.appendingPathComponent("control.json"))
+        XCTAssertThrowsError(try engine.reconcile(now: t0.addingTimeInterval(120), authorized: .unknown))
+        XCTAssertTrue(monitoring.isRegistered(id: session.id))
+        XCTAssertEqual(observing.stops, 0)
     }
 
     // MARK: Sections in the app container
