@@ -31,6 +31,28 @@ private final class ContainerBreakSelection: BreakSelectionStore {
     func remove(id: UUID) { copies.remove(id) }
     func removeAll(except id: UUID?) { copies = copies.filter { $0 == id } }
 }
+/// Counts the stops, and the stops made while another file descriptor finds the shared lock busy.
+private final class LockObservingMonitoring: MonitoringClient {
+    let base: FakeMonitoring, store: SharedControlStore
+    var stops = 0, stopsWhileLocked = 0
+    init(base: FakeMonitoring, store: SharedControlStore) { self.base = base; self.store = store }
+    private func observe() { stops += 1; if store.isLockBusy() { stopsWhileLocked += 1 } }
+    var registeredSessionIDs: [UUID] { base.registeredSessionIDs }
+    func register(id: UUID, start: Date, end: Date) throws { try base.register(id: id, start: start, end: end) }
+    func isRegistered(id: UUID) -> Bool { base.isRegistered(id: id) }
+    func stop(id: UUID) { observe(); base.stop(id: id) }
+    func registerBreak(id: UUID, index: Int, start: Date, end: Date, warning: TimeInterval) throws {
+        try base.registerBreak(id: id, index: index, start: start, end: end, warning: warning)
+    }
+    func isBreakRegistered(id: UUID, index: Int) -> Bool { base.isBreakRegistered(id: id, index: index) }
+    var registeredBreaks: [(id: UUID, index: Int)] { base.registeredBreaks }
+    func stopBreak(id: UUID, index: Int) { observe(); base.stopBreak(id: id, index: index) }
+    func registerEveryday(revision: UUID, part: EverydayPart, start: Int, end: Int) throws {
+        try base.registerEveryday(revision: revision, part: part, start: start, end: end)
+    }
+    var registeredEveryday: [(revision: UUID, part: EverydayPart)] { base.registeredEveryday }
+    func stopEveryday(revision: UUID, part: EverydayPart) { observe(); base.stopEveryday(revision: revision, part: part) }
+}
 private final class CountingMarkers: RegistrationMarkerStore {
     var writes = 0
     func read() -> RegistrationMarker? { nil }
@@ -114,11 +136,109 @@ final class ExtensionShieldTests: XCTestCase {
         try extensionEngine(copies: copies).reconcile(now: t0.addingTimeInterval(300), authorized: .unknown)
         XCTAssertEqual(try stored()?.phase, .onBreak, "the extension cannot re-block, so it never commits breakOver")
     }
-    func testExtensionConvergenceRegistersEverydayActivitiesWithoutStoreCalls() throws {
+    func testExtensionSectionChangesNoEverydayActivity() throws {
         let everyday = ContainerEveryday(forbidden: true)
         everyday.schedule = EverydaySchedule(revision: UUID(), enabled: true, rangeStart: 0, rangeEnd: 23 * 60 + 55, windows: [])
-        try filterOn(extensionEngine(everyday: everyday), at: t0)
-        XCTAssertEqual(monitoring.registeredEveryday.map(\.revision), [everyday.schedule!.revision])
+        let stale = UUID()
+        try monitoring.registerEveryday(revision: stale, part: .range, start: 0, end: 60)
+        let engine = extensionEngine(everyday: everyday)
+        try filterOn(engine, at: t0)
+        try engine.endFromFocusFilter(now: t0.addingTimeInterval(60), authorized: .denied)
+        // Neither the missing revision is registered nor the stale one stopped, also after a `denied` read (2026-11-17 lock-order amendment, decision 7).
+        XCTAssertEqual(monitoring.registeredEveryday.map(\.revision), [stale])
+    }
+
+    // MARK: Lock order (2026-11-17 lock-order amendment)
+
+    func testExtensionStartDelaysOnlyTheFirstRegistration() throws {
+        let session = try filterOn(extensionEngine(), at: t0)
+        let interval = try XCTUnwrap(monitoring.intervals[session.id])
+        XCTAssertEqual(interval.0, t0.addingTimeInterval(SessionControl.extensionStartDelay))
+        XCTAssertEqual(interval.1, session.expiresAt)
+        XCTAssertEqual(session.startedAt, t0, "focused time still starts at the call")
+    }
+    func testExtensionLateRolloverKeepsTheStartAndTheSession() throws {
+        let engine = extensionEngine()
+        let session = try filterOn(engine, at: t0)
+        // A catch-up 20 minutes after a missed rollover of a 25-minute session.
+        try engine.reconcile(now: session.expiresAt.addingTimeInterval(20 * 60), authorized: .unknown)
+        let interval = try XCTUnwrap(monitoring.intervals[session.id])
+        XCTAssertEqual(interval.0, t0)
+        XCTAssertGreaterThanOrEqual(interval.1.timeIntervalSince(interval.0), 15 * 60)
+        XCTAssertEqual(try stored()?.phase, .active)
+        XCTAssertEqual(try stored()?.expiresAt, t0.addingTimeInterval(3000))
+    }
+    func testExtensionEndStopsAfterTheLockIsReleased() throws {
+        let observing = LockObservingMonitoring(base: monitoring, store: store)
+        let engine = SessionControl(store: store, monitoring: observing, shield: ContainerShield(forbidden: true), breakSelection: ContainerBreakSelection(forbidden: true),
+                                    everyday: ContainerEveryday(forbidden: true), role: .intentsExtension)
+        let session = try filterOn(engine, at: t0)
+        try engine.endFromFocusFilter(now: t0.addingTimeInterval(60), authorized: .unknown)
+        XCTAssertEqual(observing.stops, 1)
+        XCTAssertEqual(observing.stopsWhileLocked, 0)
+        XCTAssertFalse(monitoring.isRegistered(id: session.id))
+        XCTAssertEqual(try stored()?.phase, .terminal)
+    }
+    func testExtensionRollbackStopsAfterTheLockAlsoWhenTheSectionThrew() throws {
+        let observing = LockObservingMonitoring(base: monitoring, store: store)
+        let engine = SessionControl(store: store, monitoring: observing, shield: ContainerShield(forbidden: true), breakSelection: ContainerBreakSelection(forbidden: true),
+                                    everyday: ContainerEveryday(forbidden: true), role: .intentsExtension)
+        monitoring.hideRegistration = true
+        XCTAssertThrowsError(try engine.startFromFocusFilter(now: t0, length: 1500, authorized: { .unknown }, selectionReady: true, apply: {}, matches: { true }))
+        XCTAssertEqual(observing.stops, 1)
+        XCTAssertEqual(observing.stopsWhileLocked, 0)
+        XCTAssertTrue(monitoring.intervals.isEmpty)
+        XCTAssertEqual(try stored()?.reason, .startFailed)
+    }
+    func testAppSectionStillStopsInsideTheLock() throws {
+        let observing = LockObservingMonitoring(base: monitoring, store: store)
+        let app = SessionControl(store: store, monitoring: observing, shield: appShield, breakSelection: appCopies, everyday: appEveryday,
+                                 role: .appContainer(applyFocusSelection: { true }))
+        let session = try app.start(now: t0, authorized: { .approved }, apply: { self.appShield.on = true }, matches: { self.appShield.on })
+        try app.finish(id: session.id, reason: .earlyExit, now: t0.addingTimeInterval(60))
+        XCTAssertEqual(observing.stopsWhileLocked, observing.stops)
+        XCTAssertGreaterThan(observing.stops, 0)
+    }
+    func testDeferredStopsReadAsNotRegisteredAndRunInOrder() throws {
+        let a = UUID(), b = UUID(), revision = UUID()
+        try monitoring.register(id: a, start: t0, end: t0.addingTimeInterval(1500))
+        try monitoring.register(id: b, start: t0, end: t0.addingTimeInterval(1500))
+        try monitoring.registerBreak(id: a, index: 1, start: t0, end: t0.addingTimeInterval(900), warning: 180)
+        try monitoring.registerBreak(id: b, index: 1, start: t0, end: t0.addingTimeInterval(900), warning: 180)
+        try monitoring.registerEveryday(revision: revision, part: .range, start: 0, end: 60)
+        let deferred = DeferredStopMonitoring(base: monitoring)
+        deferred.stop(id: a); deferred.stop(id: b)
+        deferred.stopBreak(id: b, index: 1); deferred.stopEveryday(revision: revision, part: .range)
+        XCTAssertFalse(deferred.isRegistered(id: a)); XCTAssertFalse(deferred.isBreakRegistered(id: a, index: 1))
+        XCTAssertTrue(deferred.registeredSessionIDs.isEmpty); XCTAssertTrue(deferred.registeredBreaks.isEmpty)
+        XCTAssertEqual(deferred.stops, [a, b])
+        // Nothing is stopped before the flush.
+        XCTAssertTrue(monitoring.isRegistered(id: a)); XCTAssertTrue(monitoring.isBreakRegistered(id: a, index: 1))
+        // A new registration of a recorded name cancels its stop.
+        try deferred.register(id: b, start: t0, end: t0.addingTimeInterval(3000))
+        deferred.flush()
+        XCTAssertFalse(monitoring.isRegistered(id: a)); XCTAssertFalse(monitoring.isBreakRegistered(id: a, index: 1))
+        XCTAssertTrue(monitoring.isRegistered(id: b)); XCTAssertTrue(monitoring.isBreakRegistered(id: b, index: 1))
+        // A break or everyday name can be registered again by another process, so neither stop is ever made.
+        XCTAssertEqual(monitoring.registeredEveryday.map(\.revision), [revision])
+        XCTAssertEqual(deferred.stops, [])
+    }
+    func testExtensionLeavesAnOrphanBreakAndTheReadFailureCleanupToTheAppContainer() throws {
+        let observing = LockObservingMonitoring(base: monitoring, store: store)
+        let engine = SessionControl(store: store, monitoring: observing, shield: ContainerShield(forbidden: true), breakSelection: ContainerBreakSelection(forbidden: true),
+                                    everyday: ContainerEveryday(forbidden: true), role: .intentsExtension)
+        // A waiting session whose interrupted break start left break activity 1 registered.
+        var session = ControlSession(startedAt: t0); session.phase = .waiting; session.pausedAt = t0.addingTimeInterval(100); session.waitEndsAt = t0.addingTimeInterval(115)
+        try store.withExclusiveAccess { try $0.save(ControlEnvelope(session: session)) }
+        try monitoring.register(id: session.id, start: t0, end: t0.addingTimeInterval(1500))
+        try monitoring.registerBreak(id: session.id, index: 1, start: t0.addingTimeInterval(115), end: t0.addingTimeInterval(1015), warning: 180)
+        try engine.reconcile(now: t0.addingTimeInterval(110), authorized: .unknown)
+        XCTAssertTrue(monitoring.isBreakRegistered(id: session.id, index: 1), "the app may register the same name again before a deferred stop")
+        // An unreadable control file: the extension stops nothing; the app container cleans up inside its own lock.
+        try Data("broken".utf8).write(to: directory.appendingPathComponent("control.json"))
+        XCTAssertThrowsError(try engine.reconcile(now: t0.addingTimeInterval(120), authorized: .unknown))
+        XCTAssertTrue(monitoring.isRegistered(id: session.id))
+        XCTAssertEqual(observing.stops, 0)
     }
 
     // MARK: Sections in the app container
