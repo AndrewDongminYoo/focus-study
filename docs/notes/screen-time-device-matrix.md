@@ -529,6 +529,43 @@ So an interval that the extension registers belongs to the app, and the first ca
 A manual session that the app's start button began at 20:06:03 (`START_LATENCY`) ran during the probe; it shielded in the app's container, the probe did not touch it, and it was ended in the app.
 After the probe the filter was removed from the Focus and the app was launched with `--filter-probe off`; the flag file is outside the part of the App Group that `devicectl` lists, so its removal was not checked.
 
+## Focus filter extension after the shield amendment: 2026-11-17, stopped (#152)
+
+The device steps of the [shield amendment](../specs/2026-11-16-extension-shield-amendment.md#physical-device-verification).
+On the iPhone 16 Pro with iOS 27.0.1, a signed Debug build of `388472f` (#169) was installed over the existing app at 10:26:58 +09:00 with `devicectl device install app`, with the existing development profiles and no `-allowProvisioningUpdates`.
+With the app not running, the Work Focus with the filter option on was turned on at 10:28:00 and off at 10:28:59; a second run with the Monitor's timing flag (the app launched once with `--screen-time-diagnostics` at 10:38:09) turned it on at 10:39:00 and toggled it until 10:42:06.
+The results come from two `log collect` archives and from what was reported on screen.
+
+| Step                                                       | Result                                                                                                                                                                    |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 6. The renamed option and a filter added before the rename | Passed: the option reads "자동으로 집중 시작" and kept its value over the install                                                                                         |
+| 1. App closed, Focus on: the Monitor applies the shield    | Failed: the selected apps stayed open; only the everyday layer's apps were blocked. No process wrote a ManagedSettings store (no `with container` line in either archive) |
+| 2. App closed, Focus off: the Monitor lifts the shield     | Nothing to lift, because step 1 applied nothing; the everyday layer stayed as it was                                                                                      |
+| 3. to 5.                                                   | Not run                                                                                                                                                                   |
+
+Finding that stopped the run: the Monitor's callback never gets the lock while the extension's section is running, and that section does not end until the callback returns.
+In the timed run, the extension registered `focus.058E4111-…` at 10:39:00.089 inside its start section; `UsageTrackingAgent` notified the Monitor at 00.101, and the Monitor's `didStart` found the lock busy on the probe and on attempts 0 to 5 (`marker=none` each time) and ended at 02.454 with `result=lock_timeout` after 2281 ms.
+The extension logged nothing after the registration and finished `perform()` at 02.473, 19 ms after the Monitor gave up.
+Every call that started or stopped a running interval took about 2.3 s (on at 10:39:00, 10:40:23 and 10:41:32; off at 10:41:04 and 10:42:06), and the one off call that had no interval to stop (10:40:20) took 8 ms.
+The amendment's gap table accepts a lost `intervalDidStart` or `intervalDidEnd` as a rare case (rows 2 and 4), but with the extension holding the lock it happens on every start and every end, so the extension can neither shield a session nor, once one is shielded, lift it.
+
+Probe the same morning, with a DEBUG build of `388472f` plus a probe commit on the local branch `probe/152-extension-lock-wait`, which is not pushed, installed over the app at 10:46:27.
+In the extension only, the probe logs the duration of every DeviceActivity call and registers each interval to start 5 s later than the engine asks.
+With the app closed, the Work Focus was turned on at 10:49:02 and off at 10:49:49; the app was opened afterwards.
+
+| Check                                      | Result                                                                                                                                                                                                                |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A registration whose interval starts later | `register` took 32 ms and the whole on call 65 ms; `UsageTrackingAgent` notified the Monitor at 10:49:09.600, and the Monitor took the lock and set `shield.applications` and `shield.webDomains` at 09.755 to 09.770 |
+| Shield on screen after that start          | The selected apps were blocked                                                                                                                                                                                        |
+| A stop of a running interval               | `stop` took 2277 ms: the agent notified the Monitor of the end at 10:49:49.811, during the call, and the call returned at 52.085; the whole off call took 2297 ms                                                     |
+| Shield on screen after that end            | The selected apps stayed blocked                                                                                                                                                                                      |
+| The app's repair of that shield            | Opening the app lifted the block                                                                                                                                                                                      |
+
+So `startMonitoring` of an interval that starts now and `stopMonitoring` of a running interval return only after the Monitor's callback for it returns, and a callback that waits for the caller's lock always loses; an interval that starts later returns at once.
+The Monitor logged its stores as in the container `kr.donminzzi.focusStudy.monitor`, unlike the app's `kr.donminzzi.focusStudy`, but the app's repair lifted the shield that the Monitor applied, so the Monitor and the app write the same `focusSession` store.
+The amendment needs a revision so that no extension section starts or stops an interval whose callback is due at once (#152).
+The probe build stays on the device until the next install.
+
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 
 이슈 #17의 검토 결과다.
