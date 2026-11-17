@@ -191,6 +191,25 @@ final class ExtensionShieldTests: XCTestCase {
         XCTAssertFalse(monitoring.isRegistered(id: session.id))
         XCTAssertFalse(shield.on, "no callback is left to lift a shield that the repair applies after the cleanup")
     }
+    func testRepairDoesNotShieldAPendingSessionThatAReadFailureStopped() throws {
+        let memory = MemoryControlStore(), shield = ContainerShield(forbidden: false)
+        var session = ControlSession(startedAt: t0); session.phase = .active; session.shieldPending = true; session.origin = .focusFilter
+        memory.envelope = ControlEnvelope(session: session)
+        try monitoring.register(id: session.id, start: t0, end: t0.addingTimeInterval(1500))
+        let app = SessionControl(store: memory, monitoring: monitoring, shield: shield, breakSelection: appCopies, everyday: appEveryday,
+                                 role: .appContainer(applyFocusSelection: { shield.on = true; return true }))
+        // The read-failure cleanup stops the session's monitoring and leaves the pending session on disk.
+        memory.failRead = true
+        XCTAssertThrowsError(try app.reconcile(now: t0.addingTimeInterval(30), authorized: .unknown))
+        memory.failRead = false
+        // An everyday edge returns before the reconcile of an `active` session; the repair must not shield it without its callbacks.
+        try app.handleCallback(activityName: ActivityNames.everyday(revision: UUID(), part: .range), kind: .didStart, now: t0.addingTimeInterval(40), authorized: .unknown)
+        XCTAssertFalse(monitoring.isRegistered(id: session.id))
+        XCTAssertFalse(shield.on, "no callback is left to lift a shield that the repair applies after the cleanup")
+        // The next reconcile ends the session, as for any session whose registration is gone.
+        try app.reconcile(now: t0.addingTimeInterval(50), authorized: .unknown)
+        XCTAssertEqual(memory.envelope.session?.reason, .recoveryInterrupted); XCTAssertNil(memory.envelope.session?.shieldPending)
+    }
     func testBreakRequestOfAPendingSessionWaitsForTheRepair() throws {
         let session = try filterOn(extensionEngine(), at: t0)
         let app = appEngine()
