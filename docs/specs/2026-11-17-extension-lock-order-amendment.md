@@ -17,11 +17,13 @@ A second probe the same afternoon, with the delayed start and with every focus s
 
 ### Start
 
-1. Every focus registration that an extension section makes starts no earlier than the section time plus `extensionStartDelay`, 5 s: the interval start is `max(startedAt, now + 5 s)`, and the interval end is the one that the engine computes today.
-   The session's `startedAt` does not change, so its focused time still starts at the call (shield amendment, decision 6); the shield arrives with the Monitor's `intervalDidStart` about 5 to 7 s later (device: 6.6 s).
+1. The first focus registration of a session that an extension section starts, in the start steps, begins at the section time plus `extensionStartDelay`, 5 s; its end is `expiresAt`, as today.
+   The interval is then at least the focus length minus 5 s, at least 24 min 55 s, above DeviceActivity's 15-minute minimum.
+   The session's `startedAt` does not change, so its focused time still starts at the call (shield amendment, decision 6); the shield arrives with the Monitor's `intervalDidStart` about 5 to 7 s later (device: 5.5 to 6.6 s).
 2. The registration check of the start steps (`isRegistered`) is unchanged; the probe read the delayed interval as registered right after the call.
-3. A rollover in an extension section registers the next end with the same delayed start.
-   `[UNCERTAIN]` Whether moving the start of a running interval delivers an immediate `intervalDidEnd` or `intervalDidStart`. If it does, that call waits up to about 2.3 s and the Monitor's callback is lost; the callback of a running session changes nothing that the next section does not redo, so the cost is the wait.
+3. Every later registration of the same session in an extension section, such as a rollover, keeps the start at `startedAt`, as today, so its length stays what the engine computes and a late catch-up cannot fall below the 15-minute minimum.
+   Only the first registration is delayed, because only that call creates an interval whose `intervalDidStart` would be due at once.
+   `[UNCERTAIN]` Whether registering a running interval again with a later end delivers an immediate callback. If it does, that call waits up to about 2.3 s and the Monitor's callback is lost; a callback of a running session changes nothing that the next section does not redo, so the cost is the wait.
 
 ### Stops
 
@@ -81,6 +83,6 @@ The third row is the cost of deferring the stop: a process exit between the comm
 
 ## Verification
 
-- Host tests: an extension section never calls a stop inside the lock and makes every recorded stop after it, in order, also when the section threw; a recorded stop reads as not registered inside the section; an extension registration starts no earlier than the section time plus 5 s and keeps its end; an extension section changes no everyday activity.
+- Host tests: an extension section never calls a stop inside the lock and makes every recorded stop after it, in order, also when the section threw; a recorded stop reads as not registered inside the section; the first registration of an extension start begins at the section time plus 5 s and keeps its end; a rollover in an extension section, also a late catch-up 20 minutes after a missed rollover, keeps the start at `startedAt`, so its interval stays at least 15 minutes and the session keeps running; an extension section changes no everyday activity.
 - The separate-process race check: an extension end whose deferred stop runs while a Monitor-like callback waits for the lock, and the callback then lifts the shield.
 - An unsigned device Release build, and the device steps above.
