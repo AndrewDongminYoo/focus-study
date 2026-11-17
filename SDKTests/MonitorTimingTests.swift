@@ -217,6 +217,13 @@ final class MonitorTimingTests: XCTestCase {
         // The read failure clears both stores inside the section.
         XCTAssertEqual(lines.map(\.text).filter { $0.contains("step=call") }.map { String($0.split(separator: " ")[5]) }, ["op=clear_shield", "op=clear_everyday", "op=stop"])
     }
+    func testPendingShieldApplyIsTimed() throws {
+        let fixture = TimingFixture.pendingStart(now: now)
+        let lines = try fixture.runTimed(directory: directory, number: 8)
+        XCTAssertEqual(lines.map(\.text).filter { $0.contains("step=call") }.map { String($0.split(separator: " ")[5]) }, ["op=apply_shield"])
+        XCTAssertTrue(fixture.events.list.contains("applyGroupSelection"))
+        XCTAssertNil(fixture.store.envelope.session?.shieldPending)
+    }
     func testEverydayApplyHasItsOwnCallLine() throws {
         let fixture = TimingFixture.breakWarning(now: now)
         // A stored range around `now`, so the re-block applies the everyday layer too, and the convergence registers its activity.
@@ -329,6 +336,12 @@ private final class TimingFixture {
         fixture.monitoring.breaks = [(session.id, 1)]; fixture.breakSelection.copies = [session.id]
         return fixture
     }
+    /// An `active` session that the App Intents extension started, whose focus activity delivers its start: the section applies the pending shield.
+    static func pendingStart(now: Date) -> TimingFixture {
+        var session = ControlSession(startedAt: now.addingTimeInterval(-1), id: UUID(uuidString: "11111111-2222-3333-4444-555555555555")!)
+        session.phase = .active; session.shieldPending = true
+        return TimingFixture(session: session, activityName: session.activityName, kind: .didStart, now: now)
+    }
     /// An `active` session whose focus activity delivers its end: the section ends the session as `expired`.
     static func expiredFocus(now: Date) -> TimingFixture {
         var session = ControlSession(startedAt: now.addingTimeInterval(-1500), id: UUID(uuidString: "11111111-2222-3333-4444-555555555555")!)
@@ -354,7 +367,8 @@ private final class TimingFixture {
         let timing = try XCTUnwrap(MonitorTimingRecorder.begin(directory: directory, activity: MonitorTimingActivity(activityName: activityName), kind: kind, now: now, number: { number }) {
             emitted.append(TimingLine(raw: $0, insideLock: self.store.isLocked))
         })
-        let engine = timing.engine(store: store, monitoring: monitoring, shield: shield, breakSelection: breakSelection, everyday: everyday, role: .appContainer(applyFocusSelection: { false }))
+        let engine = timing.engine(store: store, monitoring: monitoring, shield: shield, breakSelection: breakSelection, everyday: everyday,
+                                   role: .appContainer(applyFocusSelection: { self.events.list.append("applyGroupSelection"); return true }))
         try timing.run {
             try engine.handleCallbackRetryingLock(activityName: activityName, kind: kind, now: { self.now }, authorized: { timing.access(self.read) },
                                                   sleep: { _ in self.sleeps += 1 })

@@ -112,11 +112,16 @@ final class MonitorTimingRecorder {
     func engine(store: any ControlStore, monitoring: any MonitoringClient, shield: any ShieldClient, breakSelection: any BreakSelectionStore,
                 everyday: any EverydayLayerStore, role: ShieldRole) -> SessionControl {
         // The engine puts its marker wrapper around the timed client, so a `register` or `stop` time has no marker write or delete in it.
-        // `role` has no default here, so that the timed Monitor applies a pending shield as the plain one does.
-        SessionControl(store: TimedControlStore(base: store, recorder: self),
+        // `role` has no default here, so that the timed Monitor applies a pending shield as the plain one does; the apply is timed as `apply_shield`.
+        let timedRole: ShieldRole
+        switch role {
+        case .appContainer(let apply): timedRole = .appContainer(applyFocusSelection: { [self] in call(.applyShield, apply) })
+        case .intentsExtension: timedRole = .intentsExtension
+        }
+        return SessionControl(store: TimedControlStore(base: store, recorder: self),
                        monitoring: DiagnosticMonitoring(base: monitoring, didMeasure: { [self] operation, duration in recordCall(operation, duration) }),
                        shield: TimedShield(base: shield, recorder: self), breakSelection: TimedBreakSelection(base: breakSelection, recorder: self),
-                       everyday: TimedEverydayLayer(base: everyday, recorder: self), role: role)
+                       everyday: TimedEverydayLayer(base: everyday, recorder: self), role: timedRole)
     }
     /// The whole callback, from the flag read to the return or throw of `body`, which is the call of `handleCallbackRetryingLock`.
     func run(_ body: () throws -> Void) throws {
