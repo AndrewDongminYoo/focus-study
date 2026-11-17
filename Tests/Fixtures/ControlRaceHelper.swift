@@ -104,6 +104,16 @@ private struct FreeProbeStore: ControlStore {
     func withExclusiveAccess<T>(timeout: TimeInterval?, _ body: (LockedControl) throws -> T) throws -> T { try store.withExclusiveAccess(timeout: timeout, body) }
     func isLockBusy() -> Bool { false }
 }
+/// The shared store that writes `signal` when one of its lock attempts throws `lockTimeout`, so the holder knows that a callback collided with its lock.
+private struct CollisionSignalStore: ControlStore {
+    let store: SharedControlStore, signal: URL
+    var registrationMarkers: (any RegistrationMarkerStore)? { store.registrationMarkers }
+    func isLockBusy() -> Bool { store.isLockBusy() }
+    func withExclusiveAccess<T>(timeout: TimeInterval?, _ body: (LockedControl) throws -> T) throws -> T {
+        do { return try store.withExclusiveAccess(timeout: timeout, body) }
+        catch ControlIssue.lockTimeout { try? Data().write(to: signal); throw ControlIssue.lockTimeout }
+    }
+}
 private func waitForReady(_ root: URL) {
     let deadline = Date().addingTimeInterval(3)
     while !FileManager.default.fileExists(atPath: root.appendingPathComponent("ready").path) {
@@ -185,14 +195,13 @@ private func waitForReady(_ root: URL) {
                 }
             case "extension-hold":
                 // An extension section holds the lock inside the registration call of a filter start; it writes no marker (2026-11-16 shield amendment, decision 9).
-                // Holds the lock until the Monitor process has seen it busy, then a little longer, so that its first lock attempt collides.
+                // Holds the lock until a lock attempt of the Monitor's callback has collided with it.
                 monitor.onRegister = { id in
                     try! Data("focus.\(id.uuidString)".utf8).write(to: root.appendingPathComponent("ready"), options: .atomic)
                     let deadline = Date().addingTimeInterval(3)
                     while !FileManager.default.fileExists(atPath: root.appendingPathComponent("collided").path) {
                         if Date() > deadline { exit(2) }; usleep(1000)
                     }
-                    usleep(200_000)
                 }
                 let extensionEngine = SessionControl(store: SharedControlStore(directory: root), monitoring: monitor, shield: shield, breakSelection: copies, everyday: layer,
                                                      calendar: utc, role: .intentsExtension)
@@ -202,9 +211,10 @@ private func waitForReady(_ root: URL) {
                 waitForReady(root)
                 let name = try String(contentsOf: root.appendingPathComponent("ready"), encoding: .utf8)
                 // The holder has the lock and no marker, so a callback has nothing that lets it return early.
-                if RegistrationMarkerFile(directory: root).read() != nil || !SharedControlStore(directory: root).isLockBusy() { exit(1) }
-                try Data().write(to: root.appendingPathComponent("collided"))
-                let monitorEngine = SessionControl(store: SharedControlStore(directory: root), monitoring: monitor, shield: shield, breakSelection: copies, everyday: layer,
+                if RegistrationMarkerFile(directory: root).read() != nil { exit(1) }
+                // `collided` is written when a lock attempt of the callback itself throws `lockTimeout`, and the holder waits for it before releasing the lock.
+                let monitorEngine = SessionControl(store: CollisionSignalStore(store: SharedControlStore(directory: root), signal: root.appendingPathComponent("collided")),
+                                                   monitoring: monitor, shield: shield, breakSelection: copies, everyday: layer,
                                                    calendar: utc, role: .appContainer(applyFocusSelection: { (try? Data("applied".utf8).write(to: shield.file)) != nil }))
                 // The verifier checks the result: the shield applies only if the callback ran its section after the holder's save of `active`.
                 try monitorEngine.handleCallbackRetryingLock(activityName: name, kind: .didStart, now: { markerStart.addingTimeInterval(1) }, authorized: { .unknown })
