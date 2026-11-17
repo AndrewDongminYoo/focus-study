@@ -564,7 +564,18 @@ With the app closed, the Work Focus was turned on at 10:49:02 and off at 10:49:4
 So `startMonitoring` of an interval that starts now and `stopMonitoring` of a running interval return only after the Monitor's callback for it returns, and a callback that waits for the caller's lock always loses; an interval that starts later returns at once.
 The Monitor logged its stores as in the container `kr.donminzzi.focusStudy.monitor`, unlike the app's `kr.donminzzi.focusStudy`, but the app's repair lifted the shield that the Monitor applied, so the Monitor and the app write the same `focusSession` store.
 The amendment needs a revision so that no extension section starts or stops an interval whose callback is due at once (#152).
-The probe build stays on the device until the next install.
+
+Second probe the same afternoon, with a second probe commit on the same local branch installed over the app at 13:35:04: the extension keeps the 5 s delayed start and records each focus stop, then makes it after the call has released the lock.
+With the app closed, the Work Focus was turned on and off twice; the app was not opened.
+
+| Call      | 13:39:34 to 13:40:00                                                                                     | 13:41:13 to 13:41:45                                                                                     |
+| --------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| On        | 113 ms (`register` 38 ms); the Monitor set the shield at 13:39:40.042, and the selection was blocked     | 52 ms (`register` 31 ms); the Monitor set the shield at 13:41:19.914, and the selection was blocked      |
+| Off       | 41 ms; the deferred `stop` took 29 ms, and the Monitor cleared `focusSession` at 13:40:00.379, inside it | 36 ms; the deferred `stop` took 24 ms, and the Monitor cleared `focusSession` at 13:41:45.543, inside it |
+| On screen | The block lifted without opening the app                                                                 | The block lifted without opening the app                                                                 |
+
+The [lock-order amendment](../specs/2026-11-17-extension-lock-order-amendment.md) builds on these two changes.
+The second probe build stays on the device until the next install.
 
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 
