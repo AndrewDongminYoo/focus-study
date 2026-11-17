@@ -39,7 +39,7 @@ Use these current documentation paths:
 - [Everyday weekdays](docs/specs/2026-11-13-everyday-weekdays-design.md), implemented and not yet run on a device: the everyday layer keeps one schedule and applies it on chosen weekdays, decided by the local day inside the blocking rule
 - [Display-only streak](docs/specs/2026-11-13-streak-design.md), implemented under issue #125: the number of consecutive local days with a completed session, as one line in today's history sheet
 - [Focus filter extension](docs/specs/2026-11-16-focus-filter-extension-design.md), implemented under issue #152; the first device run stopped because the extension's shield is in its own ManagedSettings container ([device matrix](docs/notes/screen-time-device-matrix.md)): the filter runs in an App Intents extension, and a filter-started session continues until the Focus turns off
-- [Extension shield amendment](docs/specs/2026-11-16-extension-shield-amendment.md), design for approval under issue #152: the App Intents extension never writes a shield, because its ManagedSettings stores are in its own container; the Monitor applies and lifts the shields of the sessions that it starts and ends
+- [Extension shield amendment](docs/specs/2026-11-16-extension-shield-amendment.md), implemented and not yet run on a device, under issue #152: the App Intents extension never writes a shield, because its ManagedSettings stores are in its own container; the Monitor applies and lifts the shields of the sessions that it starts and ends
 - [Implementation plan](docs/plans/2026-10-26-focus-study.md)
 - [M1 implementation plan](docs/plans/2026-10-31-m1-launch-flow.md)
 - [M2 implementation plan](docs/plans/2026-11-01-m2-break-pass.md)

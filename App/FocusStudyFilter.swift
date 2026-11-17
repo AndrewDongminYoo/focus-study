@@ -6,7 +6,8 @@ import AppIntents
 struct FocusStudyFilter: SetFocusFilterIntent {
     static let title: LocalizedStringResource = "집중 시간"
     static let description: IntentDescription? = IntentDescription("이 집중 모드를 켜면 정한 시간만큼 집중을 시작해요.")
-    @Parameter(title: "집중 시작", default: false) var startsSession: Bool
+    /// The key stays `startsSession`, so that a filter added before the rename keeps its value (2026-11-16 shield amendment, decision 13).
+    @Parameter(title: "자동으로 집중 시작", default: false) var startsSession: Bool
     var displayRepresentation: DisplayRepresentation {
         DisplayRepresentation(title: startsSession ? LocalizedStringResource("집중 시작 켬") : LocalizedStringResource("집중 시작 끔"))
     }

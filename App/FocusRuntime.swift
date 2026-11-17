@@ -66,7 +66,10 @@ import os
         // The everyday file and its named store; the Monitor reads the same file.
         let everydayShield = ScreenTimeEverydayShield()
         let everyday = EverydayLayerFile(directory: group, shield: everydayShield)
-        let engine = SessionControl(store: SharedControlStore(directory: group), monitoring: monitoring, shield: shield, breakSelection: breakSelection, everyday: everyday)
+        // The app repairs the shield of a session that the extension started when the Monitor's callback was lost (2026-11-16 shield amendment, decision 11).
+        let container = group.deletingLastPathComponent()
+        let engine = SessionControl(store: SharedControlStore(directory: group), monitoring: monitoring, shield: shield, breakSelection: breakSelection, everyday: everyday,
+                                    role: .appContainer(applyFocusSelection: { shield.applyGroupSelection(container: container) }))
         let activityDidChange = FocusActivityRuntime.hook(engine: engine)
         #if DEBUG
         let diagnostics = diagnosticMonitoring.map {

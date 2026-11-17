@@ -104,6 +104,16 @@ private struct FreeProbeStore: ControlStore {
     func withExclusiveAccess<T>(timeout: TimeInterval?, _ body: (LockedControl) throws -> T) throws -> T { try store.withExclusiveAccess(timeout: timeout, body) }
     func isLockBusy() -> Bool { false }
 }
+/// The shared store that writes `signal` when one of its lock attempts throws `lockTimeout`, so the holder knows that a callback collided with its lock.
+private struct CollisionSignalStore: ControlStore {
+    let store: SharedControlStore, signal: URL
+    var registrationMarkers: (any RegistrationMarkerStore)? { store.registrationMarkers }
+    func isLockBusy() -> Bool { store.isLockBusy() }
+    func withExclusiveAccess<T>(timeout: TimeInterval?, _ body: (LockedControl) throws -> T) throws -> T {
+        do { return try store.withExclusiveAccess(timeout: timeout, body) }
+        catch ControlIssue.lockTimeout { try? Data().write(to: signal); throw ControlIssue.lockTimeout }
+    }
+}
 private func waitForReady(_ root: URL) {
     let deadline = Date().addingTimeInterval(3)
     while !FileManager.default.fileExists(atPath: root.appendingPathComponent("ready").path) {
@@ -183,6 +193,31 @@ private func waitForReady(_ root: URL) {
                     // 5 lock waits of 0.25 s and 4 pauses of 0.25 s.
                     if ProcessInfo.processInfo.systemUptime - begin < 2 { exit(1) }
                 }
+            case "extension-hold":
+                // An extension section holds the lock inside the registration call of a filter start; it writes no marker (2026-11-16 shield amendment, decision 9).
+                // Holds the lock until a lock attempt of the Monitor's callback has collided with it.
+                monitor.onRegister = { id in
+                    try! Data("focus.\(id.uuidString)".utf8).write(to: root.appendingPathComponent("ready"), options: .atomic)
+                    let deadline = Date().addingTimeInterval(3)
+                    while !FileManager.default.fileExists(atPath: root.appendingPathComponent("collided").path) {
+                        if Date() > deadline { exit(2) }; usleep(1000)
+                    }
+                }
+                let extensionEngine = SessionControl(store: SharedControlStore(directory: root), monitoring: monitor, shield: shield, breakSelection: copies, everyday: layer,
+                                                     calendar: utc, role: .intentsExtension)
+                guard case .started = try extensionEngine.startFromFocusFilter(now: markerStart, length: 1500, authorized: { .unknown }, selectionReady: true,
+                                                                               apply: { exit(1) }, matches: { exit(1) }) else { exit(1) }
+            case "extension-monitor":
+                waitForReady(root)
+                let name = try String(contentsOf: root.appendingPathComponent("ready"), encoding: .utf8)
+                // The holder has the lock and no marker, so a callback has nothing that lets it return early.
+                if RegistrationMarkerFile(directory: root).read() != nil { exit(1) }
+                // `collided` is written when a lock attempt of the callback itself throws `lockTimeout`, and the holder waits for it before releasing the lock.
+                let monitorEngine = SessionControl(store: CollisionSignalStore(store: SharedControlStore(directory: root), signal: root.appendingPathComponent("collided")),
+                                                   monitoring: monitor, shield: shield, breakSelection: copies, everyday: layer,
+                                                   calendar: utc, role: .appContainer(applyFocusSelection: { (try? Data("applied".utf8).write(to: shield.file)) != nil }))
+                // The verifier checks the result: the shield applies only if the callback ran its section after the holder's save of `active`.
+                try monitorEngine.handleCallbackRetryingLock(activityName: name, kind: .didStart, now: { markerStart.addingTimeInterval(1) }, authorized: { .unknown })
             case "marker-run":
                 try engine.handleCallbackRetryingLock(activityName: args[3], kind: .didEnd, now: { markerCallbackNow }, authorized: { .approved })
             case "new":
@@ -240,6 +275,17 @@ private func waitForReady(_ root: URL) {
         try verifyStopSkip(executable: args[0])
         try verifyStopWait(executable: args[0], ["didStart"], "a didStart for the holder's stop keeps the bounded retry")
         try verifyStopWait(executable: args[0], ["willEndWarning", "1"], "a warning for the holder's stop keeps the bounded retry")
+        try verifyExtensionStart(executable: args[0])
+    }
+    /// An extension start holds the lock without a marker; the Monitor's `didStart` waits for it, then shields the pending session (2026-11-16 shield amendment).
+    private static func verifyExtensionStart(executable: String) throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let exited = try run(executable, ["extension-monitor", root.path], ["extension-hold", root.path])
+        let current = try markerEngine(root).snapshot().session
+        guard exited, current?.phase == .active, current?.shieldPending == nil, current?.origin == .focusFilter,
+              try String(contentsOf: FileShield(root).file, encoding: .utf8) == "applied" else { exit(1) }
+        print("PASS: the Monitor waits for an extension start and shields its session")
     }
     /// A process holds the lock inside the stop call of a session end; a second process's `didEnd` for the stopped focus activity returns at once.
     private static func verifyStopSkip(executable: String) throws {

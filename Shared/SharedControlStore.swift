@@ -57,7 +57,9 @@ private struct FileControl: LockedControl {
             guard session.startedAt.timeIntervalSince1970.isFinite,
                   session.hasValidLength,
                   (session.phase == .terminal || session.phase == .ending) == (session.reason != nil && session.observedAt != nil),
-                  Self.hasValidBreakShape(session)
+                  Self.hasValidBreakShape(session),
+                  // A pending shield exists only in `active` (2026-11-16 shield amendment, "Stored values").
+                  session.shieldPending == nil || session.phase == .active
             else { throw ControlIssue.invalidState }
         }
         return value
