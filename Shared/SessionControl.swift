@@ -421,7 +421,10 @@ final class SessionControl {
         do {
             envelope.session = session
             try locked.save(envelope)
-            try monitoring.register(id: session.id, start: session.startedAt, end: session.expiresAt)
+            // In the extension, the interval begins after the section has released the lock, so `startMonitoring` does not wait for the Monitor's callback;
+            // `startedAt` stays the call time (2026-11-17 lock-order amendment, decision 1). Later registrations of the session keep `startedAt`.
+            let intervalStart = writesShields ? session.startedAt : now.addingTimeInterval(Self.extensionStartDelay)
+            try monitoring.register(id: session.id, start: intervalStart, end: session.expiresAt)
             guard monitoring.isRegistered(id: session.id), authorized() == .approved else { throw ControlIssue.verificationFailed }
             if writesShields {
                 apply()
@@ -640,8 +643,11 @@ final class SessionControl {
     }
     /// A lock holder that does not run through `section`: its read-failure stops go through a marker wrapper without a section time.
     private func holding<T>(_ body: (LockedControl) throws -> T) throws -> T {
-        try store.withExclusiveAccess { locked in
-            sectionMonitoring = markerStore.map { MarkedMonitoring(base: baseMonitoring, markers: $0) }
+        let deferred = deferredStops()
+        // Runs after `withExclusiveAccess` returned or threw, so after the lock is released.
+        defer { deferred?.flush() }
+        return try store.withExclusiveAccess { locked in
+            sectionMonitoring = deferred ?? markerStore.map { MarkedMonitoring(base: baseMonitoring, markers: $0) }
             defer { sectionMonitoring = nil }
             return try body(locked)
         }
@@ -649,10 +655,13 @@ final class SessionControl {
     /// Engine mutation sections end with everyday convergence, also when their focus part threw.
     /// When the read of `control.json` threw, the section has no envelope, and no convergence step runs.
     private func section<T>(now: Date, access: AccessState = .unknown, mayRegister: Bool = true, lockTimeout: TimeInterval? = nil, _ body: (TrackedControl) throws -> T) throws -> T {
-        try store.withExclusiveAccess(timeout: lockTimeout) { base in
+        let deferred = deferredStops()
+        // Runs after `withExclusiveAccess` returned or threw, so after the lock is released.
+        defer { deferred?.flush() }
+        return try store.withExclusiveAccess(timeout: lockTimeout) { base in
             let locked = TrackedControl(base, access: access, now: now)
             // Set after the lock is held. This reset runs after the convergence below, so the convergence registers through the wrapper too.
-            sectionMonitoring = markerStore.map { MarkedMonitoring(base: baseMonitoring, markers: $0, now: now, calendar: calendar) }
+            sectionMonitoring = deferred ?? markerStore.map { MarkedMonitoring(base: baseMonitoring, markers: $0, now: now, calendar: calendar) }
             defer { sectionMonitoring = nil }
             defer { if let stored = locked.stored { converge(stored, access: locked.access, mayRegister: mayRegister, now: now) } }
             // Declared after the convergence, so it runs before it, also when the body threw.
@@ -662,6 +671,10 @@ final class SessionControl {
     }
     /// An extension section writes no marker: it cannot decide a shield, so a Monitor callback must wait for its lock (2026-11-16 shield amendment, decision 9).
     private var markerStore: (any RegistrationMarkerStore)? { writesShields ? store.registrationMarkers : nil }
+    /// The extension's stops wait until its lock is released, so the Monitor's callback for each stop can take the lock (2026-11-17 lock-order amendment, decisions 4 to 6).
+    private func deferredStops() -> DeferredStopMonitoring? { writesShields ? nil : DeferredStopMonitoring(base: baseMonitoring) }
+    /// The delay of the first focus registration of an extension start (2026-11-17 lock-order amendment, decision 1).
+    static let extensionStartDelay: TimeInterval = 5
     /// Decision 11 of the 2026-11-16 shield amendment, after the section's own steps: it recovers a lost `intervalDidStart` or `intervalDidEnd` of the Monitor.
     /// With no running session stored, the focus shield is lifted; this is also decision 8, for a callback of an ended or removed session.
     /// A callback of another running session changes nothing.
@@ -685,9 +698,12 @@ final class SessionControl {
     }
     /// The spec "Everyday convergence". It never throws, so it can never stop a focus step.
     private func converge(_ envelope: ControlEnvelope, access: AccessState, mayRegister: Bool, now: Date) {
-        // Step 1. The extension registers and stops the everyday activities, but leaves the store to the app container (2026-11-16 shield amendment, decision 10).
+        // An extension section changes no everyday activity and no store: a registration whose range has begun would wait for the Monitor's callback,
+        // and the next section in the app container converges the layer (2026-11-17 lock-order amendment, decision 7).
+        guard writesShields else { return }
+        // Step 1.
         let schedule: EverydaySchedule?
-        do { schedule = try everyday.load() } catch { if writesShields { everyday.clearShield() }; return }
+        do { schedule = try everyday.load() } catch { everyday.clearShield(); return }
         // Step 2. Every stop names its activity: an empty list would stop the focus and break activities too.
         let expected = schedule.map { $0.enabled ? Self.everydayActivities($0) : [] } ?? []
         if access == .denied {

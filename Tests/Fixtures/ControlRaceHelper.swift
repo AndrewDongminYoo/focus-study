@@ -77,6 +77,7 @@ private final class FileShield: ShieldClient {
     let file: URL
     init(_ root: URL) { file = root.appendingPathComponent("synthetic-shield") }
     func clear() { try? FileManager.default.removeItem(at: file) }
+    var hasShield: Bool { FileManager.default.fileExists(atPath: file.path) }
 }
 /// Synthetic selection copies in the shared directory; a restore writes "restored" to the synthetic shield.
 private final class FileCopies: BreakSelectionStore {
@@ -207,6 +208,26 @@ private func waitForReady(_ root: URL) {
                                                      calendar: utc, role: .intentsExtension)
                 guard case .started = try extensionEngine.startFromFocusFilter(now: markerStart, length: 1500, authorized: { .unknown }, selectionReady: true,
                                                                                apply: { exit(1) }, matches: { exit(1) }) else { exit(1) }
+            case "extension-end-hold":
+                // An extension end whose stop, like the system's `stopMonitoring`, returns only after the Monitor's callback for it returned
+                // (2026-11-17 lock-order amendment). The stop must run after the lock is released, or the callback cannot take it.
+                monitor.onStop = { id in
+                    try! Data("focus.\(id.uuidString)".utf8).write(to: root.appendingPathComponent("ready"), options: .atomic)
+                    let deadline = Date().addingTimeInterval(3)
+                    while !FileManager.default.fileExists(atPath: root.appendingPathComponent("callback-done").path) {
+                        if Date() > deadline { exit(2) }; usleep(1000)
+                    }
+                }
+                let extensionEngine = SessionControl(store: SharedControlStore(directory: root), monitoring: monitor, shield: shield, breakSelection: copies, everyday: layer,
+                                                     calendar: utc, role: .intentsExtension)
+                guard try extensionEngine.endFromFocusFilter(now: markerStart.addingTimeInterval(60), authorized: .unknown) else { exit(1) }
+            case "extension-end-monitor":
+                waitForReady(root)
+                let name = try String(contentsOf: root.appendingPathComponent("ready"), encoding: .utf8)
+                let monitorEngine = SessionControl(store: SharedControlStore(directory: root), monitoring: monitor, shield: shield, breakSelection: copies, everyday: layer,
+                                                   calendar: utc, role: .appContainer(applyFocusSelection: { true }))
+                try monitorEngine.handleCallbackRetryingLock(activityName: name, kind: .didEnd, now: { markerStart.addingTimeInterval(61) }, authorized: { .unknown })
+                try Data().write(to: root.appendingPathComponent("callback-done"))
             case "extension-monitor":
                 waitForReady(root)
                 let name = try String(contentsOf: root.appendingPathComponent("ready"), encoding: .utf8)
@@ -276,6 +297,26 @@ private func waitForReady(_ root: URL) {
         try verifyStopWait(executable: args[0], ["didStart"], "a didStart for the holder's stop keeps the bounded retry")
         try verifyStopWait(executable: args[0], ["willEndWarning", "1"], "a warning for the holder's stop keeps the bounded retry")
         try verifyExtensionStart(executable: args[0])
+        try verifyExtensionEnd(executable: args[0])
+    }
+    /// An extension ends a shielded session; its stop waits for the Monitor's `didEnd`, which takes the lock and lifts the shield (2026-11-17 lock-order amendment).
+    private static func verifyExtensionEnd(executable: String) throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let shield = FileShield(root), monitor = LocalMonitor(root), copies = FileCopies(root, shield: shield), layer = FileLayer(root)
+        let extensionEngine = SessionControl(store: SharedControlStore(directory: root), monitoring: monitor, shield: shield, breakSelection: copies, everyday: layer,
+                                             calendar: utc, role: .intentsExtension)
+        guard case .started(let session) = try extensionEngine.startFromFocusFilter(now: markerStart, length: 1500, authorized: { .unknown }, selectionReady: true,
+                                                                                    apply: { exit(1) }, matches: { exit(1) }) else { exit(1) }
+        // The Monitor's `didStart` shields the pending session.
+        let monitorEngine = SessionControl(store: SharedControlStore(directory: root), monitoring: monitor, shield: shield, breakSelection: copies, everyday: layer,
+                                           calendar: utc, role: .appContainer(applyFocusSelection: { (try? Data("applied".utf8).write(to: shield.file)) != nil }))
+        try monitorEngine.handleCallback(activityName: session.activityName, kind: .didStart, now: markerStart.addingTimeInterval(6), authorized: .unknown)
+        guard shield.hasShield else { exit(1) }
+        let exited = try run(executable, ["extension-end-monitor", root.path], ["extension-end-hold", root.path])
+        let current = try markerEngine(root).snapshot().session
+        guard exited, current?.phase == .terminal, !shield.hasShield, !monitor.isRegistered(id: session.id) else { exit(1) }
+        print("PASS: the Monitor lifts the shield during an extension end's stop")
     }
     /// An extension start holds the lock without a marker; the Monitor's `didStart` waits for it, then shields the pending session (2026-11-16 shield amendment).
     private static func verifyExtensionStart(executable: String) throws {

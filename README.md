@@ -22,7 +22,7 @@ iOS 테스트와 Release 빌드는 CI와 같은 Xcode 26.6과 iOS 26.5 시뮬레
 
 ```sh
 swift test
-xcrun swiftc Shared/ControlTypes.swift Shared/SharedControlStore.swift Shared/SessionControl.swift Shared/FocusLength.swift Shared/BreakTiming.swift Shared/EverydaySchedule.swift Shared/RegistrationMarker.swift Tests/Fixtures/ControlRaceHelper.swift -o /tmp/focus-control-race
+xcrun swiftc Shared/ControlTypes.swift Shared/SharedControlStore.swift Shared/SessionControl.swift Shared/DeferredStopMonitoring.swift Shared/FocusLength.swift Shared/BreakTiming.swift Shared/EverydaySchedule.swift Shared/RegistrationMarker.swift Tests/Fixtures/ControlRaceHelper.swift -o /tmp/focus-control-race
 /tmp/focus-control-race --verify
 ```
 
@@ -41,7 +41,7 @@ xcodebuild build -project FocusStudy.xcodeproj -scheme FocusStudy -configuration
 | `FocusUITests`  | DEBUG 합성 데이터로 실행한 화면 흐름                                                   |
 | Release 빌드    | 개발용 코드를 뺀 App, Monitor, Report, Activity, Intents의 기기용 컴파일               |
 
-경합 검사는 다음 열두 줄을 출력해야 합니다.
+경합 검사는 다음 열네 줄을 출력해야 합니다.
 
 ```log
 PASS: stale A cannot clear B
@@ -56,6 +56,8 @@ PASS: the next lock holder deletes a leftover marker
 PASS: a didEnd for the holder's stop returns at once
 PASS: a didStart for the holder's stop keeps the bounded retry
 PASS: a warning for the holder's stop keeps the bounded retry
+PASS: the Monitor waits for an extension start and shields its session
+PASS: the Monitor lifts the shield during an extension end's stop
 ```
 
 한 묶음만 실행하려면 test 명령에 `-only-testing:FocusSDKTests` 또는 `-only-testing:FocusUITests`를 붙입니다.
