@@ -30,6 +30,7 @@ A second probe the same afternoon, with the delayed start and with every focus s
 4. An extension section never calls `stop`, `stopBreak` or `stopEveryday` inside the lock. It records each stop and makes it after the lock is released, in the order recorded, before the call returns.
    Inside the section, an activity with a recorded stop counts as not registered, so every rule that reads `isRegistered` sees the state that the section committed.
 5. This covers every stop of an extension section: the end of a session (Focus off, the activation check, a refused or failed start and its rollback), the break cleanup, and the read-failure cleanup.
+   - Reconciliation (2026-11-17, #172): the extension defers only the stop of a session that its own section ended, whose focus and break names no process registers again. It makes no other stop: an orphaned break activity of a running session and the read-failure cleanup are left to the next section in the app container, which stops inside its own lock with its markers. A deferred stop of a reusable name, such as break `(S, 1)` of a `waiting` session, could remove the registration that the app makes for the same name between the release of the lock and the stop.
 6. While the extension waits in its deferred `stopMonitoring`, the Monitor's `intervalDidEnd` takes the lock, finds the session `terminal` or removed, and lifts the focus shield by the repair rule (shield amendment, decisions 8 and 11).
 
 ### Everyday layer
