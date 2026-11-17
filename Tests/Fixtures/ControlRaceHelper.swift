@@ -185,9 +185,14 @@ private func waitForReady(_ root: URL) {
                 }
             case "extension-hold":
                 // An extension section holds the lock inside the registration call of a filter start; it writes no marker (2026-11-16 shield amendment, decision 9).
+                // Holds the lock until the Monitor process has seen it busy, then a little longer, so that its first lock attempt collides.
                 monitor.onRegister = { id in
                     try! Data("focus.\(id.uuidString)".utf8).write(to: root.appendingPathComponent("ready"), options: .atomic)
-                    usleep(1_000_000)
+                    let deadline = Date().addingTimeInterval(3)
+                    while !FileManager.default.fileExists(atPath: root.appendingPathComponent("collided").path) {
+                        if Date() > deadline { exit(2) }; usleep(1000)
+                    }
+                    usleep(200_000)
                 }
                 let extensionEngine = SessionControl(store: SharedControlStore(directory: root), monitoring: monitor, shield: shield, breakSelection: copies, everyday: layer,
                                                      calendar: utc, role: .intentsExtension)
@@ -196,13 +201,13 @@ private func waitForReady(_ root: URL) {
             case "extension-monitor":
                 waitForReady(root)
                 let name = try String(contentsOf: root.appendingPathComponent("ready"), encoding: .utf8)
-                if RegistrationMarkerFile(directory: root).read() != nil { exit(1) }
+                // The holder has the lock and no marker, so a callback has nothing that lets it return early.
+                if RegistrationMarkerFile(directory: root).read() != nil || !SharedControlStore(directory: root).isLockBusy() { exit(1) }
+                try Data().write(to: root.appendingPathComponent("collided"))
                 let monitorEngine = SessionControl(store: SharedControlStore(directory: root), monitoring: monitor, shield: shield, breakSelection: copies, everyday: layer,
                                                    calendar: utc, role: .appContainer(applyFocusSelection: { (try? Data("applied".utf8).write(to: shield.file)) != nil }))
-                let begin = ProcessInfo.processInfo.systemUptime
+                // The verifier checks the result: the shield applies only if the callback ran its section after the holder's save of `active`.
                 try monitorEngine.handleCallbackRetryingLock(activityName: name, kind: .didStart, now: { markerStart.addingTimeInterval(1) }, authorized: { .unknown })
-                // The callback waited for the holder's lock instead of returning at once.
-                if ProcessInfo.processInfo.systemUptime - begin < 0.5 { exit(1) }
             case "marker-run":
                 try engine.handleCallbackRetryingLock(activityName: args[3], kind: .didEnd, now: { markerCallbackNow }, authorized: { .approved })
             case "new":
