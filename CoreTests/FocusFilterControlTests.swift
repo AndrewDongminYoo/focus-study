@@ -524,7 +524,8 @@ final class FocusFilterControlTests: XCTestCase {
         try engine.reconcile(now: breakEnd, authorized: .approved); check("re-block")
         XCTAssertEqual(world.state.envelope.session?.phase, .breakOver)
         try engine.resume(id: s.id, now: breakEnd.addingTimeInterval(5)); check("resume")
-        for kind in [CallbackKind.didStart, .willEndWarning, .didEnd] {
+        // A focus `didEnd` here would be nothing due in its own end, which ends the session (2026-11-18 single-interval amendment, decision 12).
+        for kind in [CallbackKind.didStart, .willEndWarning] {
             try engine.handleCallback(activityName: s.activityName, kind: kind, now: breakEnd.addingTimeInterval(10), authorized: .approved); check("callback \(kind)")
         }
         XCTAssertEqual(world.state.envelope.session?.phase, .active)
@@ -649,9 +650,13 @@ final class FocusFilterControlTests: XCTestCase {
 
     // MARK: Open sessions (2026-11-16 Focus filter extension design)
 
-    private func didEnd(_ engine: SessionControl, _ session: ControlSession, at now: Date) throws {
+    /// The Monitor's `intervalDidEnd`. As on the device (2026-11-18), the system deletes the one-shot interval after a callback at or after its end,
+    /// also when the section registered it again inside the callback.
+    private func didEnd(_ engine: SessionControl, _ session: ControlSession, at now: Date, world: FilterWorld? = nil) throws {
+        defer { if let world, let end = world.state.focus[session.id], end <= now { world.state.focus[session.id] = nil } }
         try engine.handleCallback(activityName: session.activityName, kind: .didEnd, now: now, authorized: .approved)
     }
+    private var boundLength: TimeInterval { (ControlSession.maxLength / 1500).rounded(.down) * 1500 }
     private func openStart(_ engine: SessionControl, _ world: FilterWorld) throws -> ControlSession {
         try XCTUnwrap(started(try on(engine, world, at: t0)))
     }
@@ -671,19 +676,161 @@ final class FocusFilterControlTests: XCTestCase {
         XCTAssertNotNil(session.activation); XCTAssertEqual(session.baseLength, 1500)
         XCTAssertTrue(world.state.envelope.sessionIsOpen)
     }
-    func testOpenSessionRollsOverAtItsFocusEnd() throws {
+    // 2026-11-18 single-interval amendment: one interval to the bound end, and a rollover that only changes the stored session.
+
+    func testOpenSessionRegistersOneIntervalToTheBoundEnd() throws {
         let world = FilterWorld(), engine = engine(world)
         let session = try openStart(engine, world)
-        try didEnd(engine, session, at: at(1500))
+        XCTAssertEqual(boundLength, 604_500)
+        XCTAssertEqual(world.state.focus[session.id], at(boundLength))
+        let registrations = world.log.filter { $0 == "focus.register" }.count
+        try engine.reconcile(now: at(1500), authorized: .approved)
         let after = try storedSession(world)
         XCTAssertEqual(after.phase, .active); XCTAssertEqual(after.length, 3000)
-        XCTAssertEqual(world.state.focus[session.id], at(3000)); XCTAssertTrue(world.state.focusShield)
+        XCTAssertEqual(world.state.focus[session.id], at(boundLength)); XCTAssertTrue(world.state.focusShield)
+        XCTAssertEqual(world.log.filter { $0 == "focus.register" }.count, registrations, "a catch-up registers nothing")
     }
-    func testLateCallbackCatchesUpInOneSection() throws {
+    func testLateSectionCatchesUpInOneSection() throws {
         let world = FilterWorld(), engine = engine(world)
         let session = try openStart(engine, world)
-        try didEnd(engine, session, at: at(4000))
-        XCTAssertEqual(try storedSession(world).length, 4500); XCTAssertEqual(world.state.focus[session.id], at(4500))
+        try engine.reconcile(now: at(4000), authorized: .approved)
+        XCTAssertEqual(try storedSession(world).length, 4500); XCTAssertEqual(world.state.focus[session.id], at(boundLength))
+    }
+    func testEverySectionCatchesUpBeforeItsOwnStep() throws {
+        // A break past a chunk end is available: `requestBreak` reads the caught-up session (decision 11).
+        let world = FilterWorld(), engine = engine(world)
+        let session = try openStart(engine, world)
+        let waiting = try engine.requestBreak(id: session.id, now: at(2000))
+        XCTAssertEqual(waiting.phase, .waiting); XCTAssertEqual(waiting.length, 3000)
+    }
+    func testABoundEndCallbackEndsTheSessionWithTheBoundLength() throws {
+        let world = FilterWorld(), engine = engine(world)
+        let session = try openStart(engine, world)
+        try didEnd(engine, session, at: at(boundLength), world: world)
+        try assertEnded(world, .expired, length: boundLength, "bound end on time")
+    }
+    func testNothingDueInItsOwnEndEndsTheSession() throws {
+        // A focus `didEnd` before anything is due (an earlier build's chunk end, or a missed marker) ends the session (decision 12).
+        let early = FilterWorld(), earlyEngine = engine(early)
+        let a = try openStart(earlyEngine, early)
+        try didEnd(earlyEngine, a, at: at(600), world: early)
+        try assertEnded(early, .recoveryInterrupted, length: 1500, "before the base length")
+        let past = FilterWorld(), pastEngine = engine(past)
+        let b = try openStart(pastEngine, past)
+        try didEnd(pastEngine, b, at: at(2000), world: past)
+        try assertEnded(past, .expired, length: 2000, "past the base length counts with the open focused time")
+    }
+    func testAFailedCatchUpSaveInItsOwnEndStillEndsTheSession() throws {
+        // Decision 9: no later callback comes, so the section continues in memory and lifts the shield.
+        let world = FilterWorld(), engine = engine(world)
+        let session = try openStart(engine, world)
+        world.throwAtEffect = world.effects
+        try? didEnd(engine, session, at: at(boundLength), world: world)
+        try assertEnded(world, .expired, length: boundLength, "failed catch-up save in its own end")
+    }
+    func testACappedWaitingEndEndsWithTheOpenFocusedTime() throws {
+        // Bounds: pauses push the waiting end past `startedAt + 192 h`; at the cap the catch-up stops below the bound and decision 12 ends the session.
+        let world = FilterWorld(), engine = engine(world)
+        let session = try openStart(engine, world)
+        var paused = try storedSession(world); paused.pausedSeconds = 30 * 3600; paused.deadlineCredit = 30 * 3600; world.state.envelope.session = paused
+        _ = try engine.requestBreak(id: session.id, now: at(100))
+        let end = try XCTUnwrap(world.state.focus[session.id])
+        XCTAssertEqual(end, at(ControlSession.maxIntervalLength))
+        try didEnd(engine, session, at: end, world: world)
+        let ended = try storedSession(world)
+        XCTAssertEqual(ended.reason, .expired); XCTAssertLessThan(ended.length, boundLength); XCTAssertTrue(ended.hasValidLength)
+        XCTAssertFalse(world.state.focusShield)
+    }
+    func testAFiftyMinuteBaseRecordsTheBoundLengthOnTimeAndLate() throws {
+        // Decision 17 with a base that does not divide one week.
+        for (offset, name) in [(0.0, "on time"), (600, "late")] {
+            let world = FilterWorld(), engine = engine(world)
+            let session = try XCTUnwrap(started(try engine.startFromFocusFilter(now: t0, length: 3000, authorized: { .approved }, selectionReady: true,
+                                                                                    apply: { world.apply() }, matches: { world.state.focusShield })))
+            XCTAssertEqual(world.state.focus[session.id], at(603_000))
+            try didEnd(engine, session, at: at(603_000 + offset), world: world)
+            try assertEnded(world, .expired, length: 603_000, name)
+        }
+        // A bound end that never runs: the system deleted the interval, so the Focus off finds it missing (decision 17).
+        let world = FilterWorld(), engine = engine(world)
+        let session = try XCTUnwrap(started(try engine.startFromFocusFilter(now: t0, length: 3000, authorized: { .approved }, selectionReady: true,
+                                                                                apply: { world.apply() }, matches: { world.state.focusShield })))
+        world.state.focus[session.id] = nil
+        try engine.endFromFocusFilter(now: at(603_600), authorized: .approved)
+        XCTAssertEqual(try storedSession(world).reason, .recoveryInterrupted)
+    }
+    func testACleanupRegistrationInItsOwnEndEndsTheSession() throws {
+        // An interrupted break start leaves a `waiting` session with its copy; inside its own end the cleanup's registration counts as failed.
+        let world = FilterWorld(), engine = engine(world)
+        let session = try openStart(engine, world)
+        _ = try engine.requestBreak(id: session.id, now: at(100)); try world.saveCopy(session.id)
+        try didEnd(engine, session, at: at(105), world: world)
+        let ended = try storedSession(world)
+        XCTAssertEqual(ended.phase, .terminal); XCTAssertEqual(ended.reason, .recoveryInterrupted); XCTAssertFalse(world.state.focusShield)
+    }
+    func testTheActivitySnapshotKeepsTheActivationOnlyWhileOpen() throws {
+        let world = FilterWorld(), engine = engine(world)
+        _ = try openStart(engine, world)
+        XCTAssertNotNil(try engine.activitySnapshot()?.activation)
+        world.state.envelope.filterActivation = nil
+        XCTAssertNil(try engine.activitySnapshot()?.activation)
+        XCTAssertNotNil(world.state.envelope.session?.activation, "the stored session is unchanged")
+    }
+    func testAStaleWaitCancelledLateKeepsRolling() throws {
+        // Decision 10: the app opens the next day; the reconcile cancels the stale wait and catches up again before the timed end.
+        let world = FilterWorld(), engine = engine(world)
+        let session = try openStart(engine, world)
+        _ = try engine.requestBreak(id: session.id, now: at(100))
+        try engine.reconcile(now: at(86_400), authorized: .approved)
+        let after = try storedSession(world)
+        XCTAssertEqual(after.phase, .active); XCTAssertGreaterThan(after.focusEnd, at(86_400)); XCTAssertTrue(after.hasValidLength)
+    }
+    func testAWaitingEndCallbackRecordsTheBoundLength() throws {
+        // Decisions 6 and 12: at the registered `waiting` end the stale-wait cancel's registration is skipped, and the catch-up reaches the bound.
+        let world = FilterWorld(), engine = engine(world)
+        let session = try openStart(engine, world)
+        _ = try engine.requestBreak(id: session.id, now: at(100))
+        let end = try XCTUnwrap(world.state.focus[session.id])
+        XCTAssertGreaterThan(end, at(boundLength))
+        try didEnd(engine, session, at: end, world: world)
+        try assertEnded(world, .expired, length: boundLength, "waiting end")
+    }
+    func testTheRegisteredEndIsCappedAtTheProbedInterval() throws {
+        var session = ControlSession(startedAt: t0, length: 1500)
+        session.phase = .active; session.origin = .focusFilter; session.baseLength = 1500
+        XCTAssertEqual(session.openActiveEnd(timing: .standard), at(boundLength))
+        session.pausedSeconds = 30 * 3600; session.deadlineCredit = 30 * 3600
+        XCTAssertEqual(session.openActiveEnd(timing: .standard), at(ControlSession.maxIntervalLength))
+        // The deadline comes first at every chunk or at none.
+        session.deadlineCredit = 0
+        XCTAssertEqual(session.openActiveEnd(timing: .standard), session.deadline(timing: .standard))
+    }
+    func testTheOpenFocusedTimeIsCappedAtTheBoundLength() {
+        // Decision 17: with a 50-minute base, an on-time, a late or a lost bound end records 603,000 s.
+        var session = ControlSession(startedAt: t0, length: 3000)
+        session.baseLength = 3000
+        XCTAssertEqual(session.boundLength, 603_000)
+        XCTAssertEqual(session.openFocused(at: t0.addingTimeInterval(ControlSession.maxLength + 600)), 603_000)
+    }
+    func testFocusOffKeepsTheMarkerUntilTheSaveOfEnding() throws {
+        // Decision 16: the stale-wait cancel inside the Focus off section saves `active` with the marker still set.
+        let world = FilterWorld(), engine = engine(world)
+        let session = try openStart(engine, world)
+        _ = try engine.requestBreak(id: session.id, now: at(100))
+        world.recording = true; world.snapshots = [world.state]
+        try engine.endFromFocusFilter(now: at(1000), authorized: .approved)
+        for snapshot in world.snapshots where snapshot.envelope.session.map({ SessionControl.isRunning($0.phase) }) == true {
+            XCTAssertNotNil(snapshot.envelope.filterActivation, "a running session is never saved with the marker cleared")
+        }
+        let ending = try XCTUnwrap(world.saved.first { $0.session?.phase == .ending })
+        XCTAssertNil(ending.filterActivation)
+        XCTAssertNil(world.state.envelope.filterActivation)
+    }
+    func testStartupRecoveryOfAnOpenSessionPastAChunkEndCountsTheFocusedTime() throws {
+        let world = FilterWorld(), engine = engine(world)
+        _ = try openStart(engine, world)
+        try StartupRecovery(engine: engine).endCurrent(now: at(2000))
+        try assertEnded(world, .expired, length: 2000, "endCurrent")
     }
     func testManualSessionAndClearedActivationDoNotRollOver() throws {
         let manualWorld = FilterWorld(), manualEngine = engine(manualWorld)
@@ -717,20 +864,20 @@ final class FocusFilterControlTests: XCTestCase {
         try didEnd(engine, session, at: t0.addingTimeInterval(ControlSession.maxLength))
         try assertEnded(world, .expired, length: (ControlSession.maxLength / 1500).rounded(.down) * 1500, "late callback at the bound")
     }
-    func testRolloverRegistrationFailureEndsTheSessionAsExpired() throws {
+    func testACatchUpNeedsNoRegistration() throws {
         let world = FilterWorld(), engine = engine(world)
         let session = try openStart(engine, world)
         world.failRegister = true
-        try didEnd(engine, session, at: at(1600))
-        try assertEnded(world, .expired, length: 1600, "registration failed")
+        try engine.reconcile(now: at(1600), authorized: .approved)
+        XCTAssertEqual(try storedSession(world).phase, .active); XCTAssertEqual(world.state.focus[session.id], at(boundLength))
     }
-    func testThrownSaveAfterTheRolloverRegistrationCatchesUpLater() throws {
+    func testAThrownCatchUpSaveOutsideItsOwnEndCatchesUpLater() throws {
         let world = FilterWorld(), engine = engine(world)
-        let session = try openStart(engine, world)
-        world.throwAtEffect = world.effects + 1
-        XCTAssertThrowsError(try didEnd(engine, session, at: at(1500)))
-        XCTAssertEqual(try storedSession(world).length, 1500); XCTAssertEqual(world.state.focus[session.id], at(3000))
-        try didEnd(engine, session, at: at(3000))
+        _ = try openStart(engine, world)
+        world.throwAtEffect = world.effects
+        XCTAssertThrowsError(try engine.reconcile(now: at(1500), authorized: .approved))
+        XCTAssertEqual(try storedSession(world).length, 1500)
+        try engine.reconcile(now: at(3000), authorized: .approved)
         let after = try storedSession(world)
         XCTAssertEqual(after.phase, .active); XCTAssertEqual(after.length, 4500); XCTAssertTrue(world.state.focusShield)
     }
@@ -743,8 +890,8 @@ final class FocusFilterControlTests: XCTestCase {
     }
     func testFocusOffAfterARolloverRecordsTheFocusedTime() throws {
         let world = FilterWorld(), engine = engine(world)
-        let session = try openStart(engine, world)
-        try didEnd(engine, session, at: at(1500))
+        _ = try openStart(engine, world)
+        try engine.reconcile(now: at(1500), authorized: .approved)
         try engine.endFromFocusFilter(now: at(2000), authorized: .approved)
         try assertEnded(world, .expired, length: 2000, "after rollover")
     }
@@ -772,7 +919,9 @@ final class FocusFilterControlTests: XCTestCase {
             default: try engine.finish(id: session.id, reason: .earlyExit, now: at(2000))
             }
             let ended = try storedSession(world)
-            XCTAssertEqual(ended.phase, .terminal, path); XCTAssertEqual(ended.reason, .recoveryInterrupted, path); XCTAssertEqual(ended.length, 1500, path)
+            XCTAssertEqual(ended.phase, .terminal, path); XCTAssertEqual(ended.reason, .recoveryInterrupted, path)
+            // The cleanup's catch-up runs before the reconcile ends the session; the recorded length is not counted.
+            XCTAssertEqual(ended.length, 3000, path)
         }
     }
     func testFocusOffAfterTheDeadlineIsDeadlineMissed() throws {
@@ -785,7 +934,7 @@ final class FocusFilterControlTests: XCTestCase {
     func testFocusOffDuringABreakExcludesTheOpenPause() throws {
         let world = FilterWorld(), engine = engine(world)
         let session = try openStart(engine, world)
-        try didEnd(engine, session, at: at(1500))
+        try engine.reconcile(now: at(1500), authorized: .approved)
         _ = try engine.requestBreak(id: session.id, now: at(1600))
         try engine.startBreak(id: session.id, now: at(1615), saveSelection: { try world.saveCopy(session.id) })
         try engine.endFromFocusFilter(now: at(1700), authorized: .approved)
@@ -815,6 +964,8 @@ final class FocusFilterControlTests: XCTestCase {
         // "집중 종료" saves `ending` as `.expired` with the focused time, then the save of `terminal` fails; the app retries with `.earlyExit`.
         let world = FilterWorld(), engine = engine(world)
         let session = try openStart(engine, world)
+        // The catch-up is saved first, so the failing effect below is the save of `terminal`.
+        try engine.reconcile(now: at(2000), authorized: .approved)
         world.throwAtEffect = world.effects + 1
         XCTAssertThrowsError(try engine.finish(id: session.id, reason: .earlyExit, now: at(2000)))
         XCTAssertEqual(world.state.envelope.session?.phase, .ending); XCTAssertEqual(world.state.envelope.session?.reason, .expired)

@@ -43,10 +43,33 @@ public struct ControlSession: Codable, Equatable {
         let multiple = (length / baseLength).rounded()
         return multiple >= 1 && abs(multiple * baseLength - length) < 0.01
     }
-    /// The open focused time (spec decision 5): `focused(at:)` without the cap at `length`, within the one-week bound.
+    /// The open focused time (spec decision 5): `focused(at:)` without the cap at `length`, capped at the bound length
+    /// (2026-11-18 single-interval amendment, decision 17), or at the one-week bound for a session without a base length.
     public func openFocused(at now: Date) -> TimeInterval {
         let openPause = pausedAt.map { max(0, now.timeIntervalSince($0)) } ?? 0
-        return min(Self.maxLength, max(0, now.timeIntervalSince(startedAt) - (pausedSeconds ?? 0) - openPause))
+        return min(boundLength ?? Self.maxLength, max(0, now.timeIntervalSince(startedAt) - (pausedSeconds ?? 0) - openPause))
+    }
+    /// The longest focus interval that an open session registers, from `startedAt`: the longest interval that the 2026-11-18 probe accepted.
+    public static let maxIntervalLength: TimeInterval = 192 * 3600
+    /// The largest whole multiple of the base length within `maxLength`, the length that the catch-up reaches at the bound.
+    public var boundLength: TimeInterval? {
+        guard let baseLength, baseLength.isFinite, baseLength > 0 else { return nil }
+        return (Self.maxLength / baseLength).rounded(.down) * baseLength
+    }
+    /// The stored-only rollover of an open session (2026-11-18 single-interval amendment, "the catch-up"): whole base lengths,
+    /// only in `active`, only while the focus end is not after the deadline, never past the bound. The caller decides that the session is open.
+    public func caughtUp(at now: Date, timing: BreakTiming) -> ControlSession {
+        guard phase == .active, let base = baseLength, base > 0, focusEnd <= deadline(timing: timing) else { return self }
+        var next = self
+        while next.focusEnd <= now, next.length + base <= Self.maxLength { next.expiresAt = next.expiresAt.addingTimeInterval(base) }
+        return next
+    }
+    /// The focus activity end of an open session in `active` (amendment, decision 5): the bound end, or the deadline when it comes first,
+    /// capped at `startedAt + maxIntervalLength`. A catch-up keeps `focusEnd - deadline`, so the deadline comes first at every chunk or at none.
+    public func openActiveEnd(timing: BreakTiming) -> Date {
+        let deadline = deadline(timing: timing)
+        let end = focusEnd <= deadline ? startedAt.addingTimeInterval((boundLength ?? length) + (pausedSeconds ?? 0)) : deadline
+        return min(end, startedAt.addingTimeInterval(Self.maxIntervalLength))
     }
     public var activityName: String { ActivityNames.focus(id: id) }
     public func breakActivityName(index: Int) -> String { ActivityNames.focusBreak(id: id, index: index) }
@@ -88,6 +111,12 @@ struct ControlEnvelope: Codable {
     var sessionIsOpen: Bool {
         guard let session, session.isFilterStarted, let activation = session.activation else { return false }
         return activation == filterActivation
+    }
+    /// The envelope with the catch-up applied to an open session (2026-11-18 single-interval amendment, decision 9).
+    func caughtUp(at now: Date, timing: BreakTiming) -> ControlEnvelope {
+        guard sessionIsOpen, let session else { return self }
+        var next = self; next.session = session.caughtUp(at: now, timing: timing)
+        return next
     }
 }
 /// Why a Focus on call started no session.

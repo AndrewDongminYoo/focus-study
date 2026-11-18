@@ -154,17 +154,18 @@ final class ExtensionShieldTests: XCTestCase {
         let session = try filterOn(extensionEngine(), at: t0)
         let interval = try XCTUnwrap(monitoring.intervals[session.id])
         XCTAssertEqual(interval.0, t0.addingTimeInterval(SessionControl.extensionStartDelay))
-        XCTAssertEqual(interval.1, session.expiresAt)
+        // The one interval of an open session ends at the bound end (2026-11-18 single-interval amendment, decision 8).
+        XCTAssertEqual(interval.1, session.openActiveEnd(timing: .standard))
         XCTAssertEqual(session.startedAt, t0, "focused time still starts at the call")
     }
-    func testExtensionLateRolloverKeepsTheStartAndTheSession() throws {
+    func testExtensionCatchUpKeepsTheOneInterval() throws {
         let engine = extensionEngine()
         let session = try filterOn(engine, at: t0)
-        // A catch-up 20 minutes after a missed rollover of a 25-minute session.
+        let before = try XCTUnwrap(monitoring.intervals[session.id])
+        // A section 20 minutes after the first chunk end catches up in the stored session only.
         try engine.reconcile(now: session.expiresAt.addingTimeInterval(20 * 60), authorized: .unknown)
         let interval = try XCTUnwrap(monitoring.intervals[session.id])
-        XCTAssertEqual(interval.0, t0)
-        XCTAssertGreaterThanOrEqual(interval.1.timeIntervalSince(interval.0), 15 * 60)
+        XCTAssertEqual(interval.0, before.0); XCTAssertEqual(interval.1, before.1)
         XCTAssertEqual(try stored()?.phase, .active)
         XCTAssertEqual(try stored()?.expiresAt, t0.addingTimeInterval(3000))
     }

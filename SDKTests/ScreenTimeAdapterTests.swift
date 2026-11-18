@@ -33,6 +33,20 @@ final class ScreenTimeAdapterTests: XCTestCase {
         XCTAssertEqual(calendar.date(from: schedule.intervalStart), start); XCTAssertEqual(calendar.date(from: schedule.intervalEnd), end)
         XCTAssertEqual(schedule.intervalEnd.day, 27)
     }
+    /// The one interval of an open session starts at `startedAt`, often a day earlier, and ends about one week later; both ends keep their seconds
+    /// (2026-11-18 single-interval amendment, decisions 5 and 12: an early focus end ends the session).
+    func testOneWeekScheduleKeepsBothEndsToTheSecond() {
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: "Asia/Seoul")!
+        let start = ISO8601DateFormatter().date(from: "2026-11-17T23:41:07Z")!
+        var session = ControlSession(startedAt: start, length: 1500)
+        session.phase = .active; session.origin = .focusFilter; session.baseLength = 1500
+        let end = session.openActiveEnd(timing: .standard)
+        XCTAssertEqual(end.timeIntervalSince(start), 604_500)
+        let schedule = ScreenTimeMonitoring.schedule(start: start, end: end, calendar: calendar)
+        XCTAssertFalse(schedule.repeats)
+        XCTAssertEqual(calendar.date(from: schedule.intervalStart), start); XCTAssertEqual(calendar.date(from: schedule.intervalEnd), end)
+        XCTAssertEqual(schedule.intervalEnd.second, 7)
+    }
     func testBreakScheduleIsFifteenMinutesWithTwelveMinuteWarning() {
         let calendar = Calendar(identifier: .gregorian), start = Date(timeIntervalSince1970: 1_800_000_000)
         let schedule = ScreenTimeMonitoring.breakSchedule(start: start, end: start.addingTimeInterval(BreakTiming.breakActivityLength), warning: BreakTiming.standard.breakWarning, calendar: calendar)

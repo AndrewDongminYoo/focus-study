@@ -380,18 +380,18 @@ final class BreakControlTests: XCTestCase {
 
     // MARK: Process exit between overwrite and save (callback with nothing due)
 
-    func testResumeExitBeforeSaveRegistersDeadlineAtStaleEnd() throws {
+    // The 2026-11-18 single-interval amendment replaced the re-registration of the stale end: the system deletes the interval after its `didEnd`,
+    // so the callback with nothing due ends the session (decision 12, gap rows of transitions 2 and 5).
+    func testResumeExitBeforeSaveEndsAtTheStaleEnd() throws {
         let world = World(); let (engine, id) = try afterReBlock(world)
         world.recording = true
         try engine.resume(id: id, now: at(600))
         let exited = try overwriteSnapshot(world, storedPhase: .breakOver, end: at(1800))
         XCTAssertEqual(exited.state.focus[id]?.end, at(1800))
         try self.engine(exited).handleCallback(activityName: focusName(id), kind: .didEnd, now: at(1800), authorized: .approved)
-        XCTAssertEqual(stored(exited).phase, .breakOver); XCTAssertEqual(exited.state.focus[id]?.end, at(2295))
-        try self.engine(exited).handleCallback(activityName: focusName(id), kind: .didEnd, now: at(2295), authorized: .approved)
-        XCTAssertEqual(stored(exited).reason, .deadlineMissed); XCTAssertFalse(exited.state.shieldOn)
+        XCTAssertEqual(stored(exited).reason, .recoveryInterrupted); XCTAssertFalse(exited.state.shieldOn)
     }
-    func testCancelWaitExitNearFocusEndRegistersWaitingEndAgain() throws {
+    func testCancelWaitExitNearFocusEndEndsAtTheStaleEnd() throws {
         let world = World(); let (engine, id) = try started(world)
         _ = try engine.requestBreak(id: id, now: at(1495))
         world.recording = true
@@ -399,9 +399,17 @@ final class BreakControlTests: XCTestCase {
         let exited = try overwriteSnapshot(world, storedPhase: .waiting, end: at(1495 + 6))
         XCTAssertEqual(exited.state.focus[id]?.end, at(1501))
         try self.engine(exited).handleCallback(activityName: focusName(id), kind: .didEnd, now: at(1501), authorized: .approved)
-        XCTAssertEqual(stored(exited).phase, .waiting); XCTAssertEqual(exited.state.focus[id]?.end, at(1495 + 30))
-        try self.engine(exited).handleCallback(activityName: focusName(id), kind: .didEnd, now: at(1525), authorized: .approved)
-        XCTAssertEqual(stored(exited).pausedSeconds, 25); XCTAssertEqual(stored(exited).reason, .expired)
+        XCTAssertEqual(stored(exited).reason, .recoveryInterrupted); XCTAssertFalse(exited.state.shieldOn)
+    }
+    func testManualStaleWaitAtItsRegisteredEndStillEndsAsExpired() throws {
+        // The stale-wait cancel's registration of an end that is not after `now` is skipped inside its own end, so the timed end still applies
+        // (2026-11-18 single-interval amendment, decision 12).
+        let world = World(); let (engine, id) = try started(world)
+        _ = try engine.requestBreak(id: id, now: at(1400))
+        let end = try XCTUnwrap(world.state.focus[id]?.end)
+        try engine.handleCallback(activityName: focusName(id), kind: .didEnd, now: end, authorized: .approved)
+        let s = stored(world)
+        XCTAssertEqual(s.reason, .expired); XCTAssertFalse(world.state.shieldOn)
     }
     func testRequestBreakExitEndsWithinWaitPlusGrace() throws {
         let world = World(); let (engine, id) = try started(world)
