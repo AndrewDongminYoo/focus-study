@@ -673,16 +673,19 @@ final class SessionControl {
     }
     /// The end of a session whose focus interval ended with the session still running (amendment, decision 12): an open session that reached
     /// its base length counts, with the open focused time; every other session ends as `.recoveryInterrupted`.
+    /// The time is the registered end when the callback came late, so a late callback at the 192 h cap records no time after the cap.
     private func endWithoutCallback(_ envelope: inout ControlEnvelope, locked: LockedControl, now: Date) throws {
         guard var session = envelope.session else { return }
-        let focused = session.openFocused(at: now)
-        if envelope.sessionIsOpen, let base = session.baseLength, focused >= base {
+        let open = envelope.sessionIsOpen
+        let endedAt = min(now, focusActivityEnd(session, open: open) ?? now)
+        let focused = session.openFocused(at: endedAt)
+        if open, let base = session.baseLength, focused >= base {
             session.expiresAt = session.startedAt.addingTimeInterval(focused)
             envelope.session = session
-            try end(&envelope, locked: locked, reason: .expired, now: now)
+            try end(&envelope, locked: locked, reason: .expired, now: endedAt)
             return
         }
-        try end(&envelope, locked: locked, reason: .recoveryInterrupted, now: now)
+        try end(&envelope, locked: locked, reason: .recoveryInterrupted, now: endedAt)
     }
 
     // MARK: Everyday convergence

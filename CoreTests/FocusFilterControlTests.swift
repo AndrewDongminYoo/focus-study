@@ -743,6 +743,15 @@ final class FocusFilterControlTests: XCTestCase {
         // The open focused time at the cap: 192 h minus the 30 h of pauses and the cancelled wait.
         try assertEnded(world, .expired, length: ControlSession.maxIntervalLength - 30 * 3600 - shift, "capped waiting end")
     }
+    func testALateCappedCallbackRecordsNoTimeAfterTheCap() throws {
+        let world = FilterWorld(), engine = engine(world)
+        let session = try openStart(engine, world)
+        var paused = try storedSession(world); paused.pausedSeconds = 30 * 3600; paused.deadlineCredit = 30 * 3600; world.state.envelope.session = paused
+        let waiting = try engine.requestBreak(id: session.id, now: at(100))
+        let shift = try XCTUnwrap(waiting.waitEndsAt).addingTimeInterval(BreakTiming.standard.staleWaitGrace).timeIntervalSince(at(100))
+        try didEnd(engine, session, at: at(ControlSession.maxIntervalLength + 60), world: world)
+        try assertEnded(world, .expired, length: ControlSession.maxIntervalLength - 30 * 3600 - shift, "late capped end")
+    }
     func testAFailedReBlockSaveAtTheCapStillEndsTheSession() throws {
         // A break whose deadline is after the 192 h cap: the cap's `didEnd` re-blocks, the save of `breakOver` fails, and the end still lifts the shield.
         let world = FilterWorld(), engine = engine(world)
@@ -789,7 +798,9 @@ final class FocusFilterControlTests: XCTestCase {
         let world = FilterWorld(), engine = engine(world)
         let session = try openStart(engine, world)
         _ = try engine.requestBreak(id: session.id, now: at(100)); try world.saveCopy(session.id)
+        let registrations = world.log.filter { $0 == "focus.register" }.count
         try didEnd(engine, session, at: at(105), world: world)
+        XCTAssertEqual(world.log.filter { $0 == "focus.register" }.count, registrations, "no registration inside its own end")
         let ended = try storedSession(world)
         XCTAssertEqual(ended.phase, .terminal); XCTAssertEqual(ended.reason, .recoveryInterrupted); XCTAssertFalse(world.state.focusShield)
     }
@@ -847,8 +858,10 @@ final class FocusFilterControlTests: XCTestCase {
         for snapshot in world.snapshots where snapshot.envelope.session.map({ SessionControl.isRunning($0.phase) }) == true {
             XCTAssertNotNil(snapshot.envelope.filterActivation, "a running session is never saved with the marker cleared")
         }
-        let ending = try XCTUnwrap(world.saved.first { $0.session?.phase == .ending })
-        XCTAssertNil(ending.filterActivation)
+        let endingIndex = try XCTUnwrap(world.saved.firstIndex { $0.session?.phase == .ending })
+        let cancelled = try XCTUnwrap(world.saved[..<endingIndex].last { $0.session?.phase == .active }, "the stale-wait cancel saved `active` first")
+        XCTAssertEqual(cancelled.filterActivation, session.activation)
+        XCTAssertNil(world.saved[endingIndex].filterActivation)
         XCTAssertNil(world.state.envelope.filterActivation)
     }
     func testStartupRecoveryOfAnOpenSessionPastAChunkEndCountsTheFocusedTime() throws {
