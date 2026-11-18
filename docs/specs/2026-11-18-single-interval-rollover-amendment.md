@@ -178,3 +178,8 @@ The bound end itself (one week) is not run on a device; host tests cover it.
 
 - Where the catch-up lives (`ControlSession` or `SessionControl`) and how `activitySnapshot` returns the open value.
 - How a section knows that it runs inside its own end (the callback's activity name and kind are already passed to `handleCallback`).
+
+## Implementation reconciliation: 2026-11-18
+
+- [Readers](#the-catch-up), the row `StartupRecovery.endCurrent`: an open session passes `.earlyExit` to `finish` without reading a timed end, so it always takes `finish`'s open rule; that rule checks the registration, the deadline and the base length, and a lost bound end ends as `.recoveryInterrupted`, not as a timed `.expired` (decision 17).
+- Decision 9 also covers the reconcile inside the focus activity's own end: a failed save there, such as the re-block of a break whose deadline is after the 192 h cap, does not skip the end of decision 12.

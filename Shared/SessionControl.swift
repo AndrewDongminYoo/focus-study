@@ -213,10 +213,16 @@ final class SessionControl {
             // A late callback of an earlier break or an earlier session cannot re-block, clear or end this one.
             guard isFocus || isCurrentBreak else { return }
             // An early re-block is the safe direction for the 5-minute limit, so the warning does not check `breakEndsAt`.
-            try reconcile(&envelope, locked: locked, now: now, authorized: authorized, clockChanged: false, reBlockEarly: isCurrentBreak && kind == .willEndWarning)
+            // In its own end a failed save of the reconcile, such as a re-block at the 192 h cap, must not skip the end below (amendment, decision 9).
+            var reconcileError: Error?
+            do { try reconcile(&envelope, locked: locked, now: now, authorized: authorized, clockChanged: false, reBlockEarly: isCurrentBreak && kind == .willEndWarning) }
+            catch { if !ownEnd { throw error }; reconcileError = error }
             // Callback with nothing due: the registered interval has ended, and the system deletes it after this callback, so a session
             // that is still running has no callback at its next change and ends (2026-11-18 single-interval amendment, decision 12).
-            guard ownEnd, let after = envelope.session, after.id == session.id, after.phase != .ending, after.phase != .terminal else { return }
+            guard ownEnd, let after = envelope.session, after.id == session.id, after.phase != .ending, after.phase != .terminal else {
+                if let reconcileError { throw reconcileError }
+                return
+            }
             try endWithoutCallback(&envelope, locked: locked, now: now)
         }
     }

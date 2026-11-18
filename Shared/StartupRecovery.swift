@@ -8,8 +8,11 @@ final class StartupRecovery {
         try loadStorage()
     }
     func endCurrent(now: Date) throws {
-        // The pure catch-up first, so that an open session past a chunk end has no stale timed end (2026-11-18 single-interval amendment, decision 9).
-        guard let current = try engine.snapshot().caughtUp(at: now, timing: engine.timing).session, current.phase != .terminal else { return }
-        try engine.finish(id: current.id, reason: current.reason ?? current.timedEnd(at: now, timing: engine.timing) ?? .earlyExit, now: now, endedAt: current.observedAt)
+        let envelope = try engine.snapshot()
+        guard let current = envelope.session, current.phase != .terminal else { return }
+        // An open session takes `finish`'s open rule, which checks the registration, the deadline and the base length; a stale chunk end or a lost
+        // bound end is never a timed `.expired` here (2026-11-18 single-interval amendment, decisions 9 and 17).
+        let timed = envelope.sessionIsOpen ? nil : current.timedEnd(at: now, timing: engine.timing)
+        try engine.finish(id: current.id, reason: current.reason ?? timed ?? .earlyExit, now: now, endedAt: current.observedAt)
     }
 }

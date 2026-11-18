@@ -653,7 +653,9 @@ final class FocusFilterControlTests: XCTestCase {
     /// The Monitor's `intervalDidEnd`. As on the device (2026-11-18), the system deletes the one-shot interval after a callback at or after its end,
     /// also when the section registered it again inside the callback.
     private func didEnd(_ engine: SessionControl, _ session: ControlSession, at now: Date, world: FilterWorld? = nil) throws {
-        defer { if let world, let end = world.state.focus[session.id], end <= now { world.state.focus[session.id] = nil } }
+        // Decided at entry: a registration made inside the callback is deleted with the interval that ended.
+        let ended = world.flatMap { $0.state.focus[session.id] }.map { $0 <= now } ?? false
+        defer { if ended, let world { world.state.focus[session.id] = nil } }
         try engine.handleCallback(activityName: session.activityName, kind: .didEnd, now: now, authorized: .approved)
     }
     private var boundLength: TimeInterval { (ControlSession.maxLength / 1500).rounded(.down) * 1500 }
@@ -733,13 +735,36 @@ final class FocusFilterControlTests: XCTestCase {
         let world = FilterWorld(), engine = engine(world)
         let session = try openStart(engine, world)
         var paused = try storedSession(world); paused.pausedSeconds = 30 * 3600; paused.deadlineCredit = 30 * 3600; world.state.envelope.session = paused
-        _ = try engine.requestBreak(id: session.id, now: at(100))
+        let waiting = try engine.requestBreak(id: session.id, now: at(100))
+        let shift = try XCTUnwrap(waiting.waitEndsAt).addingTimeInterval(BreakTiming.standard.staleWaitGrace).timeIntervalSince(at(100))
         let end = try XCTUnwrap(world.state.focus[session.id])
         XCTAssertEqual(end, at(ControlSession.maxIntervalLength))
         try didEnd(engine, session, at: end, world: world)
-        let ended = try storedSession(world)
-        XCTAssertEqual(ended.reason, .expired); XCTAssertLessThan(ended.length, boundLength); XCTAssertTrue(ended.hasValidLength)
+        // The open focused time at the cap: 192 h minus the 30 h of pauses and the cancelled wait.
+        try assertEnded(world, .expired, length: ControlSession.maxIntervalLength - 30 * 3600 - shift, "capped waiting end")
+    }
+    func testAFailedReBlockSaveAtTheCapStillEndsTheSession() throws {
+        // A break whose deadline is after the 192 h cap: the cap's `didEnd` re-blocks, the save of `breakOver` fails, and the end still lifts the shield.
+        let world = FilterWorld(), engine = engine(world)
+        let session = try openStart(engine, world)
+        // A session near its bound with 30 h of pauses, so the break deadline falls after the cap.
+        var paused = try storedSession(world); paused.pausedSeconds = 30 * 3600; paused.deadlineCredit = 30 * 3600
+        paused.expiresAt = t0.addingTimeInterval(400 * 1500); world.state.envelope.session = paused
+        let waiting = try engine.requestBreak(id: session.id, now: at(100))
+        try engine.startBreak(id: session.id, now: try XCTUnwrap(waiting.waitEndsAt), saveSelection: { try world.saveCopy(session.id) })
+        let end = try XCTUnwrap(world.state.focus[session.id])
+        XCTAssertEqual(end, at(ControlSession.maxIntervalLength))
+        world.throwAtEffect = world.effects
+        try? didEnd(engine, session, at: end, world: world)
         XCTAssertFalse(world.state.focusShield)
+        XCTAssertEqual(world.state.envelope.session?.phase, .terminal)
+    }
+    func testStartupRecoveryOfALostBoundEndIsNotCounted() throws {
+        let world = FilterWorld(), engine = engine(world)
+        let session = try openStart(engine, world)
+        world.state.focus[session.id] = nil
+        try StartupRecovery(engine: engine).endCurrent(now: at(ControlSession.maxLength + 60))
+        XCTAssertEqual(try storedSession(world).reason, .recoveryInterrupted)
     }
     func testAFiftyMinuteBaseRecordsTheBoundLengthOnTimeAndLate() throws {
         // Decision 17 with a base that does not divide one week.
