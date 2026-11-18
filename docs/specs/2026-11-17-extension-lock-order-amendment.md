@@ -88,3 +88,7 @@ The third row is the cost of deferring the stop: a process exit between the comm
 - Host tests: an extension section never calls a stop inside the lock and makes every recorded stop after it, in order, also when the section threw; a recorded stop reads as not registered inside the section; the first registration of an extension start begins at the section time plus 5 s and keeps its end; a rollover in an extension section, also a late catch-up 20 minutes after a missed rollover, keeps the start at `startedAt`, so its interval stays at least 15 minutes and the session keeps running; an extension section changes no everyday activity.
 - The separate-process race check: an extension end whose deferred stop runs while a Monitor-like callback waits for the lock, and the callback then lifts the shield.
 - An unsigned device Release build, and the device steps above.
+
+## Single-interval reconciliation: 2026-11-18
+
+Decision 3 stays for every later registration of an extension session, but a rollover no longer makes one: an open session registers one interval to the bound end, and a rollover only advances the stored session ([single-interval amendment](2026-11-18-single-interval-rollover-amendment.md), decision 8).

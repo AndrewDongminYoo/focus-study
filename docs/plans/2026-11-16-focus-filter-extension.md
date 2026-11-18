@@ -136,3 +136,9 @@
 ## After the plan
 
 The device steps of spec [Physical-device verification](../specs/2026-11-16-focus-filter-extension-design.md#physical-device-verification) run on the daily iPhone after a signed install, which needs its own announcement and approval. #152 closes when a device run shows a session that starts and ends with the app not running.
+
+## Single-interval reconciliation: 2026-11-18
+
+The steps above stay as approved and executed; the [single-interval amendment](../specs/2026-11-18-single-interval-rollover-amendment.md) and the code that implements it are the authority for the rollover.
+The device run of 2026-11-18 showed that a focus activity registered again inside its own `intervalDidEnd` is deleted after the callback, so the rollover that Task 2 Step 2 registered (`min(focusEnd, deadline)`) lost its interval.
+An open session now registers one interval to the bound end, a rollover only advances the stored `expiresAt` (`SessionControl.catchUp`, `ControlSession.caughtUp`), and a rollover registration failure no longer exists; `CoreTests/FocusFilterControlTests.swift` holds the replacing tests.

@@ -266,3 +266,13 @@ On the iPhone 16 Pro with the signed Debug build, after the signing approval:
 - The file layout of the new target in `project.yml` and `Package.swift`, and how the app and the extension share the handler.
 - The Darwin notification mechanism and its name, if the given name collides.
 - The copy of the count-up timer line, with short labels (subject to the visual approval gate).
+
+## Single-interval reconciliation: 2026-11-18
+
+The [single-interval amendment](2026-11-18-single-interval-rollover-amendment.md) and the code that implements it are the authority for the rollover; the lines below stay as the decisions of 2026-11-16 and do not describe the current behavior.
+
+- Decision 1 ("registers the new end"), decision 3 ("One long interval for the whole Focus was rejected") and [Rollover](#rollover) steps 3 to 5: an open session registers one focus interval to the bound end, and a rollover only advances the stored `expiresAt`, in the cleanup of every section and once more after a stale-wait cancel (amendment decisions 1, 2, 5, 9 and 10).
+- Decisions 5 and 8, the cap of the open focused time: the bound length, the largest whole multiple of the base length within one week (amendment decision 17).
+- [Side artifacts](#side-artifacts), "A rollover overwrites the focus activity": a rollover registers nothing.
+- [Filter end](#filter-end-focus-off): the save of `ending` carries the cleared marker; earlier saves of the section keep it (amendment decision 16).
+- [Gaps between steps](#gaps-between-steps), the two rollover rows, and [One-shot calls](#one-shot-calls-and-their-recovery), the row "Focus activity `didEnd`": the amendment's tables.

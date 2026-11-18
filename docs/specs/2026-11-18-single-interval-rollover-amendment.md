@@ -1,7 +1,7 @@
 # Amendment: one focus interval per open session, and a rollover that only changes the stored session
 
 Date: 2026-11-18.
-Status: design for approval. Issue #152, after the rollover device run of 2026-11-18.
+Status: implemented, not yet run on a device. Issue #152, after the rollover device run of 2026-11-18.
 This document amends the [Focus filter extension design](2026-11-16-focus-filter-extension-design.md) (the "extension design"), the [M2 design](2026-11-01-m2-break-pass-design.md), the [lock-order amendment](2026-11-17-extension-lock-order-amendment.md) and the [Live Activity decision](2026-11-06-live-activity-decision.md), only where it says so; where they differ, this document is the newer decision.
 
 ## Problem

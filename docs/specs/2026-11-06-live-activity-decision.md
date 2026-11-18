@@ -105,3 +105,8 @@ The original adoption PR #75 changed documentation only; implementation #74 requ
 ## Focus filter extension reconciliation: 2026-11-16
 
 A Focus filter session past its base length has the phase `openFocus`: the activity counts up from `focusStart` and shows no planned time of day, because a rollover is not a planned end ([Focus filter extension design](2026-11-16-focus-filter-extension-design.md), decision 25). Every other row of [State and time projection](#state-and-time-projection) is unchanged. A session that the extension starts has no activity until the app comes to the foreground.
+
+## Single-interval reconciliation: 2026-11-18
+
+No callback runs at the base length or at a chunk end of an open session any more ([single-interval amendment](2026-11-18-single-interval-rollover-amendment.md), decisions 13 and 14).
+The projection applies the stored-only catch-up itself, the target of `openFocus` is the registered end, never a chunk end, and an open session's `focus` card that is stale or past its base end shows the `openFocus` count-up instead of asking for a confirmation; a target that is the deadline keeps the confirmation.
