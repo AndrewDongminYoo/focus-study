@@ -611,6 +611,26 @@ With the app swiped away, the extension ran Focus on at 11:42:22, and the Monito
 So a re-registration before the end keeps the interval, but the agent delivers no second warning for a schedule registered again under the same name. `[UNCERTAIN]` Why; the agent reused the same budget object (`p361044`) for both schedules.
 A rollover that registers the same name again cannot be repeated on a device, so the rollover needs a design without periodic re-registration (#152).
 
+## Focus filter extension after the single-interval amendment: 2026-11-19 (#152)
+
+The device steps of the [single-interval amendment](../specs/2026-11-18-single-interval-rollover-amendment.md#physical-device-verification), with the real base length of 25 minutes.
+On the iPhone 16 Pro with iOS 27.0.1, a signed Debug build of `9d685f5` (#176) was installed over the probe build with `devicectl device install app` at 00:48:19, with the existing development profiles and with no session open; the results come from one `log collect` archive (00:10 to 01:20) and from what was reported on screen.
+A first Focus on at 00:49:52 ran in the extension, and a Focus off at 00:51:13 ran in the app, which was open; the run below started with the next Focus on.
+
+| Time         | Event                                                                                                                                                                     |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 00:51:20     | With the app swiped away, the extension ran Focus on; the selected apps were blocked                                                                                      |
+| 00:51:27.786 | `UsageTrackingAgent` delivered `did start` for `focus.9B4C2B51-…`, the one interval of the session, 5 s after the call plus about 2 s                                     |
+| 01:16:20     | The base length was reached: no callback came, the shield stayed, and the Live Activity card showed "집중 모드를 끌 때까지" with the count-up instead of the confirmation |
+| 01:17:58     | A break request in the app overwrote the interval with the `waiting` end (`did end` and `did start` of the replaced schedule)                                             |
+| 01:18:13     | The break started: `break.1` `did start`, and the interval was overwritten with the deadline                                                                              |
+| 01:19:18     | "다시 집중하기" ended the break early: `break.1` `did end`, and the interval was overwritten with the bound end again; the session continued                              |
+| 01:19:34     | The extension ran Focus off; the deferred stop delivered `did end` at 01:19:34.751, and the block lifted                                                                  |
+
+The session ended as completed, and history showed it with its focused time; the archive holds no `Deleting budget for one-shot activity` line for the session.
+So the interval registered at the start kept its budget through the first chunk end and through three overwrites from the app, which is the point where the rollover of #163 lost its interval on 2026-11-18.
+Not run: the second chunk end at 50 minutes, where the code path is the same as at the first (no callback and no registration), and the bound end of about one week, which the host tests cover.
+
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 
 이슈 #17의 검토 결과다.
