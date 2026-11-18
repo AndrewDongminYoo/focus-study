@@ -54,11 +54,14 @@ final class SessionControlTests: XCTestCase {
         XCTAssertThrowsError(try engine.start(now: now, authorized: { .approved }, apply: {}, matches: { true }))
         XCTAssertEqual(store.envelope.session?.id, a.id); XCTAssertTrue(shield.applied)
     }
-    func testEarlyCallbackDoesNotEndActiveSession() throws {
+    func testEarlyFocusEndCallbackEndsTheSessionWhoseIntervalEnded() throws {
+        // The system deletes the interval after its `didEnd`, so a session with nothing due has no later callback
+        // (2026-11-18 single-interval amendment, decision 12).
         let (engine, store, _, shield) = fixture()
         let a = try engine.start(now: now, authorized: { .approved }, apply: { shield.apply() }, matches: { true })
         try engine.handleCallback(activityName: a.activityName, kind: .didEnd, now: now.addingTimeInterval(1499), authorized: .approved)
-        XCTAssertEqual(store.envelope.session?.phase, .active); XCTAssertTrue(shield.applied)
+        XCTAssertEqual(store.envelope.session?.phase, .terminal); XCTAssertEqual(store.envelope.session?.reason, .recoveryInterrupted)
+        XCTAssertFalse(shield.applied)
     }
     func testExpiryClearsOnlyOwnMonitoringAndPreservesObservationTime() throws {
         let (engine, store, monitor, shield) = fixture()

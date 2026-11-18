@@ -17,6 +17,23 @@ final class FocusActivityTests: XCTestCase {
         XCTAssertTrue(app.staticTexts.matching(identifier: "activityStale").firstMatch.exists)
         XCTAssertFalse(app.staticTexts.matching(identifier: "activityCountdown").firstMatch.exists)
     }
+    /// No callback runs at the base length of an open session, so its stale card counts up instead of asking for a confirmation
+    /// (2026-11-18 single-interval amendment, decision 14).
+    func testStaleOpenSessionPreviewCountsUp() {
+        for (name, extra) in [("activity-open-stale", [String]()),
+                              ("activity-open-stale-dark", ["-UIUserInterfaceStyle", "dark"]),
+                              ("activity-open-stale-largest-text", ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])] {
+            let app = XCUIApplication()
+            app.launchArguments = ["--ui-testing", "approved", "--selected", "--activity-preview", "open-stale"] + extra
+            app.launch()
+            XCTAssertTrue(app.staticTexts["activityPreviewReady"].waitForExistence(timeout: 10), name)
+            XCTAssertTrue(app.staticTexts.matching(identifier: "activityCountUp").firstMatch.exists, name)
+            XCTAssertFalse(app.staticTexts.matching(identifier: "activityStale").firstMatch.exists, name)
+            XCTAssertTrue(app.staticTexts["집중 중"].exists, name)
+            capture(app, name: name)
+            app.terminate()
+        }
+    }
     func testCompactPreviewDistinguishesFocusAndBreakPlans() {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing", "approved", "--selected", "--activity-preview", "focus"]

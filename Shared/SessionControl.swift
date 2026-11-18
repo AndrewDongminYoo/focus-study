@@ -14,8 +14,11 @@ final class SessionControl {
     let timing: BreakTiming
     /// The wall clock of the everyday layer. `autoupdatingCurrent` follows a time zone change in a long-lived app engine.
     let calendar: Calendar
-    /// Counts focus activity registrations, so that a callback section knows whether it already registered one.
-    private var focusRegistrations = 0
+    /// The focus activity whose `intervalDidEnd` runs the current section; a registration of that activity there does not survive the callback
+    /// (2026-11-18 single-interval amendment, decision 12).
+    private var ownEndActivity: String?
+    /// Set by the Focus off section: `end` clears the marker in its save of `ending` (2026-11-18 single-interval amendment, decision 16).
+    private var clearsMarkerOnEnd = false
     /// `nil` in the App Intents extension, which never calls a ManagedSettings store (2026-11-16 shield amendment, decision 1).
     private let applyFocusSelection: (() -> Bool)?
     private var writesShields: Bool { applyFocusSelection != nil }
@@ -91,8 +94,10 @@ final class SessionControl {
             if let calledAt { envelope.filterCallAt = calledAt }
             // Openness is decided before the marker is cleared and kept for the rest of the section (2026-11-16 extension design, "Filter end").
             let wasOpen = envelope.sessionIsOpen
-            // Every later save of this section writes the cleared marker.
-            envelope.filterActivation = nil
+            // Saves before the save of `ending` keep the stored marker, so a process exit there is a lost off call that the activation check repairs;
+            // the save of `ending`, or the save at the end of this section, carries the cleared marker (2026-11-18 single-interval amendment, decision 16).
+            clearsMarkerOnEnd = true
+            defer { clearsMarkerOnEnd = false }
             if caught == nil {
                 do { try reconcile(&envelope, locked: locked, now: now, authorized: authorized, clockChanged: false, finalizingOpen: wasOpen) } catch { caught = error }
             }
@@ -136,7 +141,16 @@ final class SessionControl {
     }
     func snapshot() throws -> ControlEnvelope { try holding { try read($0) } }
     /// Optional display reads never invoke recovery, even when metadata is unavailable.
-    func activitySnapshot() throws -> ControlSession? { try store.withExclusiveAccess { try $0.load().session } }
+    /// The display copy keeps `activation` only while the session is open, so the projection reads the envelope's open value from it
+    /// (2026-11-18 single-interval amendment, decision 13).
+    func activitySnapshot() throws -> ControlSession? {
+        try store.withExclusiveAccess { locked in
+            let envelope = try locked.load()
+            guard var session = envelope.session else { return nil }
+            if !envelope.sessionIsOpen { session.activation = nil }
+            return session
+        }
+    }
     /// `now` is the wall clock of the section and of its everyday convergence; `endedAt`, when given, is the recorded end time of the session.
     func finish(id: UUID, reason: EndReason, now: Date, endedAt: Date? = nil) throws {
         try section(now: now) { locked in
@@ -178,9 +192,16 @@ final class SessionControl {
         // A section that `intervalDidStart(for:)` started never registers an everyday activity, so a registration cannot loop through its own callback.
         try section(now: now, access: authorized, mayRegister: kind != .didStart, lockTimeout: lockTimeout) { locked in
             var envelope = try read(locked)
-            let registrationsBefore = focusRegistrations
+            let stored = envelope.session
+            let ownEnd = kind == .didEnd && stored.map { activityName == $0.activityName } == true
+            if ownEnd { ownEndActivity = activityName }
+            defer { ownEndActivity = nil }
+            // A late own end of an open session decides at its registered end, so time after a capped end is never caught up or counted
+            // (amendment, "Bounds"). Every other callback keeps its arrival time as the observed time, and the everyday convergence keeps the wall clock.
+            let decidedAt = ownEnd && envelope.sessionIsOpen ? min(now, stored.flatMap { focusActivityEnd($0, open: true) } ?? now) : now
             // The cleanup depends only on the envelope and the time, and an orphaned break activity is often the only caller.
-            try cleanup(&envelope, locked: locked, now: now)
+            // In the focus activity's own end no later callback comes, so a failed cleanup save does not stop the section (amendment, decision 9).
+            do { try cleanup(&envelope, locked: locked, now: decidedAt) } catch { if !ownEnd { throw error } }
             guard let session = envelope.session else { return }
             if activityName.hasPrefix(ActivityNames.everydayPrefix) {
                 // An everyday edge reaches the M2 reconcile only in a late break, where the focus shield is already off.
@@ -195,11 +216,17 @@ final class SessionControl {
             // A late callback of an earlier break or an earlier session cannot re-block, clear or end this one.
             guard isFocus || isCurrentBreak else { return }
             // An early re-block is the safe direction for the 5-minute limit, so the warning does not check `breakEndsAt`.
-            try reconcile(&envelope, locked: locked, now: now, authorized: authorized, clockChanged: false, reBlockEarly: isCurrentBreak && kind == .willEndWarning)
-            // Callback with nothing due: a process exit between an overwrite and its save left an end of another phase registered.
-            guard isFocus, kind == .didEnd, focusRegistrations == registrationsBefore,
-                  let after = envelope.session, after.id == session.id, after.phase != .ending, after.phase != .terminal else { return }
-            try registerStoredEnd(&envelope, locked: locked, now: now)
+            // In its own end a failed save of the reconcile, such as a re-block at the 192 h cap, must not skip the end below (amendment, decision 9).
+            var reconcileError: Error?
+            do { try reconcile(&envelope, locked: locked, now: decidedAt, authorized: authorized, clockChanged: false, reBlockEarly: isCurrentBreak && kind == .willEndWarning) }
+            catch { if !ownEnd { throw error }; reconcileError = error }
+            // Callback with nothing due: the registered interval has ended, and the system deletes it after this callback, so a session
+            // that is still running has no callback at its next change and ends (2026-11-18 single-interval amendment, decision 12).
+            guard ownEnd, let after = envelope.session, after.id == session.id, after.phase != .ending, after.phase != .terminal else {
+                if let reconcileError { throw reconcileError }
+                return
+            }
+            try endWithoutCallback(&envelope, locked: locked, now: decidedAt)
         }
     }
     /// A Monitor callback is often the only trigger of its timed change, so a lock timeout retries with a fresh time before the callback returns.
@@ -274,7 +301,7 @@ final class SessionControl {
                 session.breaksTaken = index
                 session.deadlineCredit = (session.deadlineCredit ?? 0) + max(0, now.timeIntervalSince(pausedAt)) + timing.breakLength
                 session.breakEndsAt = now.addingTimeInterval(timing.breakLength); session.waitEndsAt = nil; session.phase = .onBreak
-                try registerFocus(session, end: session.deadline(timing: timing))
+                if let end = focusActivityEnd(session, open: envelope.sessionIsOpen) { _ = try registerFocus(session, end: end, now: now) }
                 var updated = envelope; updated.session = session
                 try locked.save(updated); envelope = updated
             } catch {
@@ -425,7 +452,9 @@ final class SessionControl {
             // In the extension, the interval begins after the section has released the lock, so `startMonitoring` does not wait for the Monitor's callback;
             // `startedAt` stays the call time (2026-11-17 lock-order amendment, decision 1). Later registrations of the session keep `startedAt`.
             let intervalStart = writesShields ? session.startedAt : now.addingTimeInterval(Self.extensionStartDelay)
-            try monitoring.register(id: session.id, start: intervalStart, end: session.expiresAt)
+            // An open session registers its one interval to the bound end (2026-11-18 single-interval amendment, decisions 1 and 8).
+            let intervalEnd = envelope.sessionIsOpen ? session.openActiveEnd(timing: timing) : session.expiresAt
+            try monitoring.register(id: session.id, start: intervalStart, end: intervalEnd)
             guard monitoring.isRegistered(id: session.id), authorized() == .approved else { throw ControlIssue.verificationFailed }
             if writesShields {
                 apply()
@@ -460,6 +489,17 @@ final class SessionControl {
         }
         // The copy goes last, because in `waiting` it is the only sign that the end must be registered again.
         breakSelection.removeAll(except: allowed?.id)
+        try catchUp(&envelope, locked: locked, now: now)
+    }
+    /// The stored-only rollover of an open session (2026-11-18 single-interval amendment, decisions 9 and 10). It registers nothing.
+    /// The envelope changes before the save, so a section that continues after a failed save works on the caught-up session.
+    private func catchUp(_ envelope: inout ControlEnvelope, locked: LockedControl, now: Date) throws {
+        let next = envelope.caughtUp(at: now, timing: timing)
+        guard next.session != envelope.session else { return }
+        envelope = next
+        do { try locked.save(envelope) }
+        // In the focus activity's own end no later callback comes, so the section continues in memory (amendment, decision 9).
+        catch { if ownEndActivity == nil { throw error } }
     }
     /// `finalizingOpen`: the Focus-off section of a session that was open; it neither rolls over nor ends with the timed `.expired`, and its own end follows.
     private func reconcile(_ envelope: inout ControlEnvelope, locked: LockedControl, now: Date, authorized: AccessState, clockChanged: Bool, reBlockEarly: Bool = false,
@@ -477,8 +517,10 @@ final class SessionControl {
         if s.phase == .waiting, let waitEndsAt = s.waitEndsAt, now >= waitEndsAt.addingTimeInterval(timing.staleWaitGrace) {
             try closeWait(&envelope, locked: locked, now: now)
         }
-        guard let current = envelope.session, current.phase != .waiting else { return }
-        if open, !finalizingOpen, try rollOver(&envelope, locked: locked, now: now) { return }
+        guard envelope.session.map({ $0.phase != .waiting }) == true else { return }
+        // A stale-wait cancel can run long after the wait and return an open session to `active` with a focus end of an old chunk (amendment, decision 10).
+        if open, !finalizingOpen { try catchUp(&envelope, locked: locked, now: now) }
+        guard let current = envelope.session else { return }
         if let reason = current.timedEnd(at: now, timing: timing), !(finalizingOpen && reason == .expired) {
             try end(&envelope, locked: locked, reason: reason, now: now); return
         }
@@ -528,6 +570,7 @@ final class SessionControl {
         // The store accepts a pending shield only in `active`.
         session.phase = .ending; session.shieldPending = nil
         envelope.session = session
+        if clearsMarkerOnEnd { envelope.filterActivation = nil }
         // A disk failure must not prevent releasing our own restrictions.
         var writeError: Error?
         do { try locked.save(envelope) } catch { writeError = error }
@@ -560,27 +603,6 @@ final class SessionControl {
     }
 
     static func isRunning(_ phase: SessionPhase) -> Bool { [.active, .waiting, .onBreak, .breakOver].contains(phase) }
-    /// The spec "Rollover": `true` when the section rolled the session over or ended it, so the reconcile stops.
-    private func rollOver(_ envelope: inout ControlEnvelope, locked: LockedControl, now: Date) throws -> Bool {
-        guard let before = envelope.session, before.phase == .active, let base = before.baseLength, base > 0,
-              now >= before.focusEnd, before.focusEnd <= before.deadline(timing: timing) else { return false }
-        var next = before
-        while next.focusEnd <= now, next.length + base <= ControlSession.maxLength { next.expiresAt = next.expiresAt.addingTimeInterval(base) }
-        // At the one-week bound the timed end of the reconcile ends the session as `.expired`, with the length that the catch-up reached.
-        guard next.focusEnd > now else { envelope.session = next; return false }
-        guard let end = focusActivityEnd(next) else { return false }
-        do { try registerFocus(next, end: end) }
-        catch {
-            // Step 5: without a callback at its next change the session does not keep its restrictions; the base length was reached, so it counts.
-            var ending = before; ending.expiresAt = before.startedAt.addingTimeInterval(before.openFocused(at: now))
-            envelope.session = ending
-            try self.end(&envelope, locked: locked, reason: .expired, now: now)
-            return true
-        }
-        var updated = envelope; updated.session = next
-        try locked.save(updated); envelope = updated
-        return true
-    }
     /// The end of a session that was open, with the reason order of decision 4: `denied`, the deadline, the base length reached, else the person's end.
     /// Every end of an open session converges here, so the missing-registration rule of the reconcile holds on each path:
     /// the read-failure cleanup cleared the shield and stopped monitoring, so that time is never counted.
@@ -599,41 +621,74 @@ final class SessionControl {
     // MARK: Focus activity end
 
     /// The next time the stored session must change without the app (spec "Monitoring activities").
-    private func focusActivityEnd(_ session: ControlSession) -> Date? {
+    /// An open session registers its focus interval once, to the bound end (2026-11-18 single-interval amendment, decision 5).
+    private func focusActivityEnd(_ session: ControlSession, open: Bool) -> Date? {
         let deadline = session.deadline(timing: timing)
+        let activeEnd = open ? session.openActiveEnd(timing: timing) : min(session.focusEnd, deadline)
+        let end: Date
         switch session.phase {
-        case .active: return min(session.focusEnd, deadline)
+        case .active: end = activeEnd
         case .waiting:
             guard let pausedAt = session.pausedAt, let waitEndsAt = session.waitEndsAt else { return nil }
             // The `active` end after a stale-wait cancel, which adds the same time to the pause and to the deadline.
-            return min(session.focusEnd, deadline).addingTimeInterval(max(0, waitEndsAt.addingTimeInterval(timing.staleWaitGrace).timeIntervalSince(pausedAt)))
-        case .onBreak, .breakOver: return deadline
+            end = activeEnd.addingTimeInterval(max(0, waitEndsAt.addingTimeInterval(timing.staleWaitGrace).timeIntervalSince(pausedAt)))
+        case .onBreak, .breakOver: end = deadline
         case .preparing, .ending, .terminal: return nil
         }
+        // Repeated wait cancels can grow the pauses without a bound, so an open session's end stays within the probed interval (amendment, "Bounds").
+        return open ? min(end, session.startedAt.addingTimeInterval(ControlSession.maxIntervalLength)) : end
     }
-    private func registerFocus(_ session: ControlSession, end: Date) throws {
+    private enum FocusRegistration { case made, skipped }
+    /// Inside its own end, a registration of the focus activity does not survive the callback (amendment, decision 12):
+    /// one whose end is not after `now` is skipped, because the same section ends the session at that end; any other counts as failed.
+    private func registerFocus(_ session: ControlSession, end: Date, now: Date) throws -> FocusRegistration {
+        if ownEndActivity == session.activityName {
+            guard end > now else { return .skipped }
+            throw ControlIssue.verificationFailed
+        }
         // The interval always starts at `startedAt`, so it is at least the focus length.
         try monitoring.register(id: session.id, start: session.startedAt, end: end)
-        focusRegistrations += 1
+        return .made
     }
     /// Registers the end that the stored phase needs. A session without a callback at its next change must not keep the restrictions on.
+    /// A restored end that is not after `now` ends the session (M2 step 2); this is not the skip of decision 12.
     private func registerStoredEnd(_ envelope: inout ControlEnvelope, locked: LockedControl, now: Date) throws {
-        guard let session = envelope.session, let end = focusActivityEnd(session) else { return }
-        if end > now, (try? registerFocus(session, end: end)) != nil { return }
-        try self.end(&envelope, locked: locked, reason: .recoveryInterrupted, now: now)
+        guard let session = envelope.session, let end = focusActivityEnd(session, open: envelope.sessionIsOpen) else { return }
+        if end > now, (try? registerFocus(session, end: end, now: now)) == .made { return }
+        if ownEndActivity != nil { try endWithoutCallback(&envelope, locked: locked, now: now) }
+        else { try self.end(&envelope, locked: locked, reason: .recoveryInterrupted, now: now) }
     }
     /// Transitions 1, 2 and 5 overwrite the focus activity end before they save.
     /// After a failure, the registered end must match the stored phase again, or the session ends.
+    /// After a skipped registration nothing was registered, so a failed save continues on the new session in memory (amendment, decision 12).
     private func overwriteAndSave(_ envelope: inout ControlEnvelope, to next: ControlSession, locked: LockedControl, now: Date) throws {
         var updated = envelope; updated.session = next
+        var registration: FocusRegistration?
         do {
-            if let end = focusActivityEnd(next) { try registerFocus(next, end: end) }
+            if let end = focusActivityEnd(next, open: updated.sessionIsOpen) { registration = try registerFocus(next, end: end, now: now) }
             try locked.save(updated)
             envelope = updated
         } catch {
+            if registration == .skipped { envelope = updated; return }
             try registerStoredEnd(&envelope, locked: locked, now: now)
             throw error
         }
+    }
+    /// The end of a session whose focus interval ended with the session still running (amendment, decision 12): an open session that reached
+    /// its base length counts, with the open focused time; every other session ends as `.recoveryInterrupted`.
+    /// The time is the registered end when the callback came late, so a late callback at the 192 h cap records no time after the cap.
+    private func endWithoutCallback(_ envelope: inout ControlEnvelope, locked: LockedControl, now: Date) throws {
+        guard var session = envelope.session else { return }
+        let open = envelope.sessionIsOpen
+        let endedAt = min(now, focusActivityEnd(session, open: open) ?? now)
+        let focused = session.openFocused(at: endedAt)
+        if open, let base = session.baseLength, focused >= base {
+            session.expiresAt = session.startedAt.addingTimeInterval(focused)
+            envelope.session = session
+            try end(&envelope, locked: locked, reason: .expired, now: endedAt)
+            return
+        }
+        try end(&envelope, locked: locked, reason: .recoveryInterrupted, now: endedAt)
     }
 
     // MARK: Everyday convergence

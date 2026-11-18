@@ -500,3 +500,10 @@ The [M4 design](2026-11-01-m4-focus-filter-design.md) and the code that implemen
 The line below stays as the M2 decision of 2026-11-01 and does not describe the current behavior.
 
 - [Session fields](#session-fields), the field table: `ControlSession` also has the optional `origin` (`manual` or `focusFilter`, missing = `manual`), set once in the save of `preparing`. `ControlEnvelope` also has the optional `filterActivation` (`UUID`), the Focus activation that the filter path has seen. Every lock section saves the envelope that it decoded, so both fields survive every M2 transition. The storage checks do not change.
+
+## Single-interval reconciliation: 2026-11-18
+
+The [single-interval amendment](2026-11-18-single-interval-rollover-amendment.md) and the code that implements it are the authority; the lines below stay as the M2 decisions of 2026-11-01 and do not describe the current behavior.
+
+- [Monitoring activities](#monitoring-activities): an open Focus filter session registers its focus activity to the bound end in `active` and `waiting` (amendment decision 5); the rows for every other session are unchanged.
+- [Callback with nothing due](#callback-with-nothing-due) and its table: a registration of a focus activity inside its own `intervalDidEnd(for:)` is deleted by the system after the callback (device run of 2026-11-18), so a focus `didEnd` that leaves the stored session running ends it, as `.recoveryInterrupted` or, for an open session past its base length, `.expired` (amendment decision 12). The `[UNCERTAIN]` about that call is answered: it does not throw, and the registration does not survive.

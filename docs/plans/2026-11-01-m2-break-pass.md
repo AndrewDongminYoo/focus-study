@@ -306,3 +306,8 @@ This task has no code test. Its failing check is a search for the text that it r
 - [ ] **Step 4: Add the device-matrix rows** for the M2 steps in the spec section [Physical-device verification](../specs/2026-11-01-m2-break-pass-design.md#physical-device-verification), all marked unverified. Add the README fixture argument and a ledger entry (what M2 changed, what stays unverified on a device).
 - [ ] **Step 5: Run** the two searches from Step 1 again, then `trunk check` on the changed files and the internal-link check. Expected: the first search prints nothing, the second prints the fixture argument, and the checks report no issues.
 - [ ] **Step 6: Commit** `docs: record M2 break pass and deadline`.
+
+## Single-interval reconciliation: 2026-11-18
+
+Acceptance item 10's repair of a process exit through [Callback with nothing due](../specs/2026-11-01-m2-break-pass-design.md#callback-with-nothing-due) is replaced: the system deletes a focus interval after its `intervalDidEnd`, also one registered again inside that callback, so a focus `didEnd` that leaves the session running now ends it ([single-interval amendment](../specs/2026-11-18-single-interval-rollover-amendment.md), decision 12).
+The tests `testResumeExitBeforeSaveEndsAtTheStaleEnd` and `testCancelWaitExitNearFocusEndEndsAtTheStaleEnd` in `CoreTests/BreakControlTests.swift` replace the two re-registration tests.

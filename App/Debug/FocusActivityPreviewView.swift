@@ -29,6 +29,9 @@ struct FocusActivityPreviewView: View {
         case "late":
             session = ControlSession(startedAt: now.addingTimeInterval(-2000)); session.phase = .breakOver
             session.pausedAt = now.addingTimeInterval(-800); session.breakEndsAt = now.addingTimeInterval(-605); session.deadlineCredit = 195
+        case "open-stale":
+            // An open Focus filter session before its base length, shown stale at the base end (2026-11-18 single-interval amendment, decision 14).
+            session.origin = .focusFilter; session.activation = UUID(); session.baseLength = 1500
         default: break
         }
         guard let projected = FocusActivityProjection.make(session: session, now: checkedAt, timing: .standard) else {
@@ -36,7 +39,7 @@ struct FocusActivityPreviewView: View {
         }
         _content = State(initialValue: projected.content)
     }
-    private var isStale: Bool { mode == "stale" || mode == "late" }
+    private var isStale: Bool { mode == "stale" || mode == "late" || mode == "open-stale" }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -49,12 +52,12 @@ struct FocusActivityPreviewView: View {
                     .background(.black, in: RoundedRectangle(cornerRadius: 20))
                 Text("Dynamic Island · 간결").font(.caption)
                 HStack {
-                    FocusActivityCompactLeading(content: content)
+                    FocusActivityCompactLeading(content: content, isStale: isStale)
                     Spacer()
                     FocusActivityCountdown(content: content, isStale: isStale, compact: true)
                 }.environment(\.colorScheme, .dark).padding().background(.black, in: Capsule())
                 Text("Dynamic Island · 최소").font(.caption)
-                Image(systemName: isStale ? "clock.badge.exclamationmark" : "timer").foregroundStyle(.white).padding()
+                Image(systemName: content.displayed(isStale: isStale).isStale ? "clock.badge.exclamationmark" : "timer").foregroundStyle(.white).padding()
                     .background(.black, in: Circle())
             }.padding()
         }.background(Color(uiColor: .systemGroupedBackground))

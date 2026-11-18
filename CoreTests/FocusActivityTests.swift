@@ -36,7 +36,20 @@ final class FocusActivityTests: XCTestCase {
         XCTAssertNil(content.focusEnd)
         // Before the base length the countdown of the focus phase stays.
         let early = try XCTUnwrap(FocusActivityProjection.make(session: value, now: Date(timeIntervalSince1970: 1000 + 600), timing: .standard)).content
-        XCTAssertEqual(early.phase, .focus); XCTAssertNil(early.focusStart)
+        // An open `.focus` carries the count-up start for its stale card (2026-11-18 single-interval amendment, decision 13).
+        XCTAssertEqual(early.phase, .focus); XCTAssertEqual(early.focusStart, Date(timeIntervalSince1970: 1100))
+        XCTAssertEqual(early.targetAt, early.focusEnd)
+        // After the base length the target is the registered end, never a chunk end.
+        XCTAssertEqual(content.targetAt, value.openActiveEnd(timing: .standard))
+    }
+    func testOpenSessionPastAChunkEndIsCaughtUpInTheProjection() throws {
+        var value = ControlSession(startedAt: Date(timeIntervalSince1970: 1000), length: 1800)
+        value.phase = .active; value.origin = .focusFilter; value.activation = UUID(); value.baseLength = 1800
+        let content = try XCTUnwrap(FocusActivityProjection.make(session: value, now: Date(timeIntervalSince1970: 1000 + 5000), timing: .standard)).content
+        XCTAssertEqual(content.phase, .openFocus); XCTAssertEqual(content.focusStart, Date(timeIntervalSince1970: 1000))
+        // Without the open value (the display copy clears `activation`), a stale chunk end is a timed end and nothing is projected.
+        value.activation = nil
+        XCTAssertNil(FocusActivityProjection.make(session: value, now: Date(timeIntervalSince1970: 1000 + 5000), timing: .standard))
     }
     func testBreakProjectionKeepsFocusFrozenAndUsesScheduledBreakBoundary() throws {
         var value = session(.onBreak)
