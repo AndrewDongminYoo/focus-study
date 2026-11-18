@@ -196,9 +196,12 @@ final class SessionControl {
             let ownEnd = kind == .didEnd && stored.map { activityName == $0.activityName } == true
             if ownEnd { ownEndActivity = activityName }
             defer { ownEndActivity = nil }
+            // A late own end of an open session decides at its registered end, so time after a capped end is never caught up or counted
+            // (amendment, "Bounds"). Every other callback keeps its arrival time as the observed time, and the everyday convergence keeps the wall clock.
+            let decidedAt = ownEnd && envelope.sessionIsOpen ? min(now, stored.flatMap { focusActivityEnd($0, open: true) } ?? now) : now
             // The cleanup depends only on the envelope and the time, and an orphaned break activity is often the only caller.
             // In the focus activity's own end no later callback comes, so a failed cleanup save does not stop the section (amendment, decision 9).
-            do { try cleanup(&envelope, locked: locked, now: now) } catch { if !ownEnd { throw error } }
+            do { try cleanup(&envelope, locked: locked, now: decidedAt) } catch { if !ownEnd { throw error } }
             guard let session = envelope.session else { return }
             if activityName.hasPrefix(ActivityNames.everydayPrefix) {
                 // An everyday edge reaches the M2 reconcile only in a late break, where the focus shield is already off.
@@ -215,7 +218,7 @@ final class SessionControl {
             // An early re-block is the safe direction for the 5-minute limit, so the warning does not check `breakEndsAt`.
             // In its own end a failed save of the reconcile, such as a re-block at the 192 h cap, must not skip the end below (amendment, decision 9).
             var reconcileError: Error?
-            do { try reconcile(&envelope, locked: locked, now: now, authorized: authorized, clockChanged: false, reBlockEarly: isCurrentBreak && kind == .willEndWarning) }
+            do { try reconcile(&envelope, locked: locked, now: decidedAt, authorized: authorized, clockChanged: false, reBlockEarly: isCurrentBreak && kind == .willEndWarning) }
             catch { if !ownEnd { throw error }; reconcileError = error }
             // Callback with nothing due: the registered interval has ended, and the system deletes it after this callback, so a session
             // that is still running has no callback at its next change and ends (2026-11-18 single-interval amendment, decision 12).
@@ -223,7 +226,7 @@ final class SessionControl {
                 if let reconcileError { throw reconcileError }
                 return
             }
-            try endWithoutCallback(&envelope, locked: locked, now: now)
+            try endWithoutCallback(&envelope, locked: locked, now: decidedAt)
         }
     }
     /// A Monitor callback is often the only trigger of its timed change, so a lock timeout retries with a fresh time before the callback returns.

@@ -744,13 +744,16 @@ final class FocusFilterControlTests: XCTestCase {
         try assertEnded(world, .expired, length: ControlSession.maxIntervalLength - 30 * 3600 - shift, "capped waiting end")
     }
     func testALateCappedCallbackRecordsNoTimeAfterTheCap() throws {
-        let world = FilterWorld(), engine = engine(world)
-        let session = try openStart(engine, world)
-        var paused = try storedSession(world); paused.pausedSeconds = 30 * 3600; paused.deadlineCredit = 30 * 3600; world.state.envelope.session = paused
-        let waiting = try engine.requestBreak(id: session.id, now: at(100))
-        let shift = try XCTUnwrap(waiting.waitEndsAt).addingTimeInterval(BreakTiming.standard.staleWaitGrace).timeIntervalSince(at(100))
-        try didEnd(engine, session, at: at(ControlSession.maxIntervalLength + 60), world: world)
-        try assertEnded(world, .expired, length: ControlSession.maxIntervalLength - 30 * 3600 - shift, "late capped end")
+        // 8 h late, the catch-up at the arrival time would pass the bound and end as a timed `.expired` with the bound length (PR #176 review).
+        for late: TimeInterval in [60, 8 * 3600] {
+            let world = FilterWorld(), engine = engine(world)
+            let session = try openStart(engine, world)
+            var paused = try storedSession(world); paused.pausedSeconds = 30 * 3600; paused.deadlineCredit = 30 * 3600; world.state.envelope.session = paused
+            let waiting = try engine.requestBreak(id: session.id, now: at(100))
+            let shift = try XCTUnwrap(waiting.waitEndsAt).addingTimeInterval(BreakTiming.standard.staleWaitGrace).timeIntervalSince(at(100))
+            try didEnd(engine, session, at: at(ControlSession.maxIntervalLength + late), world: world)
+            try assertEnded(world, .expired, length: ControlSession.maxIntervalLength - 30 * 3600 - shift, "capped end \(late) s late")
+        }
     }
     func testAFailedReBlockSaveAtTheCapStillEndsTheSession() throws {
         // A break whose deadline is after the 192 h cap: the cap's `didEnd` re-blocks, the save of `breakOver` fails, and the end still lifts the shield.
