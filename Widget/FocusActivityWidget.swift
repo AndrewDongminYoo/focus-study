@@ -14,11 +14,11 @@ struct FocusActivityWidget: Widget {
                     FocusActivityCard(content: context.state, isStale: context.isStale)
                 }
             } compactLeading: {
-                FocusActivityCompactLeading(content: context.state)
+                FocusActivityCompactLeading(content: context.state, isStale: context.isStale)
             } compactTrailing: {
                 FocusActivityCountdown(content: context.state, isStale: context.isStale, compact: true)
             } minimal: {
-                if context.isStale {
+                if context.state.displayed(isStale: context.isStale).isStale {
                     Image(systemName: "clock.badge.exclamationmark").accessibilityLabel("온:공에서 확인해 주세요")
                 } else {
                     Image(systemName: "timer").accessibilityLabel("온:공 예정 시간 · 앱에서 확인해 주세요")

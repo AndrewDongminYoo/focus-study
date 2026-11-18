@@ -19,6 +19,14 @@ extension FocusActivityContent {
         case .breakOver: return "복귀 마감"
         }
     }
+    /// No callback runs at the base length of an open session, so its `.focus` card that is stale or past its base end shows the count-up
+    /// instead of asking for a confirmation; a target that is the deadline keeps the confirmation (2026-11-18 single-interval amendment, decision 14).
+    func displayed(isStale: Bool, now: Date = Date()) -> (content: FocusActivityContent, isStale: Bool) {
+        guard phase == .focus, focusStart != nil, let focusEnd, focusEnd == targetAt, isStale || focusEnd <= now else { return (self, isStale) }
+        var shown = self
+        shown.phase = .openFocus; shown.targetAt = .distantFuture
+        return (shown, false)
+    }
 }
 
 /// Every presentation qualifies the stored phase as a plan. Even a delayed stale redraw
@@ -28,6 +36,7 @@ struct FocusActivityCountdown: View {
     let isStale: Bool
     var compact = false
     var body: some View {
+        let (content, isStale) = content.displayed(isStale: isStale)
         if isStale || content.targetAt == nil || (content.targetAt ?? .distantPast) <= Date() {
             Text(compact ? "확인" : "앱에서 확인해 주세요")
                 .font(compact ? .caption : .headline).accessibilityIdentifier("activityStale")
@@ -53,6 +62,7 @@ struct FocusActivityCard: View {
     let content: FocusActivityContent
     let isStale: Bool
     var body: some View {
+        let (content, isStale) = content.displayed(isStale: isStale)
         let needsConfirmation = isStale || content.targetAt == nil || (content.targetAt ?? .distantPast) <= Date()
         return VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
@@ -88,7 +98,8 @@ struct FocusActivityCard: View {
 
 struct FocusActivityCompactLeading: View {
     let content: FocusActivityContent
+    var isStale = false
     var body: some View {
-        Text(content.compactTitle).font(.caption2)
+        Text(content.displayed(isStale: isStale).content.compactTitle).font(.caption2)
     }
 }
