@@ -860,6 +860,15 @@ final class FocusFlowTests: XCTestCase {
         openFocusGuide(app)
         XCTAssertFalse(app.staticTexts["focusFilterRefusal"].exists)
     }
+    /// A Focus scheduled before the first unlock after a restart starts only after the unlock (#182).
+    func testFocusGuideNamesTheFirstUnlockDelay() {
+        let app = app()
+        openFocusGuide(app)
+        let row = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "처음 잠금을 풀기 전에 켜지면")).firstMatch
+        for _ in 0..<8 where !(row.exists && row.isHittable) { dragUp(app) }
+        XCTAssertTrue(row.isHittable, "the scheduled Focus row names the first-unlock delay")
+        captureReport(app, name: "focus-guide-scheduled-row")
+    }
     func testStoredRefusalShowsInTheGuide() {
         let app = app(extra: ["--focus-filter-refusal", "busy"])
         openFocusGuide(app)
