@@ -9,6 +9,44 @@ final class ScreenTimeAdapterTests: XCTestCase {
         XCTAssertEqual(ScreenTimeAccess.state(.notDetermined), .unknown, "not determined is not a revocation")
         if #available(iOS 26.4, *) { XCTAssertEqual(ScreenTimeAccess.state(.approvedWithDataAccess), .approved) }
     }
+    /// iOS 27 reads a denial as `.notDetermined`, so a declined request keeps the settings guidance until an approved or denied read (#38).
+    @MainActor func testADeclinedRequestKeepsItsUIValueWhileTheReadIsNotKnown() {
+        XCTAssertEqual(AuthorizationService.status(raw: .notDetermined, requested: true, declined: true), .declined)
+        XCTAssertEqual(AuthorizationService.status(raw: .notDetermined, requested: true, declined: false), .checking)
+        XCTAssertEqual(AuthorizationService.status(raw: .notDetermined, requested: false, declined: false), .notRequested)
+        XCTAssertEqual(AuthorizationService.status(raw: .approved, requested: true, declined: true), .approved)
+        XCTAssertEqual(AuthorizationService.status(raw: .denied, requested: true, declined: true), .denied)
+        XCTAssertTrue(AuthorizationService.isDecline(FamilyControlsError.authorizationCanceled))
+        XCTAssertFalse(AuthorizationService.isDecline(FamilyControlsError.networkError), "a network error is not the person's decline")
+        XCTAssertFalse(AuthorizationService.isDecline(CocoaError(.fileNoSuchFile)))
+    }
+    /// The service keeps `declined` through later reads of `.notDetermined`, and leaves it on an approved read or the next request (#38).
+    @MainActor func testTheServiceKeepsADeclineThroughLaterReads() async throws {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "ScreenTimeAdapterTests.decline"))
+        defaults.removePersistentDomain(forName: "ScreenTimeAdapterTests.decline")
+        defer { defaults.removePersistentDomain(forName: "ScreenTimeAdapterTests.decline") }
+        defaults.set(true, forKey: "individualAuthorizationRequested")
+        var raw = AuthorizationStatus.notDetermined
+        var next: Error? = FamilyControlsError.authorizationCanceled
+        let service = AuthorizationService(defaults: defaults, read: { raw }, request: { if let error = next { throw error } })
+        XCTAssertEqual(service.status, .checking)
+        await service.requestIndividual()
+        XCTAssertEqual(service.status, .declined)
+        service.refresh(); service.refresh()
+        XCTAssertEqual(service.status, .declined, "a later read of `.notDetermined` keeps the guidance")
+        XCTAssertEqual(service.accessState(), ScreenTimeAccess.current(), "the engine value is not the UI value")
+        // A re-check that throws another error is not a decline.
+        next = FamilyControlsError.networkError
+        await service.requestIndividual()
+        XCTAssertEqual(service.status, .checking)
+        next = FamilyControlsError.authorizationCanceled
+        await service.requestIndividual()
+        XCTAssertEqual(service.status, .declined)
+        raw = .approved; service.refresh()
+        XCTAssertEqual(service.status, .approved)
+        raw = .notDetermined; service.refresh()
+        XCTAssertEqual(service.status, .checking, "an approved read cleared the decline")
+    }
     func testReaderReadsOnTheMainQueueFromAnyThread() {
         XCTAssertEqual(ScreenTimeAccess.current(read: { XCTAssertTrue(Thread.isMainThread); return .denied }), .denied)
         let done = expectation(description: "background read")

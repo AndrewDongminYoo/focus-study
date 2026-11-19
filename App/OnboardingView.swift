@@ -46,7 +46,7 @@ struct OnboardingView: View {
         .onChange(of: scenePhase) { _, value in if value == .active { model.refresh() } }
         // Forward moves stay with the person; losing access moves back so the person is not left past the permission step.
         // `checking` is not a loss of access, so it keeps the step.
-        .onChange(of: model.access) { _, access in if (access == .denied || access == .notRequested) && step.rawValue > OnboardingStep.permission.rawValue { step = .permission } }
+        .onChange(of: model.access) { _, access in if (access == .denied || access == .declined || access == .notRequested) && step.rawValue > OnboardingStep.permission.rawValue { step = .permission } }
     }
     private var canAdvance: Bool {
         switch step {
@@ -73,10 +73,18 @@ struct OnboardingView: View {
                 Text("집중하는 동안 고른 앱을 제한하려면 권한을 허용해 주세요.").foregroundStyle(FocusTheme.Palette.secondaryText)
                 Button("권한 허용하기") { Task { await model.services.authorization.requestIndividual(); model.refresh() } }
                     .modifier(FocusPrimaryAction()).modifier(ProminentLabel()).accessibilityIdentifier("authorize")
-            case .denied:
+            case .denied, .declined:
+                // Both paths were checked on an iPhone with iOS 27 on 2026-11-19 (#38); "설정 열기" opens the first one.
                 Text("스크린 타임 권한이 꺼져 있어요").font(.title.weight(.bold))
-                Text("설정 앱에서 이 앱의 스크린 타임 권한을 켜면 이어서 시작할 수 있어요.").foregroundStyle(FocusTheme.Palette.secondaryText)
+                Text("설정 앱의 앱 목록에서 온:공을 찾아 스크린 타임을 켜 주세요.").foregroundStyle(FocusTheme.Palette.secondaryText)
+                Text("설정 앱의 스크린 타임에 있는 '스크린 타임 접근 권한이 있는 앱'에서도 켤 수 있어요.").font(.footnote).foregroundStyle(FocusTheme.Palette.secondaryText)
+                    .accessibilityIdentifier("settingsPath")
                 Link("설정 열기", destination: URL(string: UIApplication.openSettingsURLString)!).accessibilityIdentifier("settings")
+                if model.access == .declined {
+                    // The published value still reads `.notDetermined`, so only a request can tell that access is back on.
+                    Button("다시 확인하기") { Task { await model.services.authorization.requestIndividual(); model.refresh() } }
+                        .modifier(FocusSecondaryAction()).accessibilityIdentifier("authorize")
+                }
             }
         case .selection:
             Text("집중하는 동안 제한할 앱을 골라요").font(.title.weight(.bold))

@@ -9,14 +9,20 @@ import SwiftUI
 @MainActor @Observable final class FixtureAuthorization: AuthorizationProviding {
     var status: AccessStatus
     /// `checking` stays until a request: the fixture of a cold launch whose published value has not settled yet.
-    init(denied: Bool, notRequested: Bool = false, checking: Bool = false) { status = notRequested ? .notRequested : checking ? .checking : denied ? .denied : .approved }
-    func requestIndividual() async { status = .approved }
+    /// `declines`: the next request is declined, as the person's "Don't Allow" (#38).
+    private var declines: Bool
+    init(denied: Bool, notRequested: Bool = false, checking: Bool = false, declines: Bool = false) {
+        status = notRequested ? .notRequested : checking ? .checking : denied ? .denied : .approved; self.declines = declines
+    }
+    func requestIndividual() async {
+        if declines { declines = false; status = .declined } else { status = .approved }
+    }
     func refresh() {}
     func accessState() -> AccessState {
         switch status {
         case .approved: .approved
         case .denied: .denied
-        case .notRequested, .checking: .unknown
+        case .notRequested, .checking, .declined: .unknown
         }
     }
 }
@@ -180,7 +186,7 @@ extension FocusServices {
                                     // Fixtures start only manual sessions, which never have a pending shield.
                                     role: .appContainer(applyFocusSelection: { false }))
         let onboarding = arguments.contains("onboarding")
-        var services = FocusServices(authorization: FixtureAuthorization(denied: arguments.contains("denied"), notRequested: arguments.contains("not-requested") || onboarding, checking: arguments.contains("checking")), selection: FixtureSelection(selected: arguments.contains("--selected") && !onboarding), engine: engine, applySelection: { _ in }, matchesSelection: { _ in true }, isFixture: true)
+        var services = FocusServices(authorization: FixtureAuthorization(denied: arguments.contains("denied"), notRequested: arguments.contains("not-requested") || onboarding, checking: arguments.contains("checking"), declines: arguments.contains("declines")), selection: FixtureSelection(selected: arguments.contains("--selected") && !onboarding), engine: engine, applySelection: { _ in }, matchesSelection: { _ in true }, isFixture: true)
         services.saveBreakSelection = { _, id in breakSelection.copies.insert(id) }
         services.everydaySelection = { everyday.schedule == nil ? nil : everyday.selection }
         services.everydayContains = { everyday.contains($0) }

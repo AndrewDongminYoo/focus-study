@@ -88,12 +88,12 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
         if !services.settings.hasCompletedOnboarding {
             switch access {
             case .notRequested: return .onboarding(.intro)
-            case .denied, .checking: return .onboarding(.permission)
+            case .denied, .declined, .checking: return .onboarding(.permission)
             case .approved: return .onboarding(hasSelection ? .length : .selection)
             }
         }
         // `checking` is not a revocation: the timer screen shows its recovery start control.
-        if access == .denied || access == .notRequested { return .onboarding(.permission) }
+        if access == .denied || access == .declined || access == .notRequested { return .onboarding(.permission) }
         return hasSelection ? .timer : .onboarding(.selection)
     }
     convenience init(services: FocusServices, context: ModelContext) {
