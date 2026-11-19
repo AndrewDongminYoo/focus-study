@@ -17,6 +17,7 @@ codesigning
 com.apple.deviceactivity.monitor-extension
 com.apple.deviceactivityui.report-extension
 com.apple.widgetkit-extension
+dasd
 devicectl
 donminzzi
 donotdisturbd
