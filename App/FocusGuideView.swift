@@ -30,7 +30,7 @@ struct FocusGuideView: View {
             Section("알아 둘 점") {
                 FocusGuideRow(icon: "repeat", title: "켤 때마다 한 번 시작해요", detail: "켜 둔 채 집중이 끝나면 다음에 켤 때 다시 시작해요.")
                 FocusGuideRow(icon: "stop.circle", title: "끄면 집중 모드로 시작한 집중만 끝나요", detail: "집중 시작하기 버튼으로 시작한 집중은 그대로 이어져요.")
-                FocusGuideRow(icon: "calendar.badge.clock", title: "예약한 집중 모드도 똑같아요", detail: nil)
+                FocusGuideRow(icon: "calendar.badge.clock", title: "예약한 집중 모드도 똑같아요", detail: "iPhone을 다시 켠 뒤 처음 잠금을 풀기 전에 켜지면, 잠금을 풀고 잠시 뒤에 시작해요.")
                 FocusGuideRow(icon: "app.badge", title: "허용한 앱은 모든 알림을 보내요", detail: nil)
                 FocusGuideRow(icon: "exclamationmark.triangle", title: "긴급 알림은 iOS 설정을 따라요", detail: "재난 문자 같은 긴급 알림은 이 앱이 바꾸지 않아요.")
             }
