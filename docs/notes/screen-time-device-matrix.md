@@ -643,6 +643,31 @@ On the iPhone 16 Pro with iOS 27.0.1, a signed Debug build of `1bf7a11` (#178) w
 
 The guidance stays only in `declined`, which only `FamilyControlsError.authorizationCanceled` reaches, so an individual decline throws that error on iOS 27.0.1.
 
+## Home screen widget, remaining steps: 2026-11-19 (#124)
+
+The remaining steps of the [widget design](../specs/2026-11-13-home-widget-design.md#physical-device-verification), on the iPhone 16 Pro with iOS 27.0.1 and the signed Debug build of `1bf7a11` that was installed for #38; `origin/main` at `d43bffa` differs from it only in a comment and in docs, so nothing was installed.
+The small widget was on the Home Screen and in Today View.
+Results come from what was reported on screen, from two `log collect` archives (`donotdisturbd`, `runningboardd`, boot and first unlock) and from copies of the history store taken before and after the run.
+Before the run, today had one completed session (00:51:20, 26.9 minutes), and the widget showed "27분 · 1회".
+
+| Step                                                                                 | Result                                                                                                                                                                                                                                                |
+| ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Gallery preview                                                                   | Passed: "1시간 15분 · 3회", the fixed sample (`TodayWidgetView.sample`, 3 sessions and 4500 s)                                                                                                                                                        |
+| 2. A session completed with the app in front                                         | Passed: started 17:28:09, `expired` at 17:53:09; on the Home Screen right after the completion the widget already showed "52분 · 2회"                                                                                                                 |
+| 5. Focus on with the app swiped away                                                 | The app process (pid 11215) ended at 17:54:08; the Focus on call at 17:54:18 ran in the extension (`will use extension if available`, `Executing prepared action on kr.donminzzi.focusStudy.intents`), and the selected apps were blocked within 10 s |
+| 5. A background launch of the app during the session                                 | At 17:56:22 `dasd` launched the app in the background (pid 11276, `role: Background`), and the process went to `running-suspended`                                                                                                                    |
+| 5. Focus off at 18:20:43, past the base length                                       | The call ran in that suspended app process (`Executing prepared action on kr.donminzzi.focusStudy`, 0.68 s); the session ended as `expired` with 26.41 minutes, and the widget changed to "1시간 18분 · 3회" at once, without the app in front        |
+| 5. Focus on at 18:28:34 and off at 18:29:09                                          | Both calls ran in the app process; the session ended as `earlyExit` ("집중 종료" in the history sheet) and the widget kept "1시간 18분 · 3회"                                                                                                         |
+| 5. The app opened afterwards                                                         | No change: "1시간 18분 · 3회"                                                                                                                                                                                                                         |
+| 6. Restart: boot at 18:32:12, first unlock at 18:33:08, Today View before the unlock | The widget showed "1시간 18분 · 3회", the correct numbers, and not the placeholder that the plan expected; after the unlock the Home Screen widget showed the same                                                                                    |
+
+The three completed sessions of the store copy (26.9, 25.0 and 26.41 minutes) add up to 78.3 minutes, the "1시간 18분 · 3회" of the widget.
+So the extension did not write the snapshot (decision 26 of the extension design), and the widget changed without the app in front only because the system had launched the app in the background and the Focus off call ran in that process.
+Which process gets a Focus call is the system's choice; this run does not show a widget change after a call that ran in the extension, because no session ended in the extension.
+`[UNCERTAIN]` Why `dasd` launched the app at 17:56:22. The same route may explain the Focus off of 2026-11-18 that ran in the app after the app was swiped away, but that archive was not checked for a `dasd` launch.
+`[UNCERTAIN]` Whether the view before the first unlock was a render that WidgetKit kept from before the restart or a new read of the snapshot. It showed no wrong number, which is the acceptance of step 6.
+Not recorded: the time from a completion to the changed number in step 2, beyond "already changed" when the Home Screen appeared.
+
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 
 이슈 #17의 검토 결과다.

@@ -170,6 +170,7 @@ The Monitor never writes the snapshot, because it has no history.
 
 **Delay.** The number is what the app last confirmed, not the state of the device.
 A session that the Monitor ends while the app does not run, or that a Focus off call ends, has no history record yet, so the widget and the app's own summary both show it only after the next `refresh()` or the next Focus on call.
+Reconciliation (2026-11-19, #124): since the [Focus filter extension](2026-11-16-focus-filter-extension-design.md#home-widget) (decision 26), the Focus on call above writes only when it runs in the app process; the App Intents extension builds its handler with `writesTodaySnapshot: false` (`Intents/FocusFilterEntry.swift`). The system chooses the process of each Focus call: a session that ends in the extension appears in the widget only after the next `refresh()` of the app, and a call that runs in an app process that the system launched in the background changes the widget at once. The [device run of 2026-11-19](../notes/screen-time-device-matrix.md#home-screen-widget-remaining-steps-2026-11-19-124) saw the second case after the app was swiped away.
 A session that starts before midnight and completes after it counts for the day of its start, as in the app.
 
 **Privacy boundary that changes.** Today the widget extension has no App Group entitlement.
