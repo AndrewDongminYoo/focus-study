@@ -996,6 +996,30 @@ final class FocusFlowTests: XCTestCase {
         app.buttons["start"].tap()
         XCTAssertTrue(app.buttons["end"].waitForExistence(timeout: 8))
     }
+    /// A declined request while the value reads `.notDetermined` keeps the settings guidance, with both settings paths and a re-check (#38).
+    func testDeclinedRequestKeepsTheSettingsGuide() {
+        for (name, extra) in [("permission-declined", ["declines"]),
+                              ("permission-declined-largest-text", ["declines", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])] {
+            let app = app("checking", extra: extra)
+            let start = app.buttons["start"]
+            XCTAssertTrue(start.waitForExistence(timeout: 8), name)
+            for _ in 0..<4 where !start.isHittable { app.swipeUp() }
+            start.tap()
+            let settings = app.descendants(matching: .any).matching(identifier: "settings").firstMatch
+            XCTAssertTrue(settings.waitForExistence(timeout: 8), name)
+            XCTAssertTrue(app.staticTexts["settingsPath"].exists, name)
+            // The view keeps the guidance across a refresh of the screen; the service's decline across later reads is an SDK test.
+            Thread.sleep(forTimeInterval: 2)
+            XCTAssertTrue(settings.exists, name); XCTAssertTrue(app.buttons["authorize"].exists, name)
+            captureReport(app, name: name)
+            let recheck = app.buttons["authorize"]
+            for _ in 0..<4 where !recheck.isHittable { app.swipeUp() }
+            recheck.tap()
+            // An approved re-check leaves the guidance.
+            expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: settings); waitForExpectations(timeout: 8)
+            app.terminate()
+        }
+    }
     func testCheckingAccessAtLargestTextSizeKeepsTheStartControlReachable() {
         let app = app("checking", extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
         let start = app.buttons["start"]

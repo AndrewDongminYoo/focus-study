@@ -239,3 +239,11 @@ Follow `AGENTS.md` and [README verification](../../README.md#실행과-검증).
 
 - The name and the shape of the state type and of the reader.
 - How the reader's fallback on a hop that does not return is detected, if a device run shows that case at all.
+
+## Declined request reconciliation: 2026-11-19 (#38)
+
+The rule "A request that throws is not a revocation: the UI shows its error and stays in `checking`" keeps its engine half: nothing reaches the engine, which still reads `unknown`.
+Its UI half changed for one error: a request that throws `FamilyControlsError.authorizationCanceled`, the person's "Don't Allow", moves the UI to `declined`, which shows the settings guidance of `denied` with a re-check and stays until an approved or denied read or the next request (`App/AuthorizationService.swift`).
+The reason is the device observation of 2026-11-15 on #38: iOS 27 reads a denial as `.notDetermined`, so the guidance went back to the `checking` notice at the next refresh.
+The guidance names both settings paths that an iPhone with iOS 27 showed on 2026-11-19: the app's own page in Settings, which "설정 열기" opens, and the list of apps with Screen Time access in Settings › Screen Time.
+`[UNCERTAIN]` That an individual request declines with `authorizationCanceled` on iOS 27; the device step of #38 records it. Every other error keeps the rule above.
