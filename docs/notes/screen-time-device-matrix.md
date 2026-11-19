@@ -631,6 +631,18 @@ The session ended as completed, and history showed it with its focused time; the
 So the interval registered at the start kept its budget through the first chunk end and through three overwrites from the app, which is the point where the rollover of #163 lost its interval on 2026-11-18.
 Not run: the second chunk end at 50 minutes, where the code path is the same as at the first (no callback and no registration), and the bound end of about one week, which the host tests cover.
 
+## Declined access request: 2026-11-19 (#38)
+
+On the iPhone 16 Pro with iOS 27.0.1, a signed Debug build of `1bf7a11` (#178) was installed over the app with `devicectl device install app` at 11:13:39, with the existing development profiles; the result is what was reported on screen.
+
+| Step                                                                           | Result                                                                                                                                                                                  |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Screen Time access turned off in Settings › Apps › 온:공, then "집중 시작하기" | The system request appeared                                                                                                                                                             |
+| "허용 안 함" in the system request                                             | Passed: "스크린 타임 권한이 꺼져 있어요" with both settings paths, "설정 열기" and "다시 확인하기" stayed on screen; before #178 the notice went back to "확인하고 있어요" (2026-11-15) |
+| Access turned on again in Settings, back in the app, "다시 확인하기"           | Passed: the guidance left                                                                                                                                                               |
+
+The guidance stays only in `declined`, which only `FamilyControlsError.authorizationCanceled` reaches, so an individual decline throws that error on iOS 27.0.1.
+
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 
 이슈 #17의 검토 결과다.
