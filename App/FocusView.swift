@@ -137,7 +137,8 @@ struct FocusView: View {
                 }
                 if let error = model.errorMessage {
                     Label(error, systemImage: "exclamationmark.circle").font(.footnote).foregroundStyle(FocusTheme.Palette.error).accessibilityIdentifier("startError")
-                    Button("다시 확인하기") { model.refresh() }.accessibilityIdentifier("retry")
+                    // The room tints it cream (spec contract 6); the idle screen keeps the accent color.
+                    Button("다시 확인하기") { model.refresh() }.tint(isRoom ? FocusTheme.Room.text : nil).accessibilityIdentifier("retry")
                 }
             }
         }
