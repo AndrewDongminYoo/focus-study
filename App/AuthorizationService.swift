@@ -48,7 +48,7 @@ enum AccessStatus { case notRequested, checking, approved, denied, declined }
         }
     }
     /// `authorizationCanceled` is the person's "Don't Allow"; every other error is not a decline (the 2026-11-11 access-state design).
-    /// `[UNCERTAIN]` that an individual request declines with this case on iOS 27; the device steps of #38 record it.
+    /// An individual request declined with this case on iOS 27.0.1 (device run of 2026-11-19, #38).
     static func isDecline(_ error: Error) -> Bool { (error as? FamilyControlsError) == .authorizationCanceled }
     /// Runs only on a person's tap, because the request can show system UI. In `checking` it is the recovery of the access-state design.
     func requestIndividual() async {

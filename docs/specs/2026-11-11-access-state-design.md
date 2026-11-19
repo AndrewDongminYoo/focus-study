@@ -247,3 +247,4 @@ Its UI half changed for one error: a request that throws `FamilyControlsError.au
 The reason is the device observation of 2026-11-15 on #38: iOS 27 reads a denial as `.notDetermined`, so the guidance went back to the `checking` notice at the next refresh.
 The guidance names both settings paths that an iPhone with iOS 27 showed on 2026-11-19: the app's own page in Settings, which "설정 열기" opens, and the list of apps with Screen Time access in Settings › Screen Time.
 `[UNCERTAIN]` That an individual request declines with `authorizationCanceled` on iOS 27; the device step of #38 records it. Every other error keeps the rule above.
+Device run of 2026-11-19 ([device matrix](../notes/screen-time-device-matrix.md#declined-access-request-2026-11-19-38)): on iOS 27.0.1 a declined individual request kept the guidance, so it threw `authorizationCanceled`, the only error that leads to `declined`.
