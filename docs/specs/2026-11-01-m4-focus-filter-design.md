@@ -517,6 +517,9 @@ Unverified until those steps run:
 - Whether `perform()` runs before the first unlock after a restart `[UNCERTAIN]` (step 14).
 - The iOS 17 runtime.
 
+Reconciliation (2026-11-19, #55): steps 7 to 10 are out of the scope of #55, because iOS filters notifications by the Focus's own settings, which the app neither reads nor changes; the partial record of step 7 (2026-11-15) stays in the device matrix.
+On iOS 27.0.1 ([device matrix](../notes/screen-time-device-matrix.md#m4-remaining-steps-2026-11-19-55)): a Focus that turns on before the first unlock gets no `perform()` call until the system handles the first unlock, about 40 s after it, so the session starts then and nothing is shielded before; a restart while the Focus stays on sends no call; turning the filter option off and on again sends an off call and then an on call, so a second session starts by the rules of this design.
+
 ## Verification
 
 Follow `AGENTS.md` and [README verification](../../README.md#실행과-검증).
