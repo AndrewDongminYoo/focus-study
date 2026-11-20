@@ -704,16 +704,19 @@ The app picker stayed open, one app was selected and applied to the `everydayLay
 Pixels read from the captures: the background is `#232529`, not the navy `#1E2744`, which matches the SDK description of `backgroundColor` as the color used in the background blur effect; the title and the subtitle are cream; the "닫기" label is near white (`#FEF9F1` at the lightest) on the cream button (`#FDF4E4`), not the configured navy, so it is close to unreadable at every size.
 Tapping "닫기" closed the shielded app, with no action extension.
 The restriction was then removed and the text size restored.
+A second build (installed at 21:50:19) made the button navy with a cream label: the label was drawn `#DCDDE0` on the navy button (`#202742`), so iOS 27.0.1 does not use the configured label color, and the label was readable at the default text size.
+A third build (installed at 21:54:06) added a line break before the subtitle and between its two sentences, and 20 pt of transparent space under the 72 pt mark; at the default text size (22:07) both line breaks showed, and the mark was drawn about 0.78 times as tall as before, close to 72 / 92, so iOS fits the icon image into a fixed box.
+This layout was approved on screen. At the largest text size (22:08) the title wrapped to two lines, the subtitle to five, and "닫기" nearly filled the button height; nothing was clipped, and the mark was drawn smaller again.
 Each run applies real restrictions and needs its own approval; record the device, the OS version and the build in each row.
 
-| Check                                                    | Expected                                                               | Status     |
-| -------------------------------------------------------- | ---------------------------------------------------------------------- | ---------- |
-| 1. Light and dark appearance                             | The navy and the text colors are the same in both                      | Unverified |
-| 2. Largest text size                                     | The title, the subtitle and "닫기" are not clipped                     | Failed     |
-| 3. Small screen                                          | The mark, the text and the button fit                                  | Unverified |
-| 4. App shield and Safari web-domain shield               | The same configuration; other browsers are not claimed                 | Unverified |
-| 5. "닫기" without an action extension                    | Record what it does; if it does not close the app, stop for a decision | Passed     |
-| 6. Focus and everyday layers shield the same app at once | The same shield shows                                                  | Unverified |
+| Check                                                    | Expected                                                               | Status                                                                |
+| -------------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| 1. Light and dark appearance                             | The navy and the text colors are the same in both                      | Unverified                                                            |
+| 2. Largest text size                                     | The title, the subtitle and "닫기" are not clipped                     | Passed on the third build; the first build failed (unreadable "닫기") |
+| 3. Small screen                                          | The mark, the text and the button fit                                  | Unverified                                                            |
+| 4. App shield and Safari web-domain shield               | The same configuration; other browsers are not claimed                 | Unverified                                                            |
+| 5. "닫기" without an action extension                    | Record what it does; if it does not close the app, stop for a decision | Passed                                                                |
+| 6. Focus and everyday layers shield the same app at once | The same shield shows                                                  | Unverified                                                            |
 
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 
