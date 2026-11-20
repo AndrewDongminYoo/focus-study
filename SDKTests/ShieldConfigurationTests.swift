@@ -23,14 +23,14 @@ final class ShieldConfigurationTests: XCTestCase {
         XCTAssertNil(shield.backgroundBlurStyle)
         XCTAssertEqual(try srgb(XCTUnwrap(shield.backgroundColor)), try srgb(ShieldContent.navy))
         XCTAssertEqual(shield.title?.text, "지금은 쉬는 앱이에요")
-        XCTAssertEqual(shield.subtitle?.text, "온:공이 이 앱을 잠시 막고 있어요. 언제 풀리는지는 온:공에서 볼 수 있어요.")
+        XCTAssertEqual(shield.subtitle?.text, "\n온:공이 이 앱을 잠시 막고 있어요.\n언제 풀리는지는 온:공에서 볼 수 있어요.")
         XCTAssertEqual(try srgb(XCTUnwrap(shield.title?.color)), try srgb(ShieldContent.cream))
         XCTAssertEqual(try srgb(XCTUnwrap(shield.subtitle?.color)), try srgb(ShieldContent.cream))
         XCTAssertEqual(shield.primaryButtonLabel?.text, "닫기")
         XCTAssertNil(shield.secondaryButtonLabel)
         let icon = try XCTUnwrap(shield.icon)
         XCTAssertEqual(icon.scale, 3)
-        XCTAssertEqual(icon.size.height, ShieldContent.markHeight, accuracy: 0.01)
+        XCTAssertEqual(icon.size.height, ShieldContent.markHeight + ShieldContent.markBottomInset, accuracy: 0.01)
         XCTAssertEqual(icon.size.width, 78.2 / 179.4 * ShieldContent.markHeight, accuracy: 1.0 / 3)
     }
 
@@ -51,7 +51,7 @@ final class ShieldConfigurationTests: XCTestCase {
     /// The mark's geometry (navy focus room design, "Colon mark geometry"): cream ring, transparent hole, amber dot, transparent corners.
     func testColonMarkPixels() throws {
         // At scale 1 the 78.2 by 179.4 mark sits centered in a 79 by 180 pixel canvas.
-        let image = ShieldContent.colonMark(height: 179.4, scale: 1)
+        let image = ShieldContent.colonMark(height: 179.4, bottomInset: 0, scale: 1)
         XCTAssertEqual(image.size, CGSize(width: 79, height: 180))
         let pixels = try rgbaPixels(image)
         let cream = RGBA(red: 0xFF, green: 0xF4, blue: 0xE2, alpha: 255), amber = RGBA(red: 0xF4, green: 0xA6, blue: 0x4A, alpha: 255)
@@ -60,6 +60,10 @@ final class ShieldConfigurationTests: XCTestCase {
         XCTAssertEqual(pixels.at(x: 39, y: 140), amber, "dot")
         XCTAssertEqual(pixels.at(x: 1, y: 1).alpha, 0, "corner")
         XCTAssertEqual(pixels.at(x: 39, y: 89).alpha, 0, "gap between the ring and the dot")
+        // A bottom inset adds only transparent rows under the mark.
+        let inset = try rgbaPixels(ShieldContent.colonMark(height: 179.4, bottomInset: 20, scale: 1))
+        XCTAssertEqual(inset.at(x: 39, y: 140), amber, "dot stays in place")
+        XCTAssertEqual(inset.at(x: 39, y: 190).alpha, 0, "inset under the dot")
         // The shield's own icon, kept for review; the shield itself is drawn by iOS on a device only.
         let attachment = XCTAttachment(image: ShieldContent.colonMark())
         attachment.name = "shield-colon-mark"
