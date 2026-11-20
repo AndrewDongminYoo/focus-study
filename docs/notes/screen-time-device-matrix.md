@@ -690,7 +690,7 @@ So a Focus that turns on before the first unlock leaves the selection open until
 `[UNCERTAIN]` Whether the call after the first unlock would run in the extension when the app is not opened; here the app had been opened 7 s before the system handled the first unlock.
 `[UNCERTAIN]` What sent the off call at 21:50:36, which `donotdisturbd` logged after `Handling first launch/unlock: current=(null)` at 21:50:34, while the schedule was being set up with the Focus off; it found no session.
 
-## Custom shield: partly run on 2026-11-20 (#187)
+## Custom shield: run on 2026-11-20 and 2026-11-21 (#187)
 
 The checks of the [custom shield design](../specs/2026-11-20-custom-shield-design.md#verification-plan) for the `FocusShield` extension.
 A simulator cannot show a shield, so `ShieldConfigurationTests` checks only the configuration that the extension returns; it is not evidence for the rows below.
@@ -707,16 +707,26 @@ The restriction was then removed and the text size restored.
 A second build (installed at 21:50:19) made the button navy with a cream label: the label was drawn `#DCDDE0` on the navy button (`#202742`), so iOS 27.0.1 does not use the configured label color, and the label was readable at the default text size.
 A third build (installed at 21:54:06) added a line break before the subtitle and between its two sentences, and 20 pt of transparent space under the 72 pt mark; at the default text size (22:07) both line breaks showed, and the mark was drawn about 0.78 times as tall as before, close to 72 / 92, so iOS fits the icon image into a fixed box.
 This layout was approved on screen. At the largest text size (22:08) the title wrapped to two lines, the subtitle to five, and "닫기" nearly filled the button height; nothing was clipped, and the mark was drawn smaller again.
+
+On 2026-11-21, the light and dark check ran on signed Debug builds of the `fix/shield-light-appearance` branch, each installed over the app with `devicectl device install app`; every install also cleared the selection that the everyday store diagnostic had applied, so it was applied again after each one.
+On the merged `dab7689` layout (captured 06:46), the light appearance drew a light blur background (`#E9EBF0`) on which the cream title, subtitle and ring could not be read, and a dark gray label on the navy button; the dark appearance matched the 2026-11-20 captures.
+A dark blur style (installed 06:48:22, captured 06:51) kept the light appearance as dark as the dark one, and the label was drawn light on the cream button that the light appearance resolved; it was rejected.
+With no blur style and the text and the button following the appearance (installed 06:53:48), the text read in both appearances, but the dark appearance drew the light variant (navy ring) of the registered `UIImageAsset`, and the light appearance drew a light label on the cream button because the label still had a cream color.
+The approved build (installed 07:00:02, captured 07:00) has navy text, a navy label and a cream button in the light appearance, cream text and a navy button in the dark appearance, where iOS draws the label white, and the mark on a navy rounded square in the proportion of the app icon.
+With the approved build at the largest text size (07:03), both appearances showed the tile, a two-line title, a five-line subtitle and "닫기" without clipping.
+No smaller iPhone was available, so Display Zoom (Larger Text) stood in for a small screen: at the largest text size, with a focus session shielding the app (captured about 07:08, within 15 s of the session start), both appearances still fit without clipping; Display Zoom does not reproduce the shorter height of an iPhone SE.
+For the two layers at once, a second focus session was started at about 07:20; at 07:21:13 the app was relaunched with `--screen-time-diagnostics` during that session, the session stayed open, and the everyday store diagnostic applied an app that the session already shielded: the same shield showed (captured with 23:44 left). Ending the session early lifted both shields, which matches the lock section that ends a session converging the everyday store to the stored everyday file; no log was read to confirm it. Both sessions of this run were ended early.
+At 07:27 the everyday store diagnostic applied `example.com` alone, and Safari showed the same shield for that domain; iOS centered the content and put "닫기" right under the subtitle instead of at the bottom, and the copy still says "앱" for a website. Only Safari was checked.
 Each run applies real restrictions and needs its own approval; record the device, the OS version and the build in each row.
 
-| Check                                                    | Expected                                                               | Status                                                                |
-| -------------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| 1. Light and dark appearance                             | The navy and the text colors are the same in both                      | Unverified                                                            |
-| 2. Largest text size                                     | The title, the subtitle and "닫기" are not clipped                     | Passed on the third build; the first build failed (unreadable "닫기") |
-| 3. Small screen                                          | The mark, the text and the button fit                                  | Unverified                                                            |
-| 4. App shield and Safari web-domain shield               | The same configuration; other browsers are not claimed                 | Unverified                                                            |
-| 5. "닫기" without an action extension                    | Record what it does; if it does not close the app, stop for a decision | Passed                                                                |
-| 6. Focus and everyday layers shield the same app at once | The same shield shows                                                  | Unverified                                                            |
+| Check                                                    | Expected                                                               | Status                                                                                              |
+| -------------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| 1. Light and dark appearance                             | The text, the mark and the button can be read in both                  | Passed on 2026-11-21 with the approved build                                                        |
+| 2. Largest text size                                     | The title, the subtitle and "닫기" are not clipped                     | Passed on 2026-11-21 with the approved build; the first 2026-11-20 build failed (unreadable "닫기") |
+| 3. Small screen                                          | The mark, the text and the button fit                                  | Passed on 2026-11-21 with Display Zoom as a stand-in; no small device                               |
+| 4. App shield and Safari web-domain shield               | The same configuration; other browsers are not claimed                 | Passed on 2026-11-21 with the approved build (Safari only)                                          |
+| 5. "닫기" without an action extension                    | Record what it does; if it does not close the app, stop for a decision | Passed                                                                                              |
+| 6. Focus and everyday layers shield the same app at once | The same shield shows                                                  | Passed on 2026-11-21 with the approved build                                                        |
 
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 

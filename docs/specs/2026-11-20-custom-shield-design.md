@@ -19,16 +19,21 @@ That decision supersedes the #40 deferral; the entitlement request cost stays an
 Decided on 2026-11-20:
 
 1. The shield is one static configuration with this layout:
-   - background: navy `#1E2744` (FocusNavy), the same value in the light and the dark appearance, as in contract item 4 of the [navy focus room design](2026-11-20-navy-focus-room-design.md#contract);
-   - icon: the colon mark, a cream `#FFF4E2` ring over an amber `#F4A64A` dot, with the geometry that the [navy focus room design](2026-11-20-navy-focus-room-design.md#colon-mark-geometry) owns;
-   - title: "지금은 쉬는 앱이에요", in cream;
-   - subtitle: "온:공이 이 앱을 잠시 막고 있어요. 언제 풀리는지는 온:공에서 볼 수 있어요.", in cream, with a line break before it and between the two sentences;
-   - primary button: "닫기" on a navy button;
+   - background: navy `#1E2744` (FocusNavy) as the tint of the system blur, the same value in the light and the dark appearance, as in contract item 4 of the [navy focus room design](2026-11-20-navy-focus-room-design.md#contract);
+   - icon: the colon mark, a cream `#FFF4E2` ring over an amber `#F4A64A` dot, with the geometry that the [navy focus room design](2026-11-20-navy-focus-room-design.md#colon-mark-geometry) owns, on a navy rounded square in the proportion of the app icon;
+   - title: "지금은 쉬는 앱이에요", in navy in the light appearance and in cream in the dark appearance;
+   - subtitle: "온:공이 이 앱을 잠시 막고 있어요. 언제 풀리는지는 온:공에서 볼 수 있어요.", in the title's colors, with a line break before it and between the two sentences;
+   - primary button: "닫기", with a navy label on a cream button in the light appearance and a cream label on a navy button in the dark appearance;
    - no secondary button.
 
    Amended on 2026-11-20 after the first device run ([device matrix](../notes/screen-time-device-matrix.md)): `ShieldConfiguration` has no spacing or alignment property, so the line breaks separate the title from the subtitle and keep each sentence on its own line, and a transparent space under the mark separates the icon from the title.
    iOS 27.0.1 drew the button label in its own light gray and not in the configured color, so the button is navy, not cream; the label keeps cream as its configured color.
    iOS also drew the background as a gray blur tinted by the navy, as the SDK describes `backgroundColor`.
+
+   Amended on 2026-11-21 after the light and dark run ([device matrix](../notes/screen-time-device-matrix.md)): with no blur style the system blur follows the appearance, so the light appearance has a light background on which cream text and a cream ring cannot be read.
+   The text and the button therefore follow the appearance; in the dark appearance iOS draws the label white whatever its color, and in the light appearance it draws the configured navy.
+   A dark blur style kept the background dark in both appearances and was rejected, because the light appearance then looks like the dark one.
+   The icon is one image for both appearances, because iOS 27.0.1 drew the light variant of a registered `UIImageAsset` in the dark appearance; the navy tile carries the mark on either background.
 
 2. The same configuration is returned for all four `ShieldConfigurationDataSource` calls: an application, an application in a category, a web domain, and a web domain in a category.
 3. The focus layer (`focusSession`) and the everyday layer (`everydayLayer`) show the same shield.

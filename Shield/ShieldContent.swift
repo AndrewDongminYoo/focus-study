@@ -13,22 +13,35 @@ enum ShieldContent {
     static let navy = UIColor(red: 0x1E / 255, green: 0x27 / 255, blue: 0x44 / 255, alpha: 1)
     static let cream = UIColor(red: 0xFF / 255, green: 0xF4 / 255, blue: 0xE2 / 255, alpha: 1)
     static let amber = UIColor(red: 0xF4 / 255, green: 0xA6 / 255, blue: 0x4A / 255, alpha: 1)
+    /// Cream in light mode and navy in dark mode, the opposite of the label that iOS draws for each appearance.
+    static let buttonBackground = UIColor { $0.userInterfaceStyle == .dark ? navy : cream }
+    /// The title, the subtitle and the button label: navy on the light background of light mode, cream on the dark one.
+    static let text = UIColor { $0.userInterfaceStyle == .dark ? cream : navy }
 
     /// The height of the mark image in points; the width follows the mark's 78.2 by 179.4 bounds.
     static let markHeight: CGFloat = 72
     /// Transparent space under the mark, the only way to separate the icon from the title.
     static let markBottomInset: CGFloat = 20
+    /// The mark's height as a share of the tile's side, as in the app icon (717 of 1024 px).
+    static let markTileShare: CGFloat = 0.7
 
-    /// The colon mark of the navy focus room design ("Colon mark geometry"): a cream ring with an even-odd hole over an amber dot, on a transparent background.
+    /// The colon mark of the navy focus room design ("Colon mark geometry"): a ring with an even-odd hole over an amber dot, on a transparent background.
     /// The canvas is rounded up to whole pixels, and the mark is centered in it above `bottomInset`.
-    static func colonMark(height: CGFloat = markHeight, bottomInset: CGFloat = markBottomInset, scale: CGFloat = 3) -> UIImage {
+    /// With `tile`, the mark sits on a navy rounded square like the app icon: the shield uses one icon image for both appearances, and the tile carries the mark on a light background.
+    static func colonMark(height: CGFloat = markHeight, bottomInset: CGFloat = markBottomInset, tile: Bool = true, scale: CGFloat = 3) -> UIImage {
         let unit = height / 179.4
         let mark = CGSize(width: 78.2 * unit, height: height)
-        let canvas = CGSize(width: (mark.width * scale).rounded(.up) / scale, height: (mark.height * scale).rounded(.up) / scale + bottomInset)
+        let side = tile ? (height / markTileShare * scale).rounded(.up) / scale : 0
+        let canvas = CGSize(width: max(side, (mark.width * scale).rounded(.up) / scale),
+                            height: max(side, (mark.height * scale).rounded(.up) / scale) + bottomInset)
         let format = UIGraphicsImageRendererFormat()
         format.scale = scale
         format.opaque = false
         return UIGraphicsImageRenderer(size: canvas, format: format).image { _ in
+            if tile {
+                navy.setFill()
+                UIBezierPath(roundedRect: CGRect(x: 0, y: 0, width: side, height: side), cornerRadius: side * 0.22).fill()
+            }
             let left = (canvas.width - mark.width) / 2, top = (canvas.height - bottomInset - mark.height) / 2
             let radius = 39.1 * unit, hole = 17 * unit
             let ring = UIBezierPath(ovalIn: CGRect(x: left, y: top, width: 2 * radius, height: 2 * radius))
