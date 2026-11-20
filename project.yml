@@ -131,6 +131,7 @@ targets:
         App/TodaySnapshotWriter.swift,
         Activity/FocusActivityAttributes.swift,
         Activity/SystemFocusActivityClient.swift,
+        App/Assets.xcassets,
       ]
     settings:
       base:

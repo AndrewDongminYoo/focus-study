@@ -8,6 +8,8 @@ struct FocusView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric(relativeTo: .largeTitle) private var countdownSize: CGFloat = 54
+    @ScaledMetric(relativeTo: .subheadline) private var markerSize: CGFloat = 8
+    @ScaledMetric(relativeTo: .title2) private var colonMarkHeight: CGFloat = 56
     @State private var sheet: FocusSheet?
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     var body: some View {
@@ -39,6 +41,9 @@ struct FocusView: View {
                 }.frame(minHeight: geometry.size.height)
             }
         }
+        .background { (isRoom ? FocusTheme.Room.background : FocusTheme.Palette.surface).ignoresSafeArea().animation(roomAnimation, value: isRoom) }
+        // The dark appearance makes the controls, the error text and the status bar read light on navy; sheets presented from the room follow it.
+        .preferredColorScheme(isRoom ? .dark : nil)
         .sheet(item: $sheet) { item in
             switch item {
             case .selection: selectionEditor
@@ -80,14 +85,14 @@ struct FocusView: View {
             if !model.isInSession {
                 Button { sheet = .selection } label: {
                     Text("제한할 앱").frame(minWidth: FocusTheme.Layout.minimumTapTarget, minHeight: FocusTheme.Layout.minimumTapTarget).contentShape(Rectangle())
-                }.modifier(FocusSecondaryAction())
+                }.modifier(FocusSecondaryAction(tint: primaryText))
                     .disabled(model.isStarting || model.errorMessage != nil).accessibilityIdentifier("selection")
             }
             Spacer()
             if !model.isInSession || showsDiagnostics {
                 Button { sheet = .settings } label: {
                     Image(systemName: "gearshape").frame(width: FocusTheme.Layout.minimumTapTarget, height: FocusTheme.Layout.minimumTapTarget).contentShape(Rectangle())
-                }.modifier(FocusSecondaryAction()).disabled(model.isStarting)
+                }.modifier(FocusSecondaryAction(tint: primaryText)).disabled(model.isStarting)
                     .accessibilityLabel("설정").accessibilityIdentifier("settingsButton")
             }
         }
@@ -96,11 +101,12 @@ struct FocusView: View {
     @ViewBuilder private var center: some View {
         VStack(spacing: FocusTheme.Layout.controlSpacing) {
             if model.completedSessionID != nil {
-                Label("\(completedMinutes)분 집중을 마쳤어요", systemImage: "checkmark.circle.fill").font(.title2.weight(.semibold)).foregroundStyle(FocusTheme.Palette.accent).accessibilityIdentifier("completion")
-                Text("오늘의 세션에 기록했어요. 잠시 쉬었다가 다음 집중을 시작해 보세요.").multilineTextAlignment(.center).foregroundStyle(FocusTheme.Palette.secondaryText)
-                Text("제한이 풀리기까지 조금 걸릴 수 있어요.").font(.footnote).multilineTextAlignment(.center).foregroundStyle(FocusTheme.Palette.secondaryText).accessibilityIdentifier("releaseDelayNote")
+                ColonMark(height: colonMarkHeight)
+                Text("\(completedMinutes)분 집중을 마쳤어요").font(.title2.weight(.semibold)).multilineTextAlignment(.center).roomForeground(primaryText, animation: roomAnimation).accessibilityIdentifier("completion")
+                Text("오늘의 세션에 기록했어요. 잠시 쉬었다가 다음 집중을 시작해 보세요.").multilineTextAlignment(.center).roomForeground(secondaryText, animation: roomAnimation)
+                Text("제한이 풀리기까지 조금 걸릴 수 있어요.").font(.footnote).multilineTextAlignment(.center).roomForeground(secondaryText, animation: roomAnimation).accessibilityIdentifier("releaseDelayNote")
                 everydayStatusRow
-                Button("닫기") { model.dismissCompletion() }.modifier(FocusSecondaryAction()).accessibilityIdentifier("completionDismiss")
+                Button("닫기") { model.dismissCompletion() }.modifier(FocusSecondaryAction(tint: primaryText)).accessibilityIdentifier("completionDismiss")
             } else {
                 if let elapsed = model.openElapsed {
                     clock(elapsed, countsDown: false)
@@ -110,8 +116,11 @@ struct FocusView: View {
                         .accessibilityLabel("남은 시간 \(model.remaining / 60)분 \(model.remaining % 60)초").accessibilityIdentifier("countdown")
                 }
                 if model.isInSession {
-                    Text(model.openElapsed == nil ? "집중 시간 진행 중" : "집중 모드를 끌 때까지 이어져요").font(.subheadline).foregroundStyle(FocusTheme.Palette.secondaryText)
-                        .accessibilityIdentifier("sessionStatus")
+                    HStack(spacing: FocusTheme.Layout.inlineSpacing) {
+                        Circle().fill(FocusTheme.Room.marker).frame(width: markerSize, height: markerSize).accessibilityHidden(true)
+                        Text(model.openElapsed == nil ? "집중 시간 진행 중" : "집중 모드를 끌 때까지 이어져요").font(.subheadline).roomForeground(secondaryText, animation: roomAnimation)
+                            .accessibilityIdentifier("sessionStatus")
+                    }
                 } else {
                     Button("집중 시작하기") { if model.access == .checking { Task { await model.recoverAccessAndStart() } } else { model.requestStart() } }.modifier(FocusPrimaryAction()).controlSize(.large).modifier(ProminentLabel())
                         .disabled(!model.canStart).accessibilityIdentifier("start")
@@ -128,7 +137,8 @@ struct FocusView: View {
                 }
                 if let error = model.errorMessage {
                     Label(error, systemImage: "exclamationmark.circle").font(.footnote).foregroundStyle(FocusTheme.Palette.error).accessibilityIdentifier("startError")
-                    Button("다시 확인하기") { model.refresh() }.accessibilityIdentifier("retry")
+                    // The room tints it cream (spec contract 6); the idle screen keeps the accent color.
+                    Button("다시 확인하기") { model.refresh() }.tint(isRoom ? FocusTheme.Room.text : nil).accessibilityIdentifier("retry")
                 }
             }
         }
@@ -141,14 +151,14 @@ struct FocusView: View {
                     Text(line).multilineTextAlignment(.center).monospacedDigit()
                     Image(systemName: "chevron.right").font(.caption)
                 }.frame(minWidth: FocusTheme.Layout.minimumTapTarget, minHeight: FocusTheme.Layout.minimumTapTarget).contentShape(Rectangle())
-            }.buttonStyle(.plain).font(.footnote).foregroundStyle(FocusTheme.Palette.secondaryText)
+            }.buttonStyle(.plain).font(.footnote).roomForeground(secondaryText, animation: roomAnimation)
                 .disabled(model.isStarting).accessibilityLabel(line).accessibilityIdentifier("everydayStatusRow")
         }
     }
     /// `mm:ss`, or `h:mm:ss` from one hour, which only the count-up of an open session reaches.
     private func clock(_ seconds: Int, countsDown: Bool = true) -> some View {
         Text(seconds >= 3600 ? String(format: "%d:%02d:%02d", seconds / 3600, seconds % 3600 / 60, seconds % 60) : String(format: "%02d:%02d", seconds / 60, seconds % 60))
-            .font(.system(size: countdownSize, weight: .light, design: .rounded)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
+            .font(.system(size: countdownSize, weight: .light, design: .rounded)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5).roomForeground(primaryText, animation: roomAnimation)
             .contentTransition(.numericText(countsDown: countsDown)).animation(reduceMotion ? nil : .default, value: seconds)
             .accessibilityAddTraits(.updatesFrequently)
     }
@@ -156,19 +166,27 @@ struct FocusView: View {
         VStack(spacing: FocusTheme.Layout.controlSpacing) {
             // After the third break, the only way to leave before completion is `end`.
             if model.breaksLeft > 0 {
-                Button("쉬는 시간 갖기") { model.requestBreakAction(.request) }.modifier(FocusSecondaryAction()).controlSize(.large)
+                Button("쉬는 시간 갖기") { model.requestBreakAction(.request) }.modifier(FocusSecondaryAction(tint: primaryText)).controlSize(.large)
                     .disabled(model.pendingBreak != nil).accessibilityIdentifier("breakStart")
                 // The request re-registers monitoring synchronously, which can take seconds on a device; the feedback renders first.
                 if let pending = model.pendingBreak, pending.action == .request {
-                    BreakFeedback(model: model, pending: pending).frame(minHeight: FocusTheme.Layout.minimumTapTarget)
+                    BreakFeedback(model: model, pending: pending, textColor: FocusTheme.Room.secondaryText).frame(minHeight: FocusTheme.Layout.minimumTapTarget)
                 } else {
-                    Text("쉬는 시간 \(model.breaksLeft)번 남았어요").font(.footnote).foregroundStyle(FocusTheme.Palette.secondaryText).accessibilityIdentifier("breaksLeft")
+                    Text("쉬는 시간 \(model.breaksLeft)번 남았어요").font(.footnote).roomForeground(secondaryText, animation: roomAnimation).accessibilityIdentifier("breaksLeft")
                 }
             }
-            Button("집중 종료", role: .destructive) { sheet = .endConfirmation }.frame(minHeight: FocusTheme.Layout.minimumTapTarget)
+            // The system red measures about 4.3:1 on navy; the dark `ErrorText` of the room reads at 4.5:1 or more, and the role stays destructive.
+            Button(role: .destructive) { sheet = .endConfirmation } label: { Text("집중 종료").foregroundStyle(FocusTheme.Palette.error) }
+                .frame(minHeight: FocusTheme.Layout.minimumTapTarget)
                 .disabled(model.pendingBreak != nil).accessibilityIdentifier("end")
         }
     }
+    /// The navy room: an active session (the break screen excluded) and the completion card (docs/specs/2026-11-20-navy-focus-room-design.md).
+    private var isRoom: Bool { model.isActive || (model.completedSessionID != nil && !model.isInSession) }
+    private var primaryText: Color { isRoom ? FocusTheme.Room.text : FocusTheme.Palette.primaryText }
+    private var secondaryText: Color { isRoom ? FocusTheme.Room.secondaryText : FocusTheme.Palette.secondaryText }
+    /// The crossfade of the room; none with Reduce Motion on.
+    private var roomAnimation: Animation? { reduceMotion ? nil : .easeInOut(duration: 0.35) }
     /// DEBUG device diagnostics live in settings and must stay reachable during a session (docs/notes/development-launch-arguments.md, device diagnostics step 2).
     private var showsDiagnostics: Bool {
         #if DEBUG
@@ -210,8 +228,9 @@ private enum FocusSheet: String, Identifiable { case selection, settings, everyd
 struct BreakFeedback: View {
     let model: FocusModel
     let pending: PendingBreak
+    var textColor = FocusTheme.Palette.secondaryText
     var body: some View {
-        PendingFeedback(request: pending.id, text: text, identifier: "breakProgress", hold: hold, ready: model.performPendingBreak, cancel: model.cancelPendingBreak)
+        PendingFeedback(request: pending.id, text: text, identifier: "breakProgress", textColor: textColor, hold: hold, ready: model.performPendingBreak, cancel: model.cancelPendingBreak)
     }
     private var text: String {
         switch pending.action {
@@ -235,13 +254,14 @@ struct PendingFeedback: UIViewRepresentable {
     let request: UUID
     var text = "집중 시간을 시작하고 있어요"
     var identifier = "startProgress"
+    var textColor = FocusTheme.Palette.secondaryText
     /// DEBUG fixtures only: seconds to keep the feedback after the frame boundary, without blocking the main thread.
     var hold: TimeInterval = 0
     let ready: (UUID) -> Void
     let cancel: (UUID) -> Void
     func makeUIView(context: Context) -> PendingFeedbackView { PendingFeedbackView() }
     func updateUIView(_ uiView: PendingFeedbackView, context: Context) {
-        uiView.configure(request: request, text: text, identifier: identifier, hold: hold, ready: ready, cancel: cancel)
+        uiView.configure(request: request, text: text, identifier: identifier, textColor: UIColor(textColor), hold: hold, ready: ready, cancel: cancel)
     }
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: PendingFeedbackView, context: Context) -> CGSize? {
         uiView.systemLayoutSizeFitting(CGSize(width: proposal.width ?? 320, height: UIView.layoutFittingCompressedSize.height),
@@ -264,7 +284,7 @@ final class PendingFeedbackView: UIView {
         indicator.startAnimating()
         label.font = .preferredFont(forTextStyle: .subheadline)
         label.adjustsFontForContentSizeCategory = true
-        label.textColor = UIColor(FocusTheme.Palette.secondaryText); label.numberOfLines = 0
+        label.numberOfLines = 0
         let stack = UIStackView(arrangedSubviews: [indicator, label])
         stack.spacing = FocusTheme.Layout.inlineSpacing; stack.alignment = .center
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -280,9 +300,9 @@ final class PendingFeedbackView: UIView {
         accessibilityTraits = .staticText
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-    func configure(request: UUID, text: String, identifier: String, hold: TimeInterval, ready: @escaping (UUID) -> Void, cancel: @escaping (UUID) -> Void) {
+    func configure(request: UUID, text: String, identifier: String, textColor: UIColor, hold: TimeInterval, ready: @escaping (UUID) -> Void, cancel: @escaping (UUID) -> Void) {
         self.ready = ready; cancellation = cancel; self.hold = hold
-        label.text = text; accessibilityLabel = text; accessibilityIdentifier = identifier
+        label.textColor = textColor; label.text = text; accessibilityLabel = text; accessibilityIdentifier = identifier
         guard self.request != request else { return }
         invalidate(); self.request = request; completed = false
         setNeedsLayout()
@@ -319,5 +339,13 @@ final class PendingFeedbackView: UIView {
         let cancellation = cancellation
         // Teardown can run during a SwiftUI update; defer the observable mutation and reject stale IDs in the model.
         DispatchQueue.main.async { cancellation?(request) }
+    }
+}
+
+private extension View {
+    /// A text color that crossfades with the room background. The animation is scoped to the color, because an animation
+    /// over the whole screen left the glass buttons of the completion card light on navy (iOS 26.5 simulator, 2026-11-20).
+    func roomForeground(_ color: Color, animation: Animation?) -> some View {
+        self.animation(animation) { $0.foregroundStyle(color) }
     }
 }

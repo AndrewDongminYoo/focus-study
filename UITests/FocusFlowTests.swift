@@ -50,7 +50,20 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(clock.label.hasPrefix("집중한 시간 27분"), clock.label)
         XCTAssertEqual(app.staticTexts["sessionStatus"].label, "집중 모드를 끌 때까지 이어져요")
         XCTAssertTrue(app.buttons["end"].exists)
+        waitForRoom(app, true)
         captureReport(app, name: "timer-open-focus")
+    }
+    func testCountdownSessionShowsTheNavyRoomUntilItEnds() {
+        let app = app()
+        let start = app.buttons["start"]
+        XCTAssertTrue(start.waitForExistence(timeout: ready)); waitForRoom(app, false)
+        start.tap()
+        XCTAssertTrue(app.buttons["end"].waitForExistence(timeout: ready))
+        waitForRoom(app, true)
+        captureReport(app, name: "timer-countdown")
+        app.buttons["end"].tap(); app.buttons["종료하기"].tap()
+        XCTAssertTrue(start.waitForExistence(timeout: 5))
+        waitForRoom(app, false)
     }
     func testLengthSettingAppliesToNextSession() {
         let app = app()
@@ -956,6 +969,40 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertFalse(app.staticTexts["reportUnavailable"].exists)
         captureReport(app, name: "report-zero")
     }
+    /// Waits until a background pixel beside the content is the room navy `#1E2744` (`true`) or the idle surface (`false`), read in sRGB;
+    /// the crossfade takes about 0.35 s. The idle surface is `systemBackground` in the simulator's own appearance, so a forced dark
+    /// appearance left after the room reads black in light mode and fails; an unreadable pixel fails in both cases.
+    private func waitForRoom(_ app: XCUIApplication, _ expected: Bool, file: StaticString = #filePath, line: UInt = #line) {
+        let target = expected ? [0x1E, 0x27, 0x44] : idleSurfacePixel()
+        var pixel: [UInt8] = []
+        let deadline = Date().addingTimeInterval(5)
+        repeat {
+            pixel = backgroundPixel(app)
+            if pixel.count == 3, zip(pixel, target).allSatisfy({ abs(Int($0) - $1) <= 6 }) { return }
+            Thread.sleep(forTimeInterval: 0.25)
+        } while Date() < deadline
+        XCTFail("background \(pixel) is not \(expected ? "the room navy" : "the idle surface \(target)")", file: file, line: line)
+    }
+    /// `systemBackground` resolved for the simulator's appearance, in 8-bit sRGB.
+    private func idleSurfacePixel() -> [Int] {
+        let style: UIUserInterfaceStyle = XCUIDevice.shared.appearance == .dark ? .dark : .light
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+        UIColor.systemBackground.resolvedColor(with: UITraitCollection(userInterfaceStyle: style)).getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        return [red, green, blue].map { Int(($0 * 255).rounded()) }
+    }
+    /// The pixel at 2 % of the width and half the height, outside the centered content and the screen inset.
+    private func backgroundPixel(_ app: XCUIApplication) -> [UInt8] {
+        guard let image = app.screenshot().image.cgImage,
+              let point = image.cropping(to: CGRect(x: image.width / 50, y: image.height / 2, width: 1, height: 1)),
+              let space = CGColorSpace(name: CGColorSpace.sRGB) else { return [] }
+        var rgba = [UInt8](repeating: 0, count: 4)
+        let drawn = rgba.withUnsafeMutableBytes { bytes -> Bool in
+            guard let context = CGContext(data: bytes.baseAddress, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4, space: space,
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+            context.draw(point, in: CGRect(x: 0, y: 0, width: 1, height: 1)); return true
+        }
+        return drawn ? Array(rgba.prefix(3)) : []
+    }
     private func captureReport(_ app: XCUIApplication, name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
@@ -1221,9 +1268,13 @@ final class FocusFlowTests: XCTestCase {
         let completion = app.descendants(matching: .any)["completion"]
         XCTAssertTrue(completion.waitForExistence(timeout: 15))
         XCTAssertFalse(app.buttons["start"].exists)
+        waitForRoom(app, true)
         captureReport(app, name: "session-completed")
         app.buttons["completionDismiss"].tap()
         XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: 5)); XCTAssertFalse(completion.exists)
+        // The window leaves the forced dark appearance with the room (docs/specs/2026-11-20-navy-focus-room-design.md).
+        waitForRoom(app, false)
+        captureReport(app, name: "idle-after-completion")
     }
     func testReleaseDelayNoteShowsOnlyOnCompletion() {
         let app = app("expiring")
