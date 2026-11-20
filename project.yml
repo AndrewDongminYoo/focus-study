@@ -42,6 +42,8 @@ targets:
         embed: true
       - target: FocusStudyIntents
         embed: true
+      - target: FocusShield
+        embed: true
   FocusMonitor:
     type: app-extension
     platform: iOS
@@ -108,6 +110,19 @@ targets:
         CODE_SIGN_ENTITLEMENTS: Configuration/Activity.entitlements
         APPLICATION_EXTENSION_API_ONLY: YES
         TARGETED_DEVICE_FAMILY: "1"
+  # The custom shield (2026-11-20 custom shield design): one static configuration, no App Group and no data read.
+  FocusShield:
+    type: app-extension
+    platform: iOS
+    sources:
+      - Shield
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: kr.donminzzi.focusStudy.shield
+        INFOPLIST_FILE: Configuration/Shield-Info.plist
+        CODE_SIGN_ENTITLEMENTS: Configuration/Shield.entitlements
+        APPLICATION_EXTENSION_API_ONLY: YES
+        TARGETED_DEVICE_FAMILY: "1"
   FocusSDKTests:
     type: bundle.unit-test
     platform: iOS
@@ -131,6 +146,7 @@ targets:
         App/TodaySnapshotWriter.swift,
         Activity/FocusActivityAttributes.swift,
         Activity/SystemFocusActivityClient.swift,
+        Shield,
         App/Assets.xcassets,
       ]
     settings:

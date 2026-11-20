@@ -43,7 +43,7 @@ Use these current documentation paths:
 - [Extension lock-order amendment](docs/specs/2026-11-17-extension-lock-order-amendment.md), implemented and not yet run on a device, under issue #152: the extension registers the first focus interval of a session to start 5 s later and makes every stop after it releases the lock, so the Monitor's callback can take the lock; it changes no everyday activity
 - [Single-interval rollover amendment](docs/specs/2026-11-18-single-interval-rollover-amendment.md), implemented and run on a device on 2026-11-19 ([device matrix](docs/notes/screen-time-device-matrix.md)), under issue #152: an open session registers one focus interval to the one-week bound, a rollover only advances the stored session, and no section registers a focus activity inside that activity's own `intervalDidEnd`
 - [Navy focus room](docs/specs/2026-11-20-navy-focus-room-design.md), implemented under issue #189: the timer screen of an active session and the completion card use a navy background with cream text, and the completion card shows the colon mark
-- [Custom shield](docs/specs/2026-11-20-custom-shield-design.md), approved under issue #186 and not yet implemented (issue #187): one static navy shield with the colon mark and a "닫기" button for both layers, from a Shield Configuration extension that reads no data and has no action extension
+- [Custom shield](docs/specs/2026-11-20-custom-shield-design.md), approved under issue #186, implemented under issue #187 and not yet run on a device: one static navy shield with the colon mark and a "닫기" button for both layers, from a Shield Configuration extension that reads no data and has no action extension
 - [Implementation plan](docs/plans/2026-10-26-focus-study.md)
 - [M1 implementation plan](docs/plans/2026-10-31-m1-launch-flow.md)
 - [M2 implementation plan](docs/plans/2026-11-01-m2-break-pass.md)
@@ -86,10 +86,12 @@ Keep new plans, specs, and notes under `docs/plans/`, `docs/specs/`, and `docs/n
 | `Integration/DeviceDiagnostics.swift`, `App/Debug/DeviceDiagnosticsSection.swift`                                     | Opt-in DEBUG diagnostics around the real monitoring adapter and shared callback engine                                                                                                                                                                                       |
 | `Integration/MonitorTiming.swift`                                                                                     | DEBUG flag file `monitor-timing.json`, and the recorder and wrappers that build the `MONITOR_TIMING` lines of a Monitor callback; `FocusMonitor` owns the logger                                                                                                             |
 | `Shared/TodaySnapshot.swift`, `App/TodaySnapshotWriter.swift`, `Widget/`                                              | Today snapshot: the rule for "for today" and the timeline entries; the app's write after a history read; the home screen widget and its reader                                                                                                                               |
+| `Shield/`                                                                                                             | The Shield Configuration extension `FocusShield`: one static shield for both layers and all four data source calls, with the colors and the colon mark in code                                                                                                               |
 
 App, Monitor and the App Intents extension compile `Shared/` and `Integration/`; Report stays separate.
 `Presentation/` shares views between App and Report, never report data.
 Widget compiles only `Shared/FocusActivityContent.swift`, the today snapshot file of `Shared/`, Activity attributes/views and `Widget/`; its App Group access is for reading `TodaySnapshot/today.json` only, and it compiles nothing that can open the control store, a selection file, the marker or the history store.
+Shield compiles only `Shield/`, has no App Group and reads no data; its entitlements hold only Family Controls.
 SwiftPM exposes `FocusCore`, `FocusHistory`, `FocusReportLogic`; keep Screen Time imports out of `Shared/` and reuse injected protocols/closures.
 
 ## Behavioral changes and verification

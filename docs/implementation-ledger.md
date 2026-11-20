@@ -237,3 +237,15 @@ Hosted and local reviews of #163 found five defects of one family, ends of an op
 #165 passes the arrival time of a filter call from `perform()`, posts the Darwin notification `kr.donminzzi.focusStudy.control-changed` after a call that changed the stored state, orders the missing-length refusal through the engine, reloads the shared settings on a change, and separates the time that orders the activation check from the time that ends its session.
 The extension target `FocusStudyIntents` (`extensionkit-extension`, `com.apple.appintents-extension`) compiles the filter type, the handler, the services, the settings, the selection repository, the history types, `Shared/` and `Integration/`; it links no SwiftUI. Both the app and the extension carry `FocusStudyFilter` in their `Metadata.appintents`, and the build accepts the one type in two targets; which process the system picks is a device step.
 Nothing of this work was checked on a physical device; the device matrix lists its steps as unverified.
+
+## Custom shield: 2026-11-20
+
+The [custom shield design](specs/2026-11-20-custom-shield-design.md) is implemented under #187; the spec is the authority.
+The new app extension `FocusShield` (`kr.donminzzi.focusStudy.shield`, `com.apple.ManagedSettingsUI.shield-configuration-service`) compiles only `Shield/`: `FocusShieldConfiguration`, a `ShieldConfigurationDataSource` that returns one static configuration for all four calls, and `ShieldContent`, which holds the copy, the colors and the colon mark.
+Its entitlements hold only Family Controls, and its `Info.plist` has no App Group key.
+The extension cannot read the app's asset catalog, so `ShieldContent` holds the navy, cream and amber as sRGB hex values and draws the colon mark with `UIGraphicsImageRenderer` from the geometry of the [navy focus room design](specs/2026-11-20-navy-focus-room-design.md#colon-mark-geometry), at 72 pt high and scale 3, centered in a canvas rounded up to whole pixels, on a transparent background; no image or color set is copied into the extension.
+`SDKTests/ShieldConfigurationTests.swift` compiles `Shield/` and compares those colors with `FocusNavy`, `FocusCream` and `FocusAmber` of the app's asset catalog in the light and the dark appearance, checks the layout, the application and web-domain calls, and samples the mark's pixels; `CoreTests/ShieldSourceListTests.swift` checks the source list, the imports, the absence of data reads, the entitlements and the extension point.
+The two category calls take an `ActivityCategory`, which has no public initializer without a token, so a test cannot call them; they return the same static value by source.
+The spec does not set the button colors: "닫기" is navy on a cream button, about 13.5:1, so the shield uses only the colors of the navy room.
+`backgroundBlurStyle` is nil, so that the navy is not tinted by a blur.
+Nothing of this work was checked on a physical device; the device matrix lists the six checks of the spec as unverified, and the distribution entitlement of the new App ID is not requested.
