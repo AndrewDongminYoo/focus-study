@@ -11,6 +11,7 @@
 - 개인 FamilyControls 인증, 사용자 선택 앱과 웹사이트, DeviceActivityReport 안의 사용 보고서, 25분 고정 세션과 중도 종료, 오늘의 세션 기록을 제공한다.
 - 일시정지는 제공하지 않는다. 권한 거절 시 설정 안내만 한다.
 - 앱 본체와 Monitor 및 Report 확장의 3개 제품 타깃을 사용하고 기본 시스템 shield를 사용한다. 테스트 번들은 제품 타깃 수에 포함하지 않는다.
+  - 조정(2026-11-20, #186): 제품 타깃은 앱 본체와 Monitor, Report, App Intents(`FocusStudyIntents`), Activity(`FocusActivity`), Shield Configuration 확장의 6개이고, 기본 시스템 shield 대신 [사용자 지정 shield 설계](2026-11-20-custom-shield-design.md)의 shield를 사용한다. Shield Configuration 확장은 #187에서 구현한다.
 - 보호자 관리, Android, 계정, 서버, AI, 카페, 리워드는 제외한다.
 - 사용 보고서 민감 데이터를 앱 저장소로 내보내지 않는다.
 
@@ -137,6 +138,7 @@ SwiftData `SessionRecord`는 UUID를 고유 키로 하고 시작/예정 만료/�
 설정을 마치지 않은 사용자는 온보딩(소개, 스크린 타임 권한, 제한할 앱 고르기, 집중 시간)을 먼저 거치고, 설정을 마친 사용자는 전체 화면 타이머에서 시작한다.
 권한을 거절했거나 나중에 끈 사용자에게는 시스템 권한 요청을 다시 띄우지 않고 설정 앱에서 켜는 방법을 안내한다.
 일시정지 없음, 계정·서버 없음, 기본 시스템 shield 사용 같은 나머지 범위 결정은 바뀌지 않았다.
+조정(2026-11-20, #186): "기본 시스템 shield 사용"은 [사용자 지정 shield 설계](2026-11-20-custom-shield-design.md)로 대체되었다. 나머지 범위 결정은 바뀌지 않았다.
 
 ## M2 조정: 2026-11-01
 
