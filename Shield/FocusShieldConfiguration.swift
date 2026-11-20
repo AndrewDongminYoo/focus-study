@@ -6,14 +6,15 @@ import UIKit
 final class FocusShieldConfiguration: ShieldConfigurationDataSource {
     /// Built once per extension process; it holds no value that changes with time.
     static let shield = ShieldConfiguration(
+        // On iOS 27.0.1 a nil blur style follows the system appearance, so the text, the mark and the button follow it too.
         backgroundBlurStyle: nil,
         backgroundColor: ShieldContent.navy,
         icon: ShieldContent.colonMark(),
-        title: ShieldConfiguration.Label(text: ShieldContent.title, color: ShieldContent.cream),
-        subtitle: ShieldConfiguration.Label(text: ShieldContent.subtitle, color: ShieldContent.cream),
-        // On iOS 27.0.1 a navy label on a cream button was drawn near white, so the button is navy and the label cream.
-        primaryButtonLabel: ShieldConfiguration.Label(text: ShieldContent.primaryButton, color: ShieldContent.cream),
-        primaryButtonBackgroundColor: ShieldContent.navy,
+        title: ShieldConfiguration.Label(text: ShieldContent.title, color: ShieldContent.text),
+        subtitle: ShieldConfiguration.Label(text: ShieldContent.subtitle, color: ShieldContent.text),
+        // iOS 27.0.1 draws the label white in dark mode whatever its color; in light mode the configured color shows through, so the button follows the appearance.
+        primaryButtonLabel: ShieldConfiguration.Label(text: ShieldContent.primaryButton, color: ShieldContent.text),
+        primaryButtonBackgroundColor: ShieldContent.buttonBackground,
         secondaryButtonLabel: nil
     )
 
