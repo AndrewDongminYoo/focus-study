@@ -690,6 +690,22 @@ So a Focus that turns on before the first unlock leaves the selection open until
 `[UNCERTAIN]` Whether the call after the first unlock would run in the extension when the app is not opened; here the app had been opened 7 s before the system handled the first unlock.
 `[UNCERTAIN]` What sent the off call at 21:50:36, which `donotdisturbd` logged after `Handling first launch/unlock: current=(null)` at 21:50:34, while the schedule was being set up with the Focus off; it found no session.
 
+## Custom shield: not yet run (#187)
+
+The checks of the [custom shield design](../specs/2026-11-20-custom-shield-design.md#verification-plan) for the `FocusShield` extension.
+A simulator cannot show a shield, so `ShieldConfigurationTests` checks only the configuration that the extension returns; it is not evidence for the rows below.
+On 2026-11-20 the iOS 26.5 simulator (Xcode 26.6, ad-hoc signed Debug build) showed the Screen Time access alert and the "Allow with Passcode" sheet, then asked for the iPhone passcode; the simulator has none, an empty entry left access denied, and so no shield could be applied there.
+Each run applies real restrictions and needs its own approval; record the device, the OS version and the build in each row.
+
+| Check                                                    | Expected                                                               | Status     |
+| -------------------------------------------------------- | ---------------------------------------------------------------------- | ---------- |
+| 1. Light and dark appearance                             | The navy and the text colors are the same in both                      | Unverified |
+| 2. Largest text size                                     | The title, the subtitle and "닫기" are not clipped                     | Unverified |
+| 3. Small screen                                          | The mark, the text and the button fit                                  | Unverified |
+| 4. App shield and Safari web-domain shield               | The same configuration; other browsers are not claimed                 | Unverified |
+| 5. "닫기" without an action extension                    | Record what it does; if it does not close the app, stop for a decision | Unverified |
+| 6. Focus and everyday layers shield the same app at once | The same shield shows                                                  | Unverified |
+
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 
 이슈 #17의 검토 결과다.
@@ -733,6 +749,8 @@ Report와 Activity 확장은 App Group entitlement가 없어 이 파일들을 �
 | Monitor                                       | 미신청                           | 위와 같다.                                                                                       |
 | Report                                        | 미신청                           | 위와 같다.                                                                                       |
 | Activity (`kr.donminzzi.focusStudy.activity`) | 해당 없음                        | `project.yml`의 `FocusActivity` 타깃에는 entitlements 파일이 없고 Family Controls를 쓰지 않는다. |
+
+조정(2026-11-20, #187): Shield 확장(`kr.donminzzi.focusStudy.shield`)이 추가되었다. 이 확장은 Family Controls를 쓰므로 배포 entitlement가 따로 필요하며, 아직 신청하지 않았다. #17의 검토는 이 App ID를 다루지 않는다.
 
 조정(2026-11-14, #124): Activity 행의 근거 중 entitlements 파일이 없다는 부분은 바뀌었다. `Configuration/Activity.entitlements`는 App Group만 담고 Family Controls는 쓰지 않으므로 배포 entitlement는 여전히 해당 없음이다. 이 App ID의 App Groups capability와 프로필 변경은 아직 하지 않았다.
 
