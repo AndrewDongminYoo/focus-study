@@ -690,21 +690,33 @@ So a Focus that turns on before the first unlock leaves the selection open until
 `[UNCERTAIN]` Whether the call after the first unlock would run in the extension when the app is not opened; here the app had been opened 7 s before the system handled the first unlock.
 `[UNCERTAIN]` What sent the off call at 21:50:36, which `donotdisturbd` logged after `Handling first launch/unlock: current=(null)` at 21:50:34, while the schedule was being set up with the Focus off; it found no session.
 
-## Custom shield: not yet run (#187)
+## Custom shield: partly run on 2026-11-20 (#187)
 
 The checks of the [custom shield design](../specs/2026-11-20-custom-shield-design.md#verification-plan) for the `FocusShield` extension.
 A simulator cannot show a shield, so `ShieldConfigurationTests` checks only the configuration that the extension returns; it is not evidence for the rows below.
 On 2026-11-20 the iOS 26.5 simulator (Xcode 26.6, ad-hoc signed Debug build) showed the Screen Time access alert and the "Allow with Passcode" sheet, then asked for the iPhone passcode; the simulator has none, an empty entry left access denied, and so no shield could be applied there.
+On 2026-11-20, the signed Debug build of `a6f2a78` was installed on an iPhone 16 Pro with iOS 27.0.1 and a Shield development profile that included Family Controls and the test device.
+An attempt to check the largest text size through the everyday store diagnostic stopped when the app picker and its settings sheet closed before an app could be selected.
+The same diagnostic closed at the original text size and UIKit logged repeated attempts to present a sheet while another sheet was already being presented.
+The diagnostic applied no restriction, so the largest text size check remains unverified.
+At 21:38:06 the same day, a signed Debug build of `a6f2a78` with the picker sheet moved from the diagnostics section to `SettingsView` was installed over the app with `devicectl device install app`, with the existing development profiles, and launched with `--screen-time-diagnostics`.
+The app picker stayed open, one app was selected and applied to the `everydayLayer` store, and the shield was captured on screen at the default text size (21:44) and at two larger sizes (21:45), the larger of which is the largest size.
+Pixels read from the captures: the background is `#232529`, not the navy `#1E2744`, which matches the SDK description of `backgroundColor` as the color used in the background blur effect; the title and the subtitle are cream; the "닫기" label is near white (`#FEF9F1` at the lightest) on the cream button (`#FDF4E4`), not the configured navy, so it is close to unreadable at every size.
+Tapping "닫기" closed the shielded app, with no action extension.
+The restriction was then removed and the text size restored.
+A second build (installed at 21:50:19) made the button navy with a cream label: the label was drawn `#DCDDE0` on the navy button (`#202742`), so iOS 27.0.1 does not use the configured label color, and the label was readable at the default text size.
+A third build (installed at 21:54:06) added a line break before the subtitle and between its two sentences, and 20 pt of transparent space under the 72 pt mark; at the default text size (22:07) both line breaks showed, and the mark was drawn about 0.78 times as tall as before, close to 72 / 92, so iOS fits the icon image into a fixed box.
+This layout was approved on screen. At the largest text size (22:08) the title wrapped to two lines, the subtitle to five, and "닫기" nearly filled the button height; nothing was clipped, and the mark was drawn smaller again.
 Each run applies real restrictions and needs its own approval; record the device, the OS version and the build in each row.
 
-| Check                                                    | Expected                                                               | Status     |
-| -------------------------------------------------------- | ---------------------------------------------------------------------- | ---------- |
-| 1. Light and dark appearance                             | The navy and the text colors are the same in both                      | Unverified |
-| 2. Largest text size                                     | The title, the subtitle and "닫기" are not clipped                     | Unverified |
-| 3. Small screen                                          | The mark, the text and the button fit                                  | Unverified |
-| 4. App shield and Safari web-domain shield               | The same configuration; other browsers are not claimed                 | Unverified |
-| 5. "닫기" without an action extension                    | Record what it does; if it does not close the app, stop for a decision | Unverified |
-| 6. Focus and everyday layers shield the same app at once | The same shield shows                                                  | Unverified |
+| Check                                                    | Expected                                                               | Status                                                                |
+| -------------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| 1. Light and dark appearance                             | The navy and the text colors are the same in both                      | Unverified                                                            |
+| 2. Largest text size                                     | The title, the subtitle and "닫기" are not clipped                     | Passed on the third build; the first build failed (unreadable "닫기") |
+| 3. Small screen                                          | The mark, the text and the button fit                                  | Unverified                                                            |
+| 4. App shield and Safari web-domain shield               | The same configuration; other browsers are not claimed                 | Unverified                                                            |
+| 5. "닫기" without an action extension                    | Record what it does; if it does not close the app, stop for a decision | Passed                                                                |
+| 6. Focus and everyday layers shield the same app at once | The same shield shows                                                  | Unverified                                                            |
 
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 

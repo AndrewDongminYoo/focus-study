@@ -1,4 +1,7 @@
 import SwiftUI
+#if DEBUG
+import FamilyControls
+#endif
 
 /// Personal settings opened from the timer screen's top-right button, or with the everyday screen pushed from the timer screen's everyday status row.
 struct SettingsView: View {
@@ -7,6 +10,10 @@ struct SettingsView: View {
     @State private var everydayHasChanges = false
     @State private var confirmingDiscard = false
     @State private var path: [SettingsRoute]
+    #if DEBUG
+    @State private var diagnosticEverydayPicker = false
+    @State private var diagnosticEverydayDraft = FamilyActivitySelection(includeEntireCategory: true)
+    #endif
     init(model: FocusModel, opensEveryday: Bool = false) {
         self.model = model
         _path = State(initialValue: opensEveryday ? [.everyday] : [])
@@ -34,7 +41,8 @@ struct SettingsView: View {
                 } header: { Text("집중 모드") } footer: { Text("iOS 집중 모드를 켤 때 집중도 함께 시작할 수 있어요.") }
                 #if DEBUG
                 if let diagnostics = model.services.diagnostics {
-                    DeviceDiagnosticsSection(diagnostics: diagnostics, model: model, filterHandler: try? FocusRuntime.process().holder.filterHandler(), readFilter: FocusStudyFilter.reading)
+                    DeviceDiagnosticsSection(diagnostics: diagnostics, model: model, filterHandler: try? FocusRuntime.process().holder.filterHandler(),
+                                             readFilter: FocusStudyFilter.reading, openEverydayPicker: { diagnosticEverydayPicker = true })
                 }
                 #endif
             }
@@ -55,6 +63,24 @@ struct SettingsView: View {
                 }
             }
         }
+        #if DEBUG
+        // A sheet on the diagnostics Form section can trigger overlapping presentations from its rows.
+        .sheet(isPresented: $diagnosticEverydayPicker) {
+            NavigationStack {
+                FamilyActivityPicker(selection: $diagnosticEverydayDraft)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) { Button("닫기") { diagnosticEverydayPicker = false } }
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("적용") {
+                                model.services.diagnostics?.applyEverydayWithoutUnionCheck(diagnosticEverydayDraft)
+                                diagnosticEverydayPicker = false
+                            }
+                        }
+                    }
+            }
+            .modifier(FocusEditorSheet())
+        }
+        #endif
         .modifier(FocusEditorSheet())
         .interactiveDismissDisabled(everydayHasChanges)
         .alert("변경 사항을 버릴까요?", isPresented: $confirmingDiscard) {

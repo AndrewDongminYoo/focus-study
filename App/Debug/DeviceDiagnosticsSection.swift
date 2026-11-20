@@ -1,6 +1,5 @@
 #if DEBUG
 import SwiftUI
-import FamilyControls
 
 struct DeviceDiagnosticsSection: View {
     let diagnostics: DeviceDiagnostics
@@ -8,11 +7,10 @@ struct DeviceDiagnosticsSection: View {
     /// The Focus filter handler of this process and `FocusStudyFilter.reading()`, from the app.
     let filterHandler: FocusFilterHandler?
     let readFilter: () async -> FocusFilterReading
+    let openEverydayPicker: () -> Void
     @State private var replayFailed = false
     @State private var filterReading: FocusFilterReading?
     @State private var callLog: [String] = []
-    @State private var everydayPicker = false
-    @State private var everydayDraft = FamilyActivitySelection(includeEntireCategory: true)
     var body: some View {
         Section("실기기 진단") {
             Text("실제 Screen Time 등록을 사용하는 진단입니다. 기기 소유자가 동의한 항목으로만 진행해 주세요.")
@@ -32,21 +30,10 @@ struct DeviceDiagnosticsSection: View {
                 Button("등록 시간 비교") { diagnostics.runRegistrationProbe() }.accessibilityIdentifier("diagnosticRegistrationProbe")
             }
             if diagnostics.canApplyEveryday {
-                Button("매일 제한 store에 선택 적용(합집합 검사 없음)") { everydayPicker = true }.accessibilityIdentifier("diagnosticEverydayApply")
+                Button("매일 제한 store에 선택 적용(합집합 검사 없음)", action: openEverydayPicker).accessibilityIdentifier("diagnosticEverydayApply")
             }
             if let message = diagnostics.message { Text(message).font(.footnote) }
             if replayFailed { Text("콜백을 전달하지 못했습니다. 세션 상태를 다시 확인해 주세요.").foregroundStyle(FocusTheme.Palette.error) }
-        }
-        .sheet(isPresented: $everydayPicker) {
-            NavigationStack {
-                FamilyActivityPicker(selection: $everydayDraft)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) { Button("닫기") { everydayPicker = false } }
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("적용") { diagnostics.applyEverydayWithoutUnionCheck(everydayDraft); everydayPicker = false }
-                        }
-                    }
-            }
         }
         Section("Focus 필터 진단") {
             if let filterHandler {

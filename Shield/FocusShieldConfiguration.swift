@@ -11,8 +11,9 @@ final class FocusShieldConfiguration: ShieldConfigurationDataSource {
         icon: ShieldContent.colonMark(),
         title: ShieldConfiguration.Label(text: ShieldContent.title, color: ShieldContent.cream),
         subtitle: ShieldConfiguration.Label(text: ShieldContent.subtitle, color: ShieldContent.cream),
-        primaryButtonLabel: ShieldConfiguration.Label(text: ShieldContent.primaryButton, color: ShieldContent.navy),
-        primaryButtonBackgroundColor: ShieldContent.cream,
+        // On iOS 27.0.1 a navy label on a cream button was drawn near white, so the button is navy and the label cream.
+        primaryButtonLabel: ShieldConfiguration.Label(text: ShieldContent.primaryButton, color: ShieldContent.cream),
+        primaryButtonBackgroundColor: ShieldContent.navy,
         secondaryButtonLabel: nil
     )
 
