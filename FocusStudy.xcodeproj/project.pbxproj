@@ -36,6 +36,7 @@
 		2EA7B55A6538D6453A8B7ACC /* EverydaySchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72B855890EB8AC4858EACDCD /* EverydaySchedule.swift */; };
 		300F1F9D86E3C58CFDC21750 /* StartupAttemptsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22E988BD66ABB709A80F8208 /* StartupAttemptsTests.swift */; };
 		30123EEA50CBD95FDBBE2F9E /* MonitorTiming.swift in Sources */ = {isa = PBXBuildFile; fileRef = 637DC9448A9069BD6ECEF0A5 /* MonitorTiming.swift */; };
+		306B13EA4AB35052C185C1D9 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = BD2E0758EBEA6A080150E287 /* PrivacyInfo.xcprivacy */; };
 		30B2FE49B9B438FEBB38B02E /* ControlTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66F1973C38BC3E67F3196742 /* ControlTypes.swift */; };
 		31FC89F4335ED52E5CEC36D4 /* ScreenTimeAdapters.swift in Sources */ = {isa = PBXBuildFile; fileRef = B94BBE9964A108AA74EA8684 /* ScreenTimeAdapters.swift */; };
 		320BF834880639DE363C4C5E /* DeviceDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48AB9C8FAE727BB9401D212F /* DeviceDiagnostics.swift */; };
@@ -361,6 +362,7 @@
 		BC05FDB035D5E2BD02C436D5 /* RegistrationMarker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegistrationMarker.swift; sourceTree = "<group>"; };
 		BC5423DA7A71AB76ABD3FC97 /* StartupRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartupRecovery.swift; sourceTree = "<group>"; };
 		BC64A13EBA38AE48756A0698 /* EverydayLayerFileTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EverydayLayerFileTests.swift; sourceTree = "<group>"; };
+		BD2E0758EBEA6A080150E287 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		BE52C8706C6D532DF83AB565 /* UITestFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestFixtures.swift; sourceTree = "<group>"; };
 		C319BE9A1C80D0D864BC6263 /* SessionRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionRecord.swift; sourceTree = "<group>"; };
 		C3A08B2A2B5A673549A6D57E /* BreakSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreakSessionView.swift; sourceTree = "<group>"; };
@@ -614,6 +616,7 @@
 			children = (
 				0057E95E8555F6085B85D681 /* FocusFilterEntry.swift */,
 				AF4D1224026047F87F8E4D06 /* FocusStudyIntentsExtension.swift */,
+				BD2E0758EBEA6A080150E287 /* PrivacyInfo.xcprivacy */,
 			);
 			path = Intents;
 			sourceTree = "<group>";
@@ -696,6 +699,7 @@
 			buildConfigurationList = 4C650FB4EE054FDECE906975 /* Build configuration list for PBXNativeTarget "FocusStudyIntents" */;
 			buildPhases = (
 				5C06658B5381D79324819E74 /* Sources */,
+				BCFB40F9F3DD20A99B258FC1 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -885,6 +889,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				69D5500E5F0FC79EA8FB9516 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BCFB40F9F3DD20A99B258FC1 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				306B13EA4AB35052C185C1D9 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1393,7 +1405,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.1;
+				MARKETING_VERSION = 0.1.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -1592,7 +1604,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.1;
+				MARKETING_VERSION = 0.1.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
