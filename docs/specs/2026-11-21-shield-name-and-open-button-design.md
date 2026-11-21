@@ -60,6 +60,8 @@ From the #197 spike on an iPhone 16 Pro with iOS 27.0.1, a signed Debug build in
 - The action extension had no entitlements and was signed with the team's wildcard development profile.
 - The configuration of `example.com`, shielded before the spike build, stayed without the secondary button after the install and after the selection was removed and applied again; `youtube.com`, shielded for the first time, showed it.
   iOS keeps a configuration for a shielded item and reuses it, across an install of a new build; when it asks again is not known.
+  So an item shielded under an earlier build can keep its one "닫기" button while the action extension answers the primary button with `.openParentalControlsApp`; a tap on that "닫기" then opens 온:공. No build with the earlier shield was distributed (the shield extension's distribution entitlement was not requested; see the [device matrix](../notes/screen-time-device-matrix.md)), so the first distributed build ships the configuration and the action extension together, and only development devices can see the mismatch.
+  After the first distributed build, a change to what a button does must keep the meaning of the label that a cached configuration may still show.
 
 Not yet known:
 
