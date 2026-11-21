@@ -39,6 +39,7 @@ iphoneos
 KakaoTalk
 keylineTint
 kr.donminzzi.focusStudy.sdktests
+kr.donminzzi.focusStudy.shieldaction
 kr.donminzzi.focusStudy.uitests
 layoutSubviews
 logarchive
