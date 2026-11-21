@@ -1,7 +1,8 @@
 # Custom shield
 
 Date: 2026-11-20.
-Status: design approved on 2026-11-20 in [issue #186](https://github.com/AndrewDongminYoo/focus-study/issues/186); implemented under [issue #187](https://github.com/AndrewDongminYoo/focus-study/issues/187) as the `FocusShield` extension in `Shield/`, and not yet run on a device.
+Status: design approved on 2026-11-20 in [issue #186](https://github.com/AndrewDongminYoo/focus-study/issues/186); implemented under [issue #187](https://github.com/AndrewDongminYoo/focus-study/issues/187) as the `FocusShield` extension in `Shield/`, and run on a device on 2026-11-20 and 2026-11-21 ([device matrix](../notes/screen-time-device-matrix.md)).
+The [shield name and open button design](2026-11-21-shield-name-and-open-button-design.md), proposed on 2026-11-21, would amend contract items 1, 2, 5 and 6 and the excluded open button.
 The implementation and the device checks are [issue #187](https://github.com/AndrewDongminYoo/focus-study/issues/187).
 Source: the [decision of 2026-11-20 in issue #184](https://github.com/AndrewDongminYoo/focus-study/issues/184#issuecomment-7013218213), which owns the palette and the colon mark, and the choices of 2026-11-20 in issue #186.
 This document amends the [2026-10-26 design](2026-10-26-focus-study-design.md) only where [Superseded lines](#superseded-lines) says so.
