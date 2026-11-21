@@ -75,13 +75,14 @@ The implementation adds one product target, a Shield Action extension:
 - extension point `com.apple.ManagedSettings.shield-action-service`;
 - a principal class that subclasses `ShieldActionDelegate`;
 - bundle ID `kr.donminzzi.focusStudy.shieldaction`;
-- no entitlements file and no App Group.
+- an entitlements file with only `com.apple.developer.family-controls` set to true, and no App Group.
 
 The product targets in `project.yml` become 7.
 Test bundles are not counted.
 
-The spike proves the missing entitlement only for development.
-Distribution needs an explicit App ID and a distribution profile for the new bundle ID; `[UNCERTAIN]` whether App Review or the system requires the Family Controls (Distribution) entitlement for it is open, and the implementation records the answer before a TestFlight build.
+Amended on 2026-11-21: the extension first shipped with no entitlements file, because the spike worked without one on the wildcard development profile.
+Apple's [request guide](https://developer.apple.com/documentation/familycontrols/requesting-the-family-controls-entitlement) asks for the same Family Controls request for every Screen Time extension it names, Shield Action among them, so the extension now carries the entitlement on an explicit App ID, like the other Screen Time targets.
+Its distribution entitlement is requested with the others; the [device matrix](../notes/screen-time-device-matrix.md) records the state.
 
 ## Verification plan
 
