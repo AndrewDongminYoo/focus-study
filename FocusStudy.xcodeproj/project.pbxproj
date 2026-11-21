@@ -1324,6 +1324,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = Configuration/ShieldAction.entitlements;
 				INFOPLIST_FILE = "Configuration/ShieldAction-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1427,6 +1428,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = Configuration/ShieldAction.entitlements;
 				INFOPLIST_FILE = "Configuration/ShieldAction-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

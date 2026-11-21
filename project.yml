@@ -125,7 +125,7 @@ targets:
         CODE_SIGN_ENTITLEMENTS: Configuration/Shield.entitlements
         APPLICATION_EXTENSION_API_ONLY: YES
         TARGETED_DEVICE_FAMILY: "1"
-  # The shield buttons (2026-11-21 shield name and open button design): no entitlements, no App Group and no data read.
+  # The shield buttons (2026-11-21 shield name and open button design): only Family Controls, which Apple asks for every Screen Time extension; no App Group and no data read.
   FocusShieldAction:
     type: app-extension
     platform: iOS
@@ -135,6 +135,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: kr.donminzzi.focusStudy.shieldaction
         INFOPLIST_FILE: Configuration/ShieldAction-Info.plist
+        CODE_SIGN_ENTITLEMENTS: Configuration/ShieldAction.entitlements
         APPLICATION_EXTENSION_API_ONLY: YES
         TARGETED_DEVICE_FAMILY: "1"
   FocusSDKTests:

@@ -94,7 +94,7 @@ App, Monitor and the App Intents extension compile `Shared/` and `Integration/`;
 `Presentation/` shares views between App and Report, never report data.
 Widget compiles only `Shared/FocusActivityContent.swift`, the today snapshot file of `Shared/`, Activity attributes/views and `Widget/`; its App Group access is for reading `TodaySnapshot/today.json` only, and it compiles nothing that can open the control store, a selection file, the marker or the history store.
 Shield compiles only `Shield/`, has no App Group and reads no data; its entitlements hold only Family Controls.
-ShieldAction compiles only `ShieldAction/`, has no entitlements and no App Group, and reads no data.
+ShieldAction compiles only `ShieldAction/`, has no App Group and reads no data; its entitlements hold only Family Controls.
 SwiftPM exposes `FocusCore`, `FocusHistory`, `FocusReportLogic`; keep Screen Time imports out of `Shared/` and reuse injected protocols/closures.
 
 ## Behavioral changes and verification
