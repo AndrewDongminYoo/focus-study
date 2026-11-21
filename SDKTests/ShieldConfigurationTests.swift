@@ -17,17 +17,13 @@ final class ShieldConfigurationTests: XCTestCase {
         }
     }
 
-    /// Contract item 1: the system blur tinted navy, the mark on a navy tile, and text and a button that follow the appearance: navy text and a cream button in light mode, cream text and a navy button in dark mode.
+    /// Custom shield contract item 1: the system blur tinted navy, the mark on a navy tile, and text and a button that follow the appearance: navy text and a cream button in light mode, cream text and a navy button in dark mode.
     func testShieldLayoutIsTheApprovedOne() throws {
-        let shield = FocusShieldConfiguration.shield
+        let shield = FocusShieldConfiguration.shield(name: "Instagram", item: .application, opensApp: true)
         XCTAssertNil(shield.backgroundBlurStyle)
         XCTAssertEqual(try srgb(XCTUnwrap(shield.backgroundColor)), try srgb(ShieldContent.navy))
-        XCTAssertEqual(shield.title?.text, "지금은 쉬는 앱이에요")
-        XCTAssertEqual(shield.subtitle?.text, "\n온:공이 이 앱을 잠시 막고 있어요.\n언제 풀리는지는 온:공에서 볼 수 있어요.")
-        XCTAssertEqual(shield.primaryButtonLabel?.text, "닫기")
-        XCTAssertNil(shield.secondaryButtonLabel)
         let light = UITraitCollection(userInterfaceStyle: .light), dark = UITraitCollection(userInterfaceStyle: .dark)
-        for color in [shield.title?.color, shield.subtitle?.color, shield.primaryButtonLabel?.color] {
+        for color in [shield.title?.color, shield.subtitle?.color, shield.primaryButtonLabel?.color, shield.secondaryButtonLabel?.color] {
             let text = try XCTUnwrap(color)
             XCTAssertEqual(try srgb(text.resolvedColor(with: light)), try srgb(ShieldContent.navy))
             XCTAssertEqual(try srgb(text.resolvedColor(with: dark)), try srgb(ShieldContent.cream))
@@ -42,18 +38,51 @@ final class ShieldConfigurationTests: XCTestCase {
         XCTAssertEqual(icon.size.height, side + ShieldContent.markBottomInset, accuracy: 0.01)
     }
 
-    /// Contract item 2: the application and the web domain calls return the same configuration.
-    /// The two category calls need an `ActivityCategory`, which has no public initializer without a token; they return the same `shield` by source.
-    func testApplicationAndWebDomainCallsReturnTheSameShield() {
+    /// Name design, contract item 1: the name in the title, trimmed, and a text for each kind of item without one.
+    func testTitleNamesTheItemOrFallsBack() {
+        XCTAssertEqual(ShieldContent.title(name: "Instagram", item: .application), "Instagram, 지금은 쉬어요")
+        XCTAssertEqual(ShieldContent.title(name: "  유튜브 \n", item: .application), "유튜브, 지금은 쉬어요")
+        XCTAssertEqual(ShieldContent.title(name: "youtube.com", item: .website), "youtube.com, 지금은 쉬어요")
+        for blank in [nil, "", "  \n"] as [String?] {
+            XCTAssertEqual(ShieldContent.title(name: blank, item: .application), "지금은 쉬는 앱이에요")
+            XCTAssertEqual(ShieldContent.title(name: blank, item: .website), "지금은 쉬는 사이트예요")
+        }
+    }
+
+    /// Name design, contract items 2 and 4: with the open button, "온:공 열기" leads, "닫기" follows and the subtitle is one line; without it, "닫기" alone and a second line.
+    func testButtonsAndSubtitleFollowTheOpenButton() {
+        let opens = FocusShieldConfiguration.shield(name: nil, item: .application, opensApp: true)
+        XCTAssertEqual(opens.primaryButtonLabel?.text, "온:공\u{00A0}열기")
+        XCTAssertEqual(opens.secondaryButtonLabel?.text, "닫기")
+        XCTAssertEqual(opens.subtitle?.text, "\n온:공이 잠시 막고 있어요.")
+        let closes = FocusShieldConfiguration.shield(name: nil, item: .application, opensApp: false)
+        XCTAssertEqual(closes.primaryButtonLabel?.text, "닫기")
+        XCTAssertNil(closes.secondaryButtonLabel)
+        XCTAssertEqual(closes.subtitle?.text, "\n온:공이 잠시 막고 있어요.\n언제 풀리는지는 온:공에서 볼 수 있어요.")
+    }
+
+    /// The data source calls: an application gets the application fallback, because `localizedDisplayName` is nil outside the extension, and a website gets its domain.
+    /// The two category calls need an `ActivityCategory`, which has no public initializer without a token; they build the same shield by source.
+    func testCallsUseTheirItemAndOneIcon() {
         let source = FocusShieldConfiguration()
         let application = source.configuration(shielding: Application(bundleIdentifier: "com.example.app"))
         let webDomain = source.configuration(shielding: WebDomain(domain: "example.com"))
+        XCTAssertEqual(application.title?.text, "지금은 쉬는 앱이에요")
+        XCTAssertEqual(webDomain.title?.text, "example.com, 지금은 쉬어요")
         for shield in [application, webDomain] {
-            XCTAssertEqual(shield.title?.text, ShieldContent.title)
-            XCTAssertEqual(shield.subtitle?.text, ShieldContent.subtitle)
-            XCTAssertEqual(shield.primaryButtonLabel?.text, ShieldContent.primaryButton)
-            XCTAssertTrue(shield.icon === FocusShieldConfiguration.shield.icon)
+            XCTAssertEqual(shield.primaryButtonLabel?.text, FocusShieldConfiguration.opensApp ? "온:공\u{00A0}열기" : "닫기")
+            XCTAssertTrue(shield.icon === FocusShieldConfiguration.icon)
         }
+    }
+
+    /// Name design, contract item 5: on iOS 26.5 and later the primary button opens the app and the secondary button closes; below, both close.
+    func testActionResponses() {
+        if #available(iOS 26.5, *) {
+            XCTAssertEqual(FocusShieldAction.response(for: .primaryButtonPressed), .openParentalControlsApp)
+        } else {
+            XCTAssertEqual(FocusShieldAction.response(for: .primaryButtonPressed), .close)
+        }
+        XCTAssertEqual(FocusShieldAction.response(for: .secondaryButtonPressed), .close)
     }
 
     /// The mark's geometry (navy focus room design, "Colon mark geometry"): cream ring, transparent hole, amber dot, transparent corners.

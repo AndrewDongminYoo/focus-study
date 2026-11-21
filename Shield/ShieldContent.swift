@@ -1,13 +1,35 @@
 import UIKit
 
-/// The one static layout of the custom shield (docs/specs/2026-11-20-custom-shield-design.md, contract item 1).
+/// The layout of the custom shield (docs/specs/2026-11-20-custom-shield-design.md, contract item 1) and the copy of the shield name and open button design (docs/specs/2026-11-21-shield-name-and-open-button-design.md, contract items 1, 2 and 4).
 /// The extension cannot read the app's asset catalog, so the colors are the hex values of the navy room; `FocusSDKTests` compares them with the app's color sets.
-/// Nothing here depends on time, on the shielded item or on stored data (contract items 4 and 5).
+/// Nothing here depends on time or on stored data; the only per-item value is the name that the system passes to the configuration call.
 enum ShieldContent {
-    static let title = "지금은 쉬는 앱이에요"
-    /// The shield has no spacing or alignment property: the leading line break separates the subtitle from the title, and the second one keeps each sentence on its own line.
-    static let subtitle = "\n온:공이 이 앱을 잠시 막고 있어요.\n언제 풀리는지는 온:공에서 볼 수 있어요."
-    static let primaryButton = "닫기"
+    /// What a configuration call shields.
+    enum Item {
+        case application
+        case website
+    }
+
+    static let closeButton = "닫기"
+    /// A no-break space keeps the label on one line where it fits; the primary button has a fixed height, and at the largest accessibility text size with Display Zoom iOS 27.0.1 still wraps it to two clipped lines (known issue #201).
+    static let openButton = "온:공\u{00A0}열기"
+
+    /// "{name}, 지금은 쉬어요" needs no particle after the name, whose last syllable cannot be read from a Latin name; with no name, a text for the kind of item.
+    static func title(name: String?, item: Item) -> String {
+        if let name = name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+            return "\(name), 지금은 쉬어요"
+        }
+        switch item {
+        case .application: return "지금은 쉬는 앱이에요"
+        case .website: return "지금은 쉬는 사이트예요"
+        }
+    }
+
+    /// The shield has no spacing or alignment property: the leading line break separates the subtitle from the title.
+    /// Without the open button, a second line sends the person to the app.
+    static func subtitle(opensApp: Bool) -> String {
+        opensApp ? "\n온:공이 잠시 막고 있어요." : "\n온:공이 잠시 막고 있어요.\n언제 풀리는지는 온:공에서 볼 수 있어요."
+    }
 
     /// `FocusNavy`, `FocusCream` and `FocusAmber`; the same values in the light and the dark appearance.
     static let navy = UIColor(red: 0x1E / 255, green: 0x27 / 255, blue: 0x44 / 255, alpha: 1)

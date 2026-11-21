@@ -744,6 +744,21 @@ The everyday store diagnostic applied one app and `example.com`; the results are
 So iOS keeps the configuration of a shielded website and reuses it across an install of a new build and a new application of the same selection; when it asks the extension again is not known.
 A device check of a shield change needs an item that was not shielded before with that build.
 
+## Shield name and open button: 2026-11-21 (#200)
+
+The checks of the [shield name and open button design](../specs/2026-11-21-shield-name-and-open-button-design.md#verification-plan).
+On the iPhone 16 Pro with iOS 27.0.1, signed Debug builds of the `feat/shield-name-open-button` branch were installed over the app with `devicectl device install app` at 09:58:43 and, with a no-break space in "온:공 열기", at 14:10:31, with the existing development profiles; the everyday store diagnostic applied apps, websites and a category that had not been shielded before.
+The results come from captures and from what was reported on screen.
+
+| Check                                                       | Result                                                                                                                                                                                                                                                                                                                                                |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. The name in the title                                    | Passed: "Watermelon Merge Game 2, 지금은 쉬어요" for an app and "m.youtube.com, 지금은 쉬어요" for a Safari shield, the domain that was shielded rather than the one in the address bar. The app name is the English name, not the Korean App Store name                                                                                              |
+| 2. An app selected through a whole category                 | Passed: with all of 엔터테인먼트 selected, YouTube showed its name                                                                                                                                                                                                                                                                                    |
+| 3. "온:공 열기" and "닫기" on app and Safari shields        | Passed: the primary button opened 온:공 and the secondary button closed the app and the page                                                                                                                                                                                                                                                          |
+| 4. Light and dark appearance                                | Passed: both labels can be read; iOS draws the secondary button as a gray system button whose height follows the text                                                                                                                                                                                                                                 |
+| 5. The largest text size with a long name, and Display Zoom | The long name wraps without clipping. At the largest accessibility text size with Display Zoom, the fixed-height primary button wraps "온:공 열기" to two clipped lines, with or without the no-break space; without the accessibility sizes it stays on one line. Known issue [#201](https://github.com/AndrewDongminYoo/focus-study/issues/201), P3 |
+| 6. Below iOS 26.5                                           | Unverified: no device                                                                                                                                                                                                                                                                                                                                 |
+
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 
 이슈 #17의 검토 결과다.

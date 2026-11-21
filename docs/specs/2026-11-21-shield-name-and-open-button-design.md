@@ -1,7 +1,7 @@
 # Shield name and open button
 
 Date: 2026-11-21.
-Status: proposed in [issue #198](https://github.com/AndrewDongminYoo/focus-study/issues/198); not yet approved or implemented.
+Status: proposed in [issue #198](https://github.com/AndrewDongminYoo/focus-study/issues/198) and approved on 2026-11-21 in [PR #199](https://github.com/AndrewDongminYoo/focus-study/pull/199), with "온:공 열기" as the primary button; implemented under [issue #200](https://github.com/AndrewDongminYoo/focus-study/issues/200) as the `FocusShieldAction` extension in `ShieldAction/` and per-call configurations in `Shield/`, and run on a device on 2026-11-21 ([device matrix](../notes/screen-time-device-matrix.md)); the clipped primary label at the largest accessibility text size with Display Zoom is the known issue [#201](https://github.com/AndrewDongminYoo/focus-study/issues/201).
 Source: the choices of 2026-11-21 in this conversation and issue #198, and the device spike of [issue #197](https://github.com/AndrewDongminYoo/focus-study/issues/197) recorded in the [device matrix](../notes/screen-time-device-matrix.md).
 This document amends the [custom shield design](2026-11-20-custom-shield-design.md) only where [Superseded lines](#superseded-lines) says so.
 It includes the website copy of [issue #196](https://github.com/AndrewDongminYoo/focus-study/issues/196).
@@ -60,6 +60,8 @@ From the #197 spike on an iPhone 16 Pro with iOS 27.0.1, a signed Debug build in
 - The action extension had no entitlements and was signed with the team's wildcard development profile.
 - The configuration of `example.com`, shielded before the spike build, stayed without the secondary button after the install and after the selection was removed and applied again; `youtube.com`, shielded for the first time, showed it.
   iOS keeps a configuration for a shielded item and reuses it, across an install of a new build; when it asks again is not known.
+  So an item shielded under an earlier build can keep its one "닫기" button while the action extension answers the primary button with `.openParentalControlsApp`; a tap on that "닫기" then opens 온:공. No build with the earlier shield was distributed (the shield extension's distribution entitlement was not requested; see the [device matrix](../notes/screen-time-device-matrix.md)), so the first distributed build ships the configuration and the action extension together, and only development devices can see the mismatch.
+  After the first distributed build, a change to what a button does must keep the meaning of the label that a cached configuration may still show.
 
 Not yet known:
 

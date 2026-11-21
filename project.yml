@@ -44,6 +44,8 @@ targets:
         embed: true
       - target: FocusShield
         embed: true
+      - target: FocusShieldAction
+        embed: true
   FocusMonitor:
     type: app-extension
     platform: iOS
@@ -123,6 +125,18 @@ targets:
         CODE_SIGN_ENTITLEMENTS: Configuration/Shield.entitlements
         APPLICATION_EXTENSION_API_ONLY: YES
         TARGETED_DEVICE_FAMILY: "1"
+  # The shield buttons (2026-11-21 shield name and open button design): no entitlements, no App Group and no data read.
+  FocusShieldAction:
+    type: app-extension
+    platform: iOS
+    sources:
+      - ShieldAction
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: kr.donminzzi.focusStudy.shieldaction
+        INFOPLIST_FILE: Configuration/ShieldAction-Info.plist
+        APPLICATION_EXTENSION_API_ONLY: YES
+        TARGETED_DEVICE_FAMILY: "1"
   FocusSDKTests:
     type: bundle.unit-test
     platform: iOS
@@ -147,6 +161,7 @@ targets:
         Activity/FocusActivityAttributes.swift,
         Activity/SystemFocusActivityClient.swift,
         Shield,
+        ShieldAction,
         App/Assets.xcassets,
       ]
     settings:
