@@ -1,7 +1,7 @@
 # Shield name and open button
 
 Date: 2026-11-21.
-Status: proposed in [issue #198](https://github.com/AndrewDongminYoo/focus-study/issues/198); not yet approved or implemented.
+Status: proposed in [issue #198](https://github.com/AndrewDongminYoo/focus-study/issues/198) and approved on 2026-11-21 in [PR #199](https://github.com/AndrewDongminYoo/focus-study/pull/199), with "온:공 열기" as the primary button; implemented under [issue #200](https://github.com/AndrewDongminYoo/focus-study/issues/200) as the `FocusShieldAction` extension in `ShieldAction/` and per-call configurations in `Shield/`, and run on a device on 2026-11-21 ([device matrix](../notes/screen-time-device-matrix.md)); the clipped primary label at the largest accessibility text size with Display Zoom is the known issue [#201](https://github.com/AndrewDongminYoo/focus-study/issues/201).
 Source: the choices of 2026-11-21 in this conversation and issue #198, and the device spike of [issue #197](https://github.com/AndrewDongminYoo/focus-study/issues/197) recorded in the [device matrix](../notes/screen-time-device-matrix.md).
 This document amends the [custom shield design](2026-11-20-custom-shield-design.md) only where [Superseded lines](#superseded-lines) says so.
 It includes the website copy of [issue #196](https://github.com/AndrewDongminYoo/focus-study/issues/196).
