@@ -62,8 +62,9 @@ targets:
         CODE_SIGN_ENTITLEMENTS: Configuration/Monitor.entitlements
         APPLICATION_EXTENSION_API_ONLY: YES
         TARGETED_DEVICE_FAMILY: "1"
+  # The Device Activity Report extension point accepts only an ExtensionKit extension: App Store Connect rejected the NSExtension build with error 91179 on 2026-11-22.
   FocusReport:
-    type: app-extension
+    type: extensionkit-extension
     platform: iOS
     sources: [Report, Presentation]
     settings:
