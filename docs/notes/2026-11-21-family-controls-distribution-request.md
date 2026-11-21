@@ -15,7 +15,7 @@ Read on 2026-11-21 in the developer account:
   온:공 is the second case: individual authorization, a focus timer and personal blocking, and no data leaves the device.
 - Only the Account Holder submits it, and submitting accepts the terms.
 
-The request was approved at once on 2026-11-21, and Xcode then showed Family Controls as distribution, not development only, for every bundle ID below: one assignment covers every bundle ID of the team.
+The request was approved at once on 2026-11-21. Before it, the app's App ID listed only "Family Controls (Development)"; after it, the App ID editor of every bundle ID below showed "Family Controls (Development)" and "Family Controls (Distribution)" checked and "Family Controls App and Website Usage" unchecked, and Xcode showed the capability as distribution. One assignment covers every bundle ID of the team.
 
 ## Bundle IDs that use Family Controls
 

@@ -808,7 +808,7 @@ Report와 Activity 확장은 App Group entitlement가 없어 이 파일들을 �
 
 조정(2026-11-21, #188): Apple의 [신청 안내](https://developer.apple.com/documentation/familycontrols/requesting-the-family-controls-entitlement)는 Device Activity Monitor, Device Activity Report, Shield Action, Shield Configuration 같은 Screen Time 확장마다 같은 신청을 따로 내도록 한다. 신청은 Account Holder만 할 수 있다. ShieldAction 확장은 처음에 entitlement 없이 와일드카드 개발 프로필로 동작했지만, 이 안내에 따라 Family Controls entitlement를 추가했다. `-allowProvisioningUpdates`로 App ID `kr.donminzzi.focusStudy.shieldaction`와 개발 프로필 `iOS Team Provisioning Profile: kr.donminzzi.focusStudy.shieldaction`이 만들어졌고, 서명된 확장에 `com.apple.developer.family-controls`가 들어간 것을 확인했다. 앱 레코드는 App Store Connect에 아직 없다. 신청 절차는 [신청 기록](2026-11-21-family-controls-distribution-request.md)에 있다: 양식은 번들 ID가 아니라 개발자 계정 단위이며 약관 동의와 제출 버튼만 있다.
 
-조정(2026-11-21, #188, 승인): 신청서를 제출하자 바로 승인되었다. 그 뒤 Xcode에서 위 여섯 식별자의 Family Controls capability가 모두 development only가 아니라 distribution으로 표시되었다고 확인했다. 계정 단위의 승인 한 번으로 팀의 모든 식별자에 적용된다. 배포 프로필과 TestFlight 업로드는 아직 하지 않았다.
+조정(2026-11-21, #188, 승인): 신청서를 제출하자 바로 승인되었다. 승인 전에 앱 식별자의 Capabilities에는 "Family Controls (Development)" 행만 있었고 "Family Controls (Distribution)"은 Capability Requests 탭의 신청 링크였다. 승인 뒤 Apple Developer의 식별자 편집 화면에서 위 여섯 식별자 모두 "Family Controls (Development)"와 "Family Controls (Distribution)"이 체크되어 있고 "Family Controls App and Website Usage"는 체크되어 있지 않은 것을 읽었다. Xcode도 여섯 식별자의 capability를 distribution으로 표시했다. 계정 단위의 승인 한 번이 팀의 모든 식별자에 적용되었다. 배포 프로필과 TestFlight 업로드는 아직 하지 않았다.
 
 조정(2026-11-20, #187): Shield 확장(`kr.donminzzi.focusStudy.shield`)이 추가되었다. 이 확장은 Family Controls를 쓰므로 배포 entitlement가 따로 필요하며, 아직 신청하지 않았다. #17의 검토는 이 App ID를 다루지 않는다.
 
