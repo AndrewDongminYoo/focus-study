@@ -28,14 +28,15 @@ Proposed on 2026-11-21:
 2. The subtitle is "온:공이 잠시 막고 있어요." for every call, with the line break before it of the custom shield design.
    Where the open button of item 4 is not shown, the subtitle keeps a second line, "언제 풀리는지는 온:공에서 볼 수 있어요.", because then it is the only way the shield sends the person to the app.
    Copy stays short and can change later without a design change, as in contract item 7 of the custom shield design.
-3. The configuration is built for each call from the fixed parts of the custom shield design (background, icon, colors, "닫기") and the title and subtitle of items 1 and 2.
+3. The configuration is built for each call from the fixed parts of the custom shield design (background, icon, colors and the primary button colors) and the title, subtitle and buttons of items 1, 2 and 4.
    It still contains no value that changes with time (custom shield design, contract item 4).
-4. On iOS 26.5 and later the shield has a secondary button, "온:공 열기".
-   Below iOS 26.5 it has no secondary button: the system has no response that opens the app there, and a notification that the person taps to open the app would need a notification permission that the app does not ask for.
-   "닫기" stays the primary button, because stopping is the main job of the shield; "온:공 열기" is the way out to a break or the end of a session.
+4. On iOS 26.5 and later the primary button is "온:공 열기" and the secondary button is "닫기".
+   A person whose app is shielded every day will feel stuck, so the shield leads with the way to a break or the end of a session; "닫기" stays one tap away.
+   The primary button keeps the colors of the custom shield design; iOS draws the secondary button as a text button.
+   Below iOS 26.5 the primary button is "닫기" and there is no secondary button: the system has no response that opens the app there, and a notification that the person taps to open the app would need a notification permission that the app does not ask for.
 5. A Shield Action extension handles both buttons:
-   - the primary button answers `.close`;
-   - the secondary button answers `.openParentalControlsApp` on iOS 26.5 and later, and `.close` below, where the button is not shown.
+   - on iOS 26.5 and later, the primary button answers `.openParentalControlsApp` and the secondary button answers `.close`;
+   - below iOS 26.5, the primary button answers `.close`, and the secondary button, which is not shown, also answers `.close`.
 
    The app opens on its normal launch route; there is no deep link to a screen.
 
@@ -54,16 +55,16 @@ Proposed on 2026-11-21:
 
 From the #197 spike on an iPhone 16 Pro with iOS 27.0.1, a signed Debug build installed over the app (see the [device matrix](../notes/screen-time-device-matrix.md)):
 
-- With individual authorization, "온:공 열기" answered with `.openParentalControlsApp` opened 온:공 from an app shield, and "닫기" answered with `.close` closed the shielded app.
+- With individual authorization, "온:공 열기" answered with `.openParentalControlsApp` opened 온:공 from an app shield and from a Safari shield of `youtube.com`, and "닫기" answered with `.close` closed the shielded app and the page.
+  In the spike "온:공 열기" was the secondary button; this design moves it to the primary button.
 - The action extension had no entitlements and was signed with the team's wildcard development profile.
 - The configuration of `example.com`, shielded before the spike build, stayed without the secondary button after the install and after the selection was removed and applied again; `youtube.com`, shielded for the first time, showed it.
   iOS keeps a configuration for a shielded item and reuses it, across an install of a new build; when it asks again is not known.
 
 Not yet known:
 
-- `[UNCERTAIN]` whether "온:공 열기" opens the app from a website shield; the button was seen on `youtube.com`, and its tap result was not reported.
 - `[UNCERTAIN]` whether `localizedDisplayName` is filled on the `Application, in: ActivityCategory` call, which a selection of a whole category uses.
-- `[UNCERTAIN]` how iOS draws the secondary button label in each appearance; the primary button label ignored its configured color in the dark appearance.
+- `[UNCERTAIN]` how iOS draws the secondary button label, now "닫기", in each appearance; the primary button label ignored its configured color in the dark appearance.
 
 ## Targets and entitlements
 
@@ -102,7 +103,7 @@ Below iOS 26.5 the shield cannot be checked on a device here; that row stays unv
 In the [custom shield design](2026-11-20-custom-shield-design.md):
 
 - Contract item 1, the title and the subtitle lines: replaced by items 1 and 2 of this design.
-- Contract item 1, "no secondary button": replaced by item 4 of this design.
+- Contract item 1, the primary button "닫기" and "no secondary button": replaced by item 4 of this design on iOS 26.5 and later; below iOS 26.5 they stay.
 - Contract item 2, "The same configuration is returned for all four calls": replaced by item 3 of this design.
 - Contract item 5: replaced by item 6 of this design, which keeps its rule and adds the action extension.
 - Contract item 6, "There is no ShieldAction extension": replaced by item 5 of this design.
