@@ -728,6 +728,22 @@ Each run applies real restrictions and needs its own approval; record the device
 | 5. "닫기" without an action extension                    | Record what it does; if it does not close the app, stop for a decision | Passed                                                                                              |
 | 6. Focus and everyday layers shield the same app at once | The same shield shows                                                  | Passed on 2026-11-21 with the approved build                                                        |
 
+## Shield open button spike: 2026-11-21 (#197)
+
+The spike for the [shield name and open button design](../specs/2026-11-21-shield-name-and-open-button-design.md): a Shield Action extension with no entitlements answers the primary button with `.close` and the secondary button with `.openParentalControlsApp`, and the configuration shows "온:공 열기" as the secondary button on iOS 26.5 and later.
+The spike code is on a local branch and is not merged.
+On the iPhone 16 Pro with iOS 27.0.1, a signed Debug build was installed over the app at 09:17:39 with `devicectl device install app`; the action extension was signed with the team's wildcard development profile, with no new App ID and no `-allowProvisioningUpdates`.
+The everyday store diagnostic applied one app and `example.com`; the results are what was reported on screen.
+
+| Check                                                      | Result                                                                                                                                                                                                              |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. "온:공 열기" on an app shield, individual authorization | Passed: 온:공 opened                                                                                                                                                                                                |
+| 2. "닫기" through the action extension                     | Passed: the shielded app closed                                                                                                                                                                                     |
+| 3. "온:공 열기" on a Safari website shield                 | Not shown on `example.com`, which had been shielded before this build, even after the selection was removed and applied again; shown on `youtube.com`, shielded for the first time. The tap result was not reported |
+
+So iOS keeps the configuration of a shielded website and reuses it across an install of a new build and a new application of the same selection; when it asks the extension again is not known.
+A device check of a shield change needs an item that was not shielded before with that build.
+
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 
 이슈 #17의 검토 결과다.
