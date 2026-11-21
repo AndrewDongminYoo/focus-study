@@ -290,7 +290,7 @@
 		0462052071C1260CBCF057A5 /* StartupAttempts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartupAttempts.swift; sourceTree = "<group>"; };
 		075F44517A7B663FB87D2B46 /* EverydaySettingsModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EverydaySettingsModelTests.swift; sourceTree = "<group>"; };
 		0A458766C7C3F49D3EC0BDC5 /* FocusMonitor.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = FocusMonitor.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		10BE2F8DD68007BB671D0989 /* FocusShield.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = FocusShield.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		10BE2F8DD68007BB671D0989 /* FocusShield.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = FocusShield.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		12D6AC995C58C331D7D32953 /* StartLatencyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartLatencyTests.swift; sourceTree = "<group>"; };
 		19CBEBF12953D4884BDDD3CE /* FocusActivityPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusActivityPreviewView.swift; sourceTree = "<group>"; };
 		19F3D8987BD6C6691060C1F9 /* FocusRuntimeHolder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusRuntimeHolder.swift; sourceTree = "<group>"; };
@@ -305,7 +305,7 @@
 		37E336A1178D9EFA0544D247 /* UsageSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageSummary.swift; sourceTree = "<group>"; };
 		3B731670DFB36A4517DB2AFB /* FocusSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusSettingsTests.swift; sourceTree = "<group>"; };
 		3F42EE001D54D96DCA1BE8E3 /* DeviceDiagnosticsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceDiagnosticsSection.swift; sourceTree = "<group>"; };
-		467159D4C65093EAE5BF4945 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		467159D4C65093EAE5BF4945 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		48AB9C8FAE727BB9401D212F /* DeviceDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceDiagnostics.swift; sourceTree = "<group>"; };
 		49E1A6DCAF77384E5894DE37 /* AppGroupMigrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGroupMigrationTests.swift; sourceTree = "<group>"; };
 		4BE36FC578F5BE7554D484FD /* FocusGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusGuideView.swift; sourceTree = "<group>"; };
@@ -364,11 +364,11 @@
 		BE52C8706C6D532DF83AB565 /* UITestFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestFixtures.swift; sourceTree = "<group>"; };
 		C319BE9A1C80D0D864BC6263 /* SessionRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionRecord.swift; sourceTree = "<group>"; };
 		C3A08B2A2B5A673549A6D57E /* BreakSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreakSessionView.swift; sourceTree = "<group>"; };
-		C7EB2D8D4B70BA8AE3DCF7BD /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		C7EB2D8D4B70BA8AE3DCF7BD /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		CF1209C00D583C187550FF47 /* FocusActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusActivityAttributes.swift; sourceTree = "<group>"; };
 		D0F5116F02900FF3E85CD6CB /* FocusServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusServices.swift; sourceTree = "<group>"; };
 		D4C7745F3746B1E13153AAFF /* FocusActivity.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = FocusActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		D4FDE385189F73B5B88044CC /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		D4FDE385189F73B5B88044CC /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		D609D440D69531A0193ACC6D /* FocusActivityProjection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusActivityProjection.swift; sourceTree = "<group>"; };
 		D7F8E5F4EE114794DD03509E /* FocusReport.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = FocusReport.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		D82C12E3AAAB889FC7623746 /* UsageReportHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageReportHost.swift; sourceTree = "<group>"; };
@@ -808,6 +808,10 @@
 						DevelopmentTeam = 393JTTV68D;
 						ProvisioningStyle = Automatic;
 						TestTargetID = C08A9BFD08B36E9A25661C63;
+					};
+					42716E9C38B6B04C5F601CA3 = {
+						DevelopmentTeam = 393JTTV68D;
+						ProvisioningStyle = Automatic;
 					};
 					5EBBD84EDA3CA69230D7FF04 = {
 						DevelopmentTeam = 393JTTV68D;
@@ -1442,9 +1446,6 @@
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = Configuration/Shield.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 393JTTV68D;
 				INFOPLIST_FILE = "Configuration/Shield-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1452,7 +1453,6 @@
 					"@executable_path/../../Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = kr.donminzzi.focusStudy.shield;
-				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -1513,9 +1513,6 @@
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = Configuration/Shield.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 393JTTV68D;
 				INFOPLIST_FILE = "Configuration/Shield-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1523,7 +1520,6 @@
 					"@executable_path/../../Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = kr.donminzzi.focusStudy.shield;
-				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
