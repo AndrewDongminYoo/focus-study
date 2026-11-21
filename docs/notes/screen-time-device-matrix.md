@@ -794,14 +794,21 @@ Report와 Activity 확장은 App Group entitlement가 없어 이 파일들을 �
 
 ### 배포 entitlement 상태
 
-2026-11-13 기준이다.
+2026-11-13에 작성했고, 2026-11-21에 승인 상태로 갱신했다.
 
-| App ID                                        | Family Controls 배포 entitlement | 근거                                                                                             |
-| --------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------ |
-| App (`kr.donminzzi.focusStudy`)               | 미신청                           | 2026-11-13에 신청한 적이 없음을 확인했다.                                                        |
-| Monitor                                       | 미신청                           | 위와 같다.                                                                                       |
-| Report                                        | 미신청                           | 위와 같다.                                                                                       |
-| Activity (`kr.donminzzi.focusStudy.activity`) | 해당 없음                        | `project.yml`의 `FocusActivity` 타깃에는 entitlements 파일이 없고 Family Controls를 쓰지 않는다. |
+| App ID                                                | Family Controls 배포 entitlement | 근거                                                                                             |
+| ----------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------ |
+| App (`kr.donminzzi.focusStudy`)                       | 승인 (2026-11-21)                | 2026-11-13에는 미신청이었다. 아래 2026-11-21 승인 조정을 본다.                                   |
+| Monitor                                               | 승인 (2026-11-21)                | 위와 같다.                                                                                       |
+| Report                                                | 승인 (2026-11-21)                | 위와 같다.                                                                                       |
+| Activity (`kr.donminzzi.focusStudy.activity`)         | 해당 없음                        | `project.yml`의 `FocusActivity` 타깃에는 entitlements 파일이 없고 Family Controls를 쓰지 않는다. |
+| Intents (`kr.donminzzi.focusStudy.intents`)           | 승인 (2026-11-21)                | 2026-11-21에 추가한 행이다. `Configuration/Intents.entitlements`가 Family Controls를 쓴다.       |
+| Shield (`kr.donminzzi.focusStudy.shield`)             | 승인 (2026-11-21)                | 2026-11-21에 추가한 행이다. 아래 2026-11-20 조정과 같다.                                         |
+| ShieldAction (`kr.donminzzi.focusStudy.shieldaction`) | 승인 (2026-11-21)                | 2026-11-21에 추가한 행이다. 아래 2026-11-21 조정을 본다.                                         |
+
+조정(2026-11-21, #188): Apple의 [신청 안내](https://developer.apple.com/documentation/familycontrols/requesting-the-family-controls-entitlement)는 Device Activity Monitor, Device Activity Report, Shield Action, Shield Configuration 같은 Screen Time 확장마다 같은 신청을 따로 내도록 한다. 신청은 Account Holder만 할 수 있다. ShieldAction 확장은 처음에 entitlement 없이 와일드카드 개발 프로필로 동작했지만, 이 안내에 따라 Family Controls entitlement를 추가했다. `-allowProvisioningUpdates`로 App ID `kr.donminzzi.focusStudy.shieldaction`와 개발 프로필 `iOS Team Provisioning Profile: kr.donminzzi.focusStudy.shieldaction`이 만들어졌고, 서명된 확장에 `com.apple.developer.family-controls`가 들어간 것을 확인했다. 앱 레코드는 App Store Connect에 아직 없다. 신청 절차는 [신청 기록](2026-11-21-family-controls-distribution-request.md)에 있다: 양식은 번들 ID가 아니라 개발자 계정 단위이며 약관 동의와 제출 버튼만 있다.
+
+조정(2026-11-21, #188, 승인): 신청서를 제출하자 바로 승인되었다. 그 뒤 Xcode에서 위 여섯 식별자의 Family Controls capability가 모두 development only가 아니라 distribution으로 표시되었다고 확인했다. 계정 단위의 승인 한 번으로 팀의 모든 식별자에 적용된다. 배포 프로필과 TestFlight 업로드는 아직 하지 않았다.
 
 조정(2026-11-20, #187): Shield 확장(`kr.donminzzi.focusStudy.shield`)이 추가되었다. 이 확장은 Family Controls를 쓰므로 배포 entitlement가 따로 필요하며, 아직 신청하지 않았다. #17의 검토는 이 App ID를 다루지 않는다.
 
