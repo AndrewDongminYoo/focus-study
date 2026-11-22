@@ -27,6 +27,7 @@ donminzzi
 donotdisturbd
 dsym
 ENABLE_STRICT_OBJC_MSGSEND
+esac
 evenodd
 exclamationmark.circle
 exclamationmark.triangle
