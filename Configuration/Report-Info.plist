@@ -18,13 +18,13 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<key>LSRequiresIPhoneOS</key>
-	<true/>
-	<key>NSExtension</key>
+	<key>EXAppExtensionAttributes</key>
 	<dict>
-		<key>NSExtensionPointIdentifier</key>
+		<key>EXExtensionPointIdentifier</key>
 		<string>com.apple.deviceactivityui.report-extension</string>
 	</dict>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
 	<key>UILaunchScreen</key>
 	<dict/>
 </dict>
