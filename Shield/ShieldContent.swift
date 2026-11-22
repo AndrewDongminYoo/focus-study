@@ -11,15 +11,8 @@ enum ShieldContent {
     }
 
     static let closeButton = "닫기"
-    /// A no-break space keeps the label on one line where it fits; the primary button has a fixed height, and at the largest accessibility text size with Display Zoom iOS 27.0.1 still wraps it to two clipped lines (issue #201), so accessibility sizes use `openButtonShort`.
+    /// A no-break space keeps the label on one line where it fits; the primary button has a fixed height, and at the largest accessibility text size with Display Zoom iOS 27.0.1 still wraps it to two clipped lines (known issue #201).
     static let openButton = "온:공\u{00A0}열기"
-    /// The open button at an accessibility text size (amendment of 2026-11-22 in the shield name and open button design); the shield has no button height or line-break property.
-    static let openButtonShort = "열기"
-
-    /// The open button label for the text size; `accessibilityText` is true only for an accessibility content size category.
-    static func openButton(accessibilityText: Bool) -> String {
-        accessibilityText ? openButtonShort : openButton
-    }
 
     /// "{name}, 지금은 쉬어요" needs no particle after the name, whose last syllable cannot be read from a Latin name; with no name, a text for the kind of item.
     static func title(name: String?, item: Item) -> String {
