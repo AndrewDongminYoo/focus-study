@@ -1,7 +1,7 @@
 # Shield name and open button
 
 Date: 2026-11-21.
-Status: proposed in [issue #198](https://github.com/AndrewDongminYoo/focus-study/issues/198) and approved on 2026-11-21 in [PR #199](https://github.com/AndrewDongminYoo/focus-study/pull/199), with "온:공 열기" as the primary button; implemented under [issue #200](https://github.com/AndrewDongminYoo/focus-study/issues/200) as the `FocusShieldAction` extension in `ShieldAction/` and per-call configurations in `Shield/`, and run on a device on 2026-11-21 ([device matrix](../notes/screen-time-device-matrix.md)); the clipped primary label at the largest accessibility text size with Display Zoom is the known issue [#201](https://github.com/AndrewDongminYoo/focus-study/issues/201).
+Status: proposed in [issue #198](https://github.com/AndrewDongminYoo/focus-study/issues/198) and approved on 2026-11-21 in [PR #199](https://github.com/AndrewDongminYoo/focus-study/pull/199), with "온:공 열기" as the primary button; implemented under [issue #200](https://github.com/AndrewDongminYoo/focus-study/issues/200) as the `FocusShieldAction` extension in `ShieldAction/` and per-call configurations in `Shield/`, and run on a device on 2026-11-21 ([device matrix](../notes/screen-time-device-matrix.md)); the clipped primary label at the largest accessibility text size with Display Zoom, issue [#201](https://github.com/AndrewDongminYoo/focus-study/issues/201), is answered by the [amendment of 2026-11-22](#amendment-of-2026-11-22-short-open-button-at-accessibility-text-sizes), not yet run on a device.
 Source: the choices of 2026-11-21 in this conversation and issue #198, and the device spike of [issue #197](https://github.com/AndrewDongminYoo/focus-study/issues/197) recorded in the [device matrix](../notes/screen-time-device-matrix.md).
 This document amends the [custom shield design](2026-11-20-custom-shield-design.md) only where [Superseded lines](#superseded-lines) says so.
 It includes the website copy of [issue #196](https://github.com/AndrewDongminYoo/focus-study/issues/196).
@@ -113,3 +113,22 @@ In the [custom shield design](2026-11-20-custom-shield-design.md):
 - Excluded, "a secondary button; a button that … opens the app": superseded by the choice of 2026-11-21 to add "온:공 열기".
 - Targets and entitlements, "No ShieldAction extension … is added" and the count of 6 product targets: replaced by [Targets and entitlements](#targets-and-entitlements) of this design.
 - API, the out-of-scope lines for `ShieldActionResponse.openParentalControlsApp` and `ShieldActionDelegate`: both are in scope in this design.
+
+## Amendment of 2026-11-22: short open button at accessibility text sizes
+
+Approved on 2026-11-22 in [issue #201](https://github.com/AndrewDongminYoo/focus-study/issues/201).
+On iOS 27.0.1 the primary button has a fixed height, and at the largest accessibility text size with Display Zoom "온:공 열기" wraps to two clipped lines ([device matrix](../notes/screen-time-device-matrix.md), verification row 5).
+`ShieldConfiguration` has no button height or line-break property.
+
+This amends contract item 4 for the primary button label only:
+
+- When the configuration call reads an accessibility content size category, the primary button on iOS 26.5 and later is "열기".
+- At any other category, and when the call cannot read a category (`unspecified`), it stays "온:공 열기".
+- The secondary button "닫기", the primary button below iOS 26.5, and both button actions of item 5 do not change.
+
+The configuration extension reads the category from its current trait collection; it still reads no stored data (item 6).
+
+Not yet known; a device check after the change answers both:
+
+- `[UNCERTAIN]` whether the extension's trait collection carries the text size that the person set; if it does not, the label stays "온:공 열기", as before this amendment.
+- `[UNCERTAIN]` whether iOS asks for a new configuration of a shielded item after the text size changes, or keeps the label of its cached configuration.
