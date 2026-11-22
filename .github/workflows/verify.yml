@@ -37,18 +37,26 @@ jobs:
           "$RUNNER_TEMP/focus-control-race" --verify
 
   simulator:
-    name: simulator (${{ matrix.bundle }})
+    name: simulator (${{ matrix.suite }})
     runs-on: macos-26
     timeout-minutes: ${{ matrix.timeout }}
     strategy:
       fail-fast: false
       matrix:
+        # The UI tests run in two jobs: on 2026-11-20 (run 44835178175) the build took about 4.5 min and the 82 UI tests 2112 s in sequence,
+        # of which the 16 `testEveryday…` tests took 768 s; one job reached its 45 min limit on 2026-11-21 (#205).
         include:
-          - bundle: FocusSDKTests
+          - suite: FocusSDKTests
+            shard: sdk
             timeout: 20
-          - bundle: FocusUITests
-            # About 27 min of UI tests observed on 2026-11-07 (PR #77), so 45 min.
-            timeout: 45
+          - suite: FocusUITests
+            shard: ui
+            # About 22 min of tests plus the build, so 40 min.
+            timeout: 40
+          - suite: FocusUITests everyday
+            shard: everyday
+            # About 13 min of tests plus the build, so 30 min.
+            timeout: 30
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     steps:
@@ -72,16 +80,42 @@ jobs:
           with open(os.environ["GITHUB_ENV"], "a") as output:
               output.write("SIMULATOR_ID=" + candidates[0]["udid"] + "\n")
           PYTHON
-      - name: Test ${{ matrix.bundle }} without signing
+      - name: Choose the tests of this job
+        shell: bash
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          # The everyday job runs every `testEveryday…` method of FocusFlowTests, and the UI job skips the same list, so no test falls between them.
+          everyday=()
+          while IFS= read -r name; do everyday+=("$name"); done < <(grep -oE 'func testEveryday[A-Za-z0-9_]*' UITests/FocusFlowTests.swift | cut -d' ' -f2)
+          if [ "${#everyday[@]}" -eq 0 ]; then
+            echo "No testEveryday methods found in UITests/FocusFlowTests.swift; update this step before splitting the UI tests." >&2
+            exit 1
+          fi
+          case "$SHARD" in
+            sdk) args="-only-testing:FocusSDKTests" ;;
+            ui)
+              args="-only-testing:FocusUITests"
+              for name in "${everyday[@]}"; do args+=" -skip-testing:FocusUITests/FocusFlowTests/$name"; done
+              ;;
+            everyday)
+              args=""
+              for name in "${everyday[@]}"; do args+=" -only-testing:FocusUITests/FocusFlowTests/$name"; done
+              ;;
+            *) echo "Unknown shard $SHARD" >&2; exit 1 ;;
+          esac
+          echo "Running ${#everyday[@]} everyday tests in the everyday job and skipping them in the UI job."
+          echo "TEST_SELECTION=$args" >> "$GITHUB_ENV"
+      - name: Test ${{ matrix.suite }} without signing
         run: >-
           xcodebuild test -project FocusStudy.xcodeproj -scheme FocusStudy
           -destination "platform=iOS Simulator,id=$SIMULATOR_ID"
-          -only-testing:${{ matrix.bundle }}
+          $TEST_SELECTION
           -derivedDataPath "$RUNNER_TEMP/focus-derived"
           -resultBundlePath "$RUNNER_TEMP/focus-tests.xcresult"
           CODE_SIGNING_ALLOWED=NO -parallel-testing-enabled NO
       - name: Export synthetic UI attachments
-        if: ${{ !cancelled() && matrix.bundle == 'FocusUITests' }}
+        if: ${{ !cancelled() && matrix.shard != 'sdk' }}
         run: |
           if [ -d "$RUNNER_TEMP/focus-tests.xcresult" ]; then
             xcrun xcresulttool export attachments \
@@ -89,11 +123,11 @@ jobs:
               --output-path "$RUNNER_TEMP/focus-test-attachments"
           fi
       - name: Preserve synthetic UI attachments
-        if: ${{ !cancelled() && matrix.bundle == 'FocusUITests' }}
+        if: ${{ !cancelled() && matrix.shard != 'sdk' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           if-no-files-found: ignore
-          name: focus-test-attachments
+          name: focus-test-attachments-${{ matrix.shard }}
           path: ${{ runner.temp }}/focus-test-attachments
           retention-days: 3
 
