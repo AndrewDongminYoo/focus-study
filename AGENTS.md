@@ -56,6 +56,8 @@ Use these current documentation paths:
 - [Physical-device acceptance](docs/notes/screen-time-device-matrix.md)
 - [Development launch arguments](docs/notes/development-launch-arguments.md): UI fixtures, Live Activity probes, device diagnostics
 - [Release to TestFlight](docs/notes/release-testflight.md): version, extension packaging, privacy manifests, archive and upload
+- [Store privacy declarations](docs/notes/store-privacy-declarations.md): the App Privacy answers, the data that stays on the device and the build evidence behind them
+- [App Store listing](docs/notes/app-store-listing.md): name, subtitle, description, keywords and App Review notes of the first submission
 
 The plan preserves the initial task breakdown and links to current interfaces.
 Use source and manifests for executable behavior, and the implementation ledger for historical decisions.

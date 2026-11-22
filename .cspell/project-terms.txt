@@ -44,12 +44,16 @@ kr.donminzzi.focusStudy.sdktests
 kr.donminzzi.focusStudy.shieldaction
 kr.donminzzi.focusStudy.uitests
 layoutSubviews
+libswift
 logarchive
 Mirae
+NSURL
 Onone
+otool
 parallelizable
 parallelizeBuildables
 person.crop.circle.badge.exclamationmark
+pomodoro
 readback
 runningboardd
 SDKROOT
@@ -66,6 +70,7 @@ udid
 UICT
 unixepoch
 Unretained
+unscored
 WCAG
 wholemodule
 WWDC
