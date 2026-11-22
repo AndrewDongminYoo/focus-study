@@ -765,6 +765,18 @@ The app switcher's snapshot of the same shield showed the label on one line, bec
 A temporary probe build, never committed, put the values that the configuration extension reads into the subtitle: `UITraitCollection.current` gave `unspecified`, `UIScreen.main` gave the default `L`, the body font was 17 pt, and `scale` and `nativeScale` were both 3.0.
 The extension does not receive the text size or Display Zoom that was set, so the change was reverted and #201 stays a known issue.
 
+Where the label starts to clip, on the same device on 2026-11-22:
+
+| Text size                                                       | Body size (Apple HIG) | Share of the default | "온:공 열기"      |
+| --------------------------------------------------------------- | --------------------- | -------------------- | ----------------- |
+| xxxLarge, the largest size without "Larger Accessibility Sizes" | 23 pt                 | 135 %                | One line          |
+| AX1 to AX4                                                      | 28 to 47 pt           | 165 % to 276 %       | Not checked       |
+| AX5, the largest accessibility size, with Display Zoom          | 53 pt and the zoom    | 312 % and the zoom   | Two clipped lines |
+
+The body sizes come from the iOS Dynamic Type tables of the [Human Interface Guidelines, Typography](https://developer.apple.com/design/human-interface-guidelines/typography); the default size, Large, has a 17 pt body.
+Above xxxLarge, iOS Settings also clips its own text: at an accessibility size the "손쉬운 사용 설정에서 더 보기" row of the text size screen wraps out of its button.
+Issue #201 therefore stays a P3 known issue of the Screen Time shield rendering, with no change to the label.
+
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 
 이슈 #17의 검토 결과다.
