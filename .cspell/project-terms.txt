@@ -52,7 +52,6 @@ logarchive
 magick
 Mirae
 NSURL
-onggong
 Onone
 otool
 oxipng

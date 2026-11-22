@@ -259,14 +259,14 @@ def main() -> None:
             if not capture.is_file():
                 print(f"skip {index:02d}: missing {capture}")
                 continue
-            out = output / f"onggong-appstore-{index:02d}.png"
+            out = output / f"focus-study-appstore-{index:02d}.png"
             if shot["kind"] == "hero":
                 report[out.name] = hero(shot, capture, out, tmp)
             else:
                 feature(shot, capture, out, tmp)
                 report[out.name] = {}
             print(f"wrote {out}")
-    pngs = sorted(str(p) for p in output.glob("onggong-appstore-*.png"))
+    pngs = sorted(str(p) for p in output.glob("focus-study-appstore-*.png"))
     if pngs:
         subprocess.run(["oxipng", "--strip", "safe", "-q", *pngs], check=True)
     (output / "layout.json").write_text(json.dumps(report, ensure_ascii=False, indent=2))
