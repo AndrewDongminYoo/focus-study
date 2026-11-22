@@ -9,8 +9,8 @@ Field limits are App Store Connect's: name and subtitle 30 characters, promotion
 
 | Field              | Value                                                        |
 | ------------------ | ------------------------------------------------------------ |
-| Name               | 온:공 - 공부 집중, 앱 차단                                   |
-| Subtitle           | 고른 앱만 잠그는 공부 집중 타이머                            |
+| Name               | 온:공 - 공부 타이머, 앱 잠금                                 |
+| Subtitle           | 집중하는 동안 고른 앱만 차단                                 |
 | Primary category   | 생산성 (Productivity)                                        |
 | Secondary category | 교육 (Education)                                             |
 | Privacy policy URL | `https://focus.donminzzi.kr/privacy`                         |
@@ -60,29 +60,59 @@ iOS에서 "공부" 같은 집중 모드를 켜면 집중이 시작되고, 끄면
 
 ## Keywords
 
-Provisional — not for submission until the scoring step is done.
-
 ```plaintext
-스크린타임,앱잠금,폰잠금,디지털디톡스,뽀모도로,수험생,시험,학생,폰중독,사용시간,웹사이트,매일,루틴,자기관리,스마트폰
+스크린타임,폰,휴대폰,핸드폰,순공,시간,제한,뽀모도로,포모도로,디지털,디톡스,도파민,스터디,열공
 ```
 
-Owed: Apple Ads popularity for every term in a Korea ad group, recorded as `storefront | date | source | seed | term | score`.
-The name and subtitle already index 온:공, 공부, 집중, 앱, 차단, 고른, 잠그는 and 타이머, so they are not repeated.
+53 characters, 133 UTF-8 bytes; the App Store Connect counter is the authority.
+The name and subtitle already index 온:공, 공부, 타이머, 앱, 잠금, 집중, 동안, 고른 and 차단, so the field repeats none of them.
+Compound searches match through their words: 공부시간 (공부 + 시간), 폰 잠금 and 휴대폰 잠금 (폰, 휴대폰 + 잠금), 디지털 디톡스 and 도파민 디톡스, 폰 시간 제한, 순공시간, 뽀모도로 타이머.
 
-Expectation check, Korea storefront, 2026-11-22, first 12 unique apps of `apps.apple.com/kr/iphone/search`:
+### Popularity
 
-- `앱차단` and `스크린타임`: 9 to 10 of 12 are Screen Time blocking apps (터닝, 잠글시간, 지키자, 락체스트, 진짜로); these are the pillars.
-- `공부타이머`, `집중`, `뽀모도로`: mostly study timers (열품타, Forest, 얼티밋 포커스); partly the same expectation.
-- `수험생`: mixed with simulation games and exam communities; an experiment.
+Apple Ads keyword recommendations, storefront Korea, 2026-11-22, source: the Add keywords screen of an unsaved search-results campaign draft for the sibling app 온:음 with Korea as its only country (온:공 is not on the store yet, so it cannot be the campaign app).
+Popularity is a relative score from 0 to 100 for this storefront on this date, not search volume.
 
-Held candidates:
+| Seed          | Term (popularity)                                                                                  |
+| ------------- | -------------------------------------------------------------------------------------------------- |
+| 앱차단        | 폰 시간 제한 19, 앱 차단 17, 앱 제한 15, 앱 시간제한 11, 앱차단 8                                  |
+| 스크린타임    | 스크린타임 41, 시간제한 19, 앱 차단 17, 스크린 타임 5                                              |
+| 앱잠금        | 앱 잠금 42, 잠금 35, 잠금앱 34, 앱잠금 33, 휴대폰 잠금 33, 어플 잠금 21, 공부 폰 잠금 16           |
+| 디지털디톡스  | 폰 잠금 37, 폰잠금 29, 도파민 디톡스 22, 디지털 디톡스 22, 디지털디톡스 14, 스마트폰 중독 방지 11  |
+| 공부          | 공부 61, 공부앱 42, 공부어플 36                                                                    |
+| 공부타이머    | 공부 타이머 52, 공부타이머 32, 순공시간 32, 순공 26, 공부 시간 19, 순공타이머 19, 스터디 타이머 13 |
+| 공부시간      | 공부시간 33, 공부기록 22                                                                           |
+| 순공          | 순공시간 32, 순공 26, 순공타이머 19, 열공 16, 열공시간 7                                           |
+| 뽀모도로      | 뽀모도로 타이머 44, 뽀모도로 39, 포모도로 22, pomodoro 13                                          |
+| 수험생        | 수능 44, 수험생키우기 36, 수험생 19                                                                |
+| 시험          | 시험 34, 시험문제 24, 시험공부 21, 학습 20                                                         |
+| 루틴          | 루틴 45, 습관 38, 루틴어플 25, 자기관리 19                                                         |
+| 숏폼          | 숏폼 36, short drama 22                                                                            |
+| 학생          | 학교 37, 학생 12                                                                                   |
+| Five or lower | 집중타이머, 집중력, 집중모드, 사용시간, 폰중독, 스마트폰 중독: 5 each                              |
 
-- `공부기록`: results are planners and study logs (열품타, 투두메이트, 스터디 로그); the app shows only today's history.
-- `숏폼`, `쇼츠`: the app blocks whole apps, not short-form feeds inside an app.
-- `폰중독`: the search request failed (HTTP 500); `[TOOL_FAILED]`, kept in the string as unscored.
-- Brand and app names (열품타, Forest): App Review Guideline 2.3.7.
+`집중` returned no response; `집중타이머` stands in for it.
 
-Terms to track after release, baseline 2026-11-22: `앱차단` absent, `스크린타임` absent.
+### Expectation check
+
+Korea storefront, 2026-11-22, first 12 unique apps of `apps.apple.com/kr/iphone/search`:
+
+- `앱 잠금`, `폰 잠금`, `앱차단`, `스크린타임`, `디지털 디톡스`: mostly Screen Time blocking apps (터닝, 잠글시간, 지키자, 락체스트, 2G폰, Forest); the same expectation as 온:공.
+- `공부타이머`, `공부시간`, `순공`, `뽀모도로`: mostly study timers (열품타, 순공시간, 올클, Forest, 얼티밋 포커스); the same expectation for the timer.
+- `수능`: exam content and simulation games; `시험`: question banks and AI study tools; `루틴`: habit planners; `수험생`: games and exam communities. None answers the expectation of 온:공.
+
+### Held candidates
+
+- 수능 (44), 루틴 (45), 시험 (34), 수험생 (19): popular, but the results are a different kind of app.
+- 숏폼 (36): the results are short-form drama apps, and the app blocks whole apps, not feeds inside an app.
+- 공부기록 (22): the results are planners and study logs; the app shows only today's history.
+- 어플, 앱: the word "app" in any language.
+- 열품타, Forest and other app names: App Review Guideline 2.3.7.
+- 집중력, 집중모드, 사용시간, 폰중독, 스마트폰 중독: popularity 5.
+
+### Terms to track after release
+
+Baseline 2026-11-22, position among the first 12 unique apps: `앱 잠금` absent, `공부 타이머` absent.
 
 ## App Review information
 

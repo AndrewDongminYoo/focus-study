@@ -53,6 +53,7 @@ otool
 parallelizable
 parallelizeBuildables
 person.crop.circle.badge.exclamationmark
+pomodoro
 readback
 runningboardd
 SDKROOT
