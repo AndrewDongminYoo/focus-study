@@ -19,7 +19,7 @@ final class ShieldConfigurationTests: XCTestCase {
 
     /// Custom shield contract item 1: the system blur tinted navy, the mark on a navy tile, and text and a button that follow the appearance: navy text and a cream button in light mode, cream text and a navy button in dark mode.
     func testShieldLayoutIsTheApprovedOne() throws {
-        let shield = FocusShieldConfiguration.shield(name: "Instagram", item: .application, opensApp: true, contentSize: .large)
+        let shield = FocusShieldConfiguration.shield(name: "Instagram", item: .application, opensApp: true)
         XCTAssertNil(shield.backgroundBlurStyle)
         XCTAssertEqual(try srgb(XCTUnwrap(shield.backgroundColor)), try srgb(ShieldContent.navy))
         let light = UITraitCollection(userInterfaceStyle: .light), dark = UITraitCollection(userInterfaceStyle: .dark)
@@ -51,35 +51,14 @@ final class ShieldConfigurationTests: XCTestCase {
 
     /// Name design, contract items 2 and 4: with the open button, "온:공 열기" leads, "닫기" follows and the subtitle is one line; without it, "닫기" alone and a second line.
     func testButtonsAndSubtitleFollowTheOpenButton() {
-        let opens = FocusShieldConfiguration.shield(name: nil, item: .application, opensApp: true, contentSize: .large)
+        let opens = FocusShieldConfiguration.shield(name: nil, item: .application, opensApp: true)
         XCTAssertEqual(opens.primaryButtonLabel?.text, "온:공\u{00A0}열기")
         XCTAssertEqual(opens.secondaryButtonLabel?.text, "닫기")
         XCTAssertEqual(opens.subtitle?.text, "\n온:공이 잠시 막고 있어요.")
-        let closes = FocusShieldConfiguration.shield(name: nil, item: .application, opensApp: false, contentSize: .large)
+        let closes = FocusShieldConfiguration.shield(name: nil, item: .application, opensApp: false)
         XCTAssertEqual(closes.primaryButtonLabel?.text, "닫기")
         XCTAssertNil(closes.secondaryButtonLabel)
         XCTAssertEqual(closes.subtitle?.text, "\n온:공이 잠시 막고 있어요.\n언제 풀리는지는 온:공에서 볼 수 있어요.")
-    }
-
-    /// Amendment of 2026-11-22 (issue #201): at an accessibility text size the open button is "열기", which fits the fixed-height button on one line.
-    func testOpenButtonLabelFollowsAccessibilityText() {
-        XCTAssertEqual(ShieldContent.openButton(accessibilityText: false), "온:공\u{00A0}열기")
-        XCTAssertEqual(ShieldContent.openButton(accessibilityText: true), "열기")
-    }
-
-    /// Amendment of 2026-11-22: only an accessibility category shortens the open button; an unknown category keeps it, and "닫기" never changes.
-    func testShieldShortensTheOpenButtonOnlyAtAccessibilitySizes() {
-        let large = FocusShieldConfiguration.shield(name: nil, item: .application, opensApp: true, contentSize: .accessibilityExtraExtraExtraLarge)
-        XCTAssertEqual(large.primaryButtonLabel?.text, "열기")
-        XCTAssertEqual(large.secondaryButtonLabel?.text, "닫기")
-        for category in [UIContentSizeCategory.large, .extraExtraExtraLarge, .unspecified] {
-            let shield = FocusShieldConfiguration.shield(name: nil, item: .website, opensApp: true, contentSize: category)
-            XCTAssertEqual(shield.primaryButtonLabel?.text, "온:공\u{00A0}열기", "\(category.rawValue)")
-            XCTAssertEqual(shield.secondaryButtonLabel?.text, "닫기", "\(category.rawValue)")
-        }
-        let closes = FocusShieldConfiguration.shield(name: nil, item: .application, opensApp: false, contentSize: .accessibilityExtraExtraExtraLarge)
-        XCTAssertEqual(closes.primaryButtonLabel?.text, "닫기")
-        XCTAssertNil(closes.secondaryButtonLabel)
     }
 
     /// The data source calls: an application gets the application fallback, because `localizedDisplayName` is nil outside the extension, and a website gets its domain.
@@ -91,8 +70,7 @@ final class ShieldConfigurationTests: XCTestCase {
         XCTAssertEqual(application.title?.text, "지금은 쉬는 앱이에요")
         XCTAssertEqual(webDomain.title?.text, "example.com, 지금은 쉬어요")
         for shield in [application, webDomain] {
-            let open = ShieldContent.openButton(accessibilityText: FocusShieldConfiguration.contentSize.isAccessibilityCategory)
-            XCTAssertEqual(shield.primaryButtonLabel?.text, FocusShieldConfiguration.opensApp ? open : "닫기")
+            XCTAssertEqual(shield.primaryButtonLabel?.text, FocusShieldConfiguration.opensApp ? "온:공\u{00A0}열기" : "닫기")
             XCTAssertTrue(shield.icon === FocusShieldConfiguration.icon)
         }
     }
