@@ -55,6 +55,7 @@ Use these current documentation paths:
 - [Review regressions](docs/notes/independent-review.md)
 - [Physical-device acceptance](docs/notes/screen-time-device-matrix.md)
 - [Development launch arguments](docs/notes/development-launch-arguments.md): UI fixtures, Live Activity probes, device diagnostics
+- [Release to TestFlight](docs/notes/release-testflight.md): version, extension packaging, privacy manifests, archive and upload
 
 The plan preserves the initial task breakdown and links to current interfaces.
 Use source and manifests for executable behavior, and the implementation ledger for historical decisions.

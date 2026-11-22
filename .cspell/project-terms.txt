@@ -36,6 +36,7 @@ gearshape
 GENERATE_INFOPLIST_FILE
 INFOPLIST_FILE
 iphoneos
+ITMS
 KakaoTalk
 keylineTint
 kr.donminzzi.focusStudy.sdktests
@@ -62,10 +63,12 @@ Testables
 translatesAutoresizingMaskIntoConstraints
 udid
 UICT
+unixepoch
 Unretained
 WCAG
 wholemodule
 WWDC
+xcarchive
 xcassets
 xcodegen
 xcodeproj
@@ -80,3 +83,5 @@ XCUIElement
 xcuserdata
 xcuserstate
 xpcservice
+ZSESSIONRECORD
+ZSTARTEDAT
