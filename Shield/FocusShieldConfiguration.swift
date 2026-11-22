@@ -15,9 +15,16 @@ final class FocusShieldConfiguration: ShieldConfigurationDataSource {
         return false
     }
 
+    /// The text size of the current call. An extension cannot use `UIApplication.shared`; when the trait collection carries no size, the category is `.unspecified`, which is not an accessibility category, so the shield keeps its normal label.
+    static var contentSize: UIContentSizeCategory {
+        UITraitCollection.current.preferredContentSizeCategory
+    }
+
     /// The configuration for one shielded item; `name` is the name that the system passed to the call, or nil.
-    static func shield(name: String?, item: ShieldContent.Item, opensApp: Bool = opensApp) -> ShieldConfiguration {
-        ShieldConfiguration(
+    /// At an accessibility text size the open button is the short label; "닫기" does not change.
+    static func shield(name: String?, item: ShieldContent.Item, opensApp: Bool = opensApp, contentSize: UIContentSizeCategory = contentSize) -> ShieldConfiguration {
+        let openButton = ShieldContent.openButton(accessibilityText: contentSize.isAccessibilityCategory)
+        return ShieldConfiguration(
             // On iOS 27.0.1 a nil blur style follows the system appearance, so the text, the mark and the button follow it too.
             backgroundBlurStyle: nil,
             backgroundColor: ShieldContent.navy,
@@ -25,7 +32,7 @@ final class FocusShieldConfiguration: ShieldConfigurationDataSource {
             title: ShieldConfiguration.Label(text: ShieldContent.title(name: name, item: item), color: ShieldContent.text),
             subtitle: ShieldConfiguration.Label(text: ShieldContent.subtitle(opensApp: opensApp), color: ShieldContent.text),
             // iOS 27.0.1 draws the label white in dark mode whatever its color; in light mode the configured color shows through, so the button follows the appearance.
-            primaryButtonLabel: ShieldConfiguration.Label(text: opensApp ? ShieldContent.openButton : ShieldContent.closeButton, color: ShieldContent.text),
+            primaryButtonLabel: ShieldConfiguration.Label(text: opensApp ? openButton : ShieldContent.closeButton, color: ShieldContent.text),
             primaryButtonBackgroundColor: ShieldContent.buttonBackground,
             secondaryButtonLabel: opensApp ? ShieldConfiguration.Label(text: ShieldContent.closeButton, color: ShieldContent.text) : nil
         )
