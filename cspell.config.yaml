@@ -4,6 +4,8 @@ useGitignore: true
 enableGlobDot: true
 ignorePaths:
   - .git
+  # Third-party license text, kept verbatim.
+  - screenshot/fonts/OFL.txt
 dictionaries:
   - swift
   # SharedControlStore bridges Darwin file operations; CI embeds Python.
