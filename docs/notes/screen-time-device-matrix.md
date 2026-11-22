@@ -759,6 +759,12 @@ The results come from captures and from what was reported on screen.
 | 5. The largest text size with a long name, and Display Zoom | The long name wraps without clipping. At the largest accessibility text size with Display Zoom, the fixed-height primary button wraps "온:공 열기" to two clipped lines, with or without the no-break space; without the accessibility sizes it stays on one line. Known issue [#201](https://github.com/AndrewDongminYoo/focus-study/issues/201), P3 |
 | 6. Below iOS 26.5                                           | Unverified: no device                                                                                                                                                                                                                                                                                                                                 |
 
+On 2026-11-22 the [amendment of that date](../specs/2026-11-21-shield-name-and-open-button-design.md#amendment-of-2026-11-22-short-open-button-at-accessibility-text-sizes) (PR #209, `668e808`) tried "열기" at accessibility text sizes for row 5.
+A signed Debug build of `668e808` was installed over the TestFlight build with `devicectl device install app`; at the largest accessibility text size with Display Zoom, several apps that had not been shielded before still showed "온:공 열기" on two clipped lines.
+The app switcher's snapshot of the same shield showed the label on one line, because the snapshot is drawn smaller.
+A temporary probe build, never committed, put the values that the configuration extension reads into the subtitle: `UITraitCollection.current` gave `unspecified`, `UIScreen.main` gave the default `L`, the body font was 17 pt, and `scale` and `nativeScale` were both 3.0.
+The extension does not receive the text size or Display Zoom that was set, so the change was reverted and #201 stays a known issue.
+
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 
 이슈 #17의 검토 결과다.
