@@ -63,3 +63,8 @@ The dot has a radius of 39.1 and is centered 140.3 units below the top.
 - Captures on the iOS 26.5 simulator (2026-11-20) of the countdown, the count-up, the completion card and the idle screen after it, in the light and the dark appearance, at the largest text size and with Reduce Motion on: the status bar reads light in the room in each, and the idle screen after the room is light in the light appearance and black in the dark one.
   They show end states only, so they do not show the crossfade.
 - `[UNCERTAIN]` The status bar during a sheet presented from the room, and the room on an iOS 17 runtime; neither was captured.
+
+## Amendment of 2026-11-23
+
+The [screen redesign](2026-11-23-screen-redesign-design.md), approved under issue #228, replaces contract 3 once it is implemented: the idle screen and the break screen use `FocusCanvas` (`#F8F5F0` light, `#202C46` dark) instead of the system background.
+The other contracts stay.
