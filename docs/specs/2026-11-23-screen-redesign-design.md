@@ -99,7 +99,8 @@ The dot moves clockwise by its progress, from 0 at 12 o'clock to 1 at a full tur
 
 With Reduce Motion off, the dot moves with the 1 s tick and a linear animation.
 With Reduce Motion on, in a focus session it moves to the progress of the last full minute, and in the wait and the break it moves to the progress of the last full second, without animation in both cases.
-The dial is decorative for VoiceOver (`accessibilityHidden`); the clock keeps its own label.
+Only the drawn ring (discs, ticks and dot) is hidden from VoiceOver (`accessibilityHidden`).
+The label, the clock and the status line inside the dial stay accessibility elements, with the identifiers and labels in "Identifiers".
 
 Dynamic Type: the label, the clock and the status line inside the dial use `minimumScaleFactor(0.5)` and one line each.
 At the accessibility text sizes (`isAccessibilitySize`), the dial is not drawn, and the label, the clock and the status line show as a column, as the clock shows today.
@@ -129,7 +130,8 @@ Cards and full-width buttons have a corner radius of 16; full-width buttons are 
 - Action area:
   - "집중 시작하기" with a `play.fill` symbol, `AccentColor` fill and a white label (`AccentLabel` keeps its dark value).
   - Card "집중 중 제한": "집중 중 제한" on the leading side, "앱 N개 · 웹사이트 M개" on the trailing side; a separator; then the everyday status row ("● 매일 제한 중" in `AccentText`, the end time and a chevron).
-    With no everyday layer, the card shows only the first row.
+    The second row shows the text of `EverydaySettingsModel.timerLine` under its current conditions, including "매일 제한을 확인해 주세요" when the everyday status has an issue, and opens the everyday settings as today; the dot shows only for the "매일 제한 중" text.
+    When `timerLine` returns no text, the card shows only the first row.
   - Card "오늘의 집중": "오늘의 집중" and "기록 보기 ›" in the title row; the minutes and the count of completed sessions below, numbers in `.title2`, units "분" and "회" in `.subheadline`.
     The whole card is the history button.
 - The start blocker, the error and the retry button show between the dial line and the action area, as they do today.
@@ -167,6 +169,8 @@ The mock shows the `waiting` phase; the `onBreak` and `breakOver` phases use the
 | End                 | "집중 종료" text button in `ErrorText`                                                                                           | same                         | same                        |
 
 The pill uses `FocusPill` with `AccentText`.
+While a break action is pending (`model.pendingBreak`), the break feedback (`breakProgress`) shows as today: in `waiting`, it replaces the first card line; in `onBreak` and `breakOver`, it shows below the primary button.
+While it shows, the primary button and "집중 종료" are disabled, as today.
 The progress bar of the wait is replaced by the dial.
 Its identifier `breakWait`, with the label "쉬는 시간 준비 중" and the value "N초 남음", moves to the first card line; the dial clock keeps `breakWaitCountdown`.
 The second and third card lines are one accessibility element with the identifier `breaksLeft` and the label of today, "다른 앱으로 나가면 집중으로 돌아가요. 이번 쉬는 시간을 쓰면 N번 남아요."
@@ -174,18 +178,18 @@ The texts of `onBreak` and `breakOver` that the mock does not show are proposals
 
 ## Identifiers
 
-| Identifier                                                                                                        | New element                                                                          | Label read by `UITests/FocusFlowTests.swift`                                                               |
-| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| `countdown`                                                                                                       | the dial clock of the timer screen                                                   | "남은 시간 N분 N초" (unchanged)                                                                            |
-| `sessionStatus`                                                                                                   | the status line inside the dial                                                      | "집중 모드를 끌 때까지 이어져요" for an open session (unchanged)                                           |
-| `breaksLeft`                                                                                                      | timer screen: the chip; break screen: the second and third card lines as one element | "쉬는 시간 N번 남았어요" and the wait sentence (unchanged accessibility labels; the chip shows "N번 남음") |
-| `breakStart`                                                                                                      | the "쉬는 시간 갖기" button                                                          | none                                                                                                       |
-| `end`                                                                                                             | the "집중 종료" text button on both screens                                          | none                                                                                                       |
-| `todaySummary`                                                                                                    | the "오늘의 집중" card                                                               | "오늘 집중 N분 · N회" (unchanged accessibility label)                                                      |
-| `restrictionSummary`                                                                                              | the trailing text of the "집중 중 제한" card                                         | none                                                                                                       |
-| `everydayStatusRow`                                                                                               | the second row of the "집중 중 제한" card                                            | none                                                                                                       |
-| `start`, `selection`, `settingsButton`                                                                            | the start button and the two header buttons                                          | none                                                                                                       |
-| `breakCountdown`, `breakWaitCountdown`, `breakWait`, `breakWaitCancel`, `resume`, `deadlineNotice`, `breakScreen` | the matching elements of the break screen                                            | as today                                                                                                   |
+| Identifier                                                                                                        | New element                                                                          | Label read by `UITests/FocusFlowTests.swift`                                                                             |
+| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `countdown`                                                                                                       | the dial clock of the timer screen                                                   | countdown: "남은 시간 N분 N초"; open session: "집중한 시간 N시간 N분 N초", the hours only from one hour (both unchanged) |
+| `sessionStatus`                                                                                                   | the status line inside the dial                                                      | "집중 모드를 끌 때까지 이어져요" for an open session (unchanged)                                                         |
+| `breaksLeft`                                                                                                      | timer screen: the chip; break screen: the second and third card lines as one element | "쉬는 시간 N번 남았어요" and the wait sentence (unchanged accessibility labels; the chip shows "N번 남음")               |
+| `breakStart`                                                                                                      | the "쉬는 시간 갖기" button                                                          | none                                                                                                                     |
+| `end`                                                                                                             | the "집중 종료" text button on both screens                                          | none                                                                                                                     |
+| `todaySummary`                                                                                                    | the "오늘의 집중" card                                                               | "오늘 집중 N분 · N회" (unchanged accessibility label)                                                                    |
+| `restrictionSummary`                                                                                              | the trailing text of the "집중 중 제한" card                                         | none                                                                                                                     |
+| `everydayStatusRow`                                                                                               | the second row of the "집중 중 제한" card                                            | none                                                                                                                     |
+| `start`, `selection`, `settingsButton`                                                                            | the start button and the two header buttons                                          | none                                                                                                                     |
+| `breakCountdown`, `breakWaitCountdown`, `breakWait`, `breakWaitCancel`, `resume`, `deadlineNotice`, `breakScreen` | the matching elements of the break screen                                            | as today                                                                                                                 |
 
 ## Not carried
 
