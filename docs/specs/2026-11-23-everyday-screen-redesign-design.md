@@ -94,12 +94,14 @@ While it is locked:
 - A range that moves (for example 08:00–18:00 to 09:00–20:00) cannot be entered, because the start cannot move later.
 - Every edit that the table allows is one that the engine accepts while locked, so a locked save is refused only when the stored state changed after the screen read it; the refusal line stays for that case.
 - The strict-only line (`everydayStrictOnly`) is removed.
-- When the lock starts while the screen is open (the status read after a boundary), every field that the table disables returns to its stored value in the draft: the switch, the stored weekdays, the window times and windows that the draft added, and the selection; a range start later than the stored start and a range end earlier than the stored end return to the stored values too.
+- When the lock starts while the screen is open (the status read after a boundary), every field that the table disables returns to its stored value in the draft: the switch, the stored weekdays and the selection, and the windows keep only the stored windows that the draft still has (see the window rule below); a range start later than the stored start and a range end earlier than the stored end return to the stored values too.
   The strict edits in the draft stay, and the save feedback line says "제한 시간이 시작되어 느슨해지는 변경을 되돌렸어요."
   So the draft never holds an edit that the screen cannot undo and the engine refuses.
 - The model returns these edits at every status read while the layer is locked, not only at the boundary, so a refused save also leaves a draft without the refused edit; the refusal line and the return line (`everydayLockRevert`) both show.
+  The return line stays until the next edit, save or reload, also when a later status read finds nothing to return, and a failed save keeps its refusal line after the read.
+- A lock that starts on a later day is read only at that day's next status read (`statusReadDelay` reads at today's range edges, the next change and midnight); until then a loosening save is refused by the engine with its reason.
 - A window has no identity, so the draft keeps only the stored windows that it still has: a window that the draft added or changed goes away, and a stored window that the draft removed stays removed.
-- The disabled elements use the system disabled appearance and keep their accessibility labels; VoiceOver reads them as dimmed.
+- The disabled switch and time pickers use the system disabled appearance; the disabled chips, the app card and "+ 시간 추가하기" draw at 45 % opacity. All keep their accessibility labels, and VoiceOver reads them as dimmed.
 
 ## Save confirmation
 
@@ -123,7 +125,7 @@ The light values are the mock values; the dark values follow the screen redesign
 | Unblocked bar                                              | `#C8D0DD`                                                  | `#48536C`                     |
 | Divider                                                    | `#E6E9EF`                                                  | `#37435C`                     |
 | Range card                                                 | `#202C46` with white and `#D2D9E6` text, `#FFE0BB` summary | `#F7DFC0` with `#1E2744` text |
-| Disabled save                                              | `#E4E7ED` with `#626C7D`                                   | system disabled               |
+| Disabled save                                              | `#E4E7ED` with `#626C7D`                                   | `#37435C` with cream at 62 %  |
 | Destructive "삭제"                                         | `ErrorText`                                                | `ErrorText`                   |
 
 The dark values are not drawn in a mock; the implementation captures them for approval.
