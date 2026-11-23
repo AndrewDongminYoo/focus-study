@@ -36,3 +36,7 @@ The synthetic preview UI tests check that each clock exists with its label, that
 The hour labels and center text are hidden from accessibility, so the tests cannot read their frames; the captures show whether they clear each other and the band.
 Light, dark, largest-text and Increase Contrast captures check the layout and the distinction between the tint and the track; explicit visual approval is required before merge.
 Simulator captures cannot establish spoken VoiceOver behavior or real Screen Time restrictions.
+
+## Amendment of 2026-11-23
+
+The [everyday screen redesign](2026-11-23-everyday-screen-redesign-design.md), approved under issue #236, amends this spec once it is implemented; see its list of amended specs.

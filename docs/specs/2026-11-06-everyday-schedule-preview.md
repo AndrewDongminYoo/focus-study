@@ -29,3 +29,7 @@ Compile the iOS app and extensions, test the affected SDK/UI suites, and run the
 No shared engine behavior changes, new dependencies, real authorization, real shields, or device installation are in scope.
 Simulator accessibility labels and audits cannot establish actual spoken VoiceOver behavior or real Screen Time restrictions.
 Explicit operator visual approval is required before merge.
+
+## Amendment of 2026-11-23
+
+The [everyday screen redesign](2026-11-23-everyday-screen-redesign-design.md), approved under issue #236, amends this spec once it is implemented; see its list of amended specs.
