@@ -1,7 +1,7 @@
 # Home, break wait and focus screen redesign
 
 Date: 2026-11-23.
-Status: approved on 2026-11-23 under [issue #228](https://github.com/AndrewDongminYoo/focus-study/issues/228); no code implements it yet.
+Status: approved on 2026-11-23 under [issue #228](https://github.com/AndrewDongminYoo/focus-study/issues/228); implemented under [issue #237](https://github.com/AndrewDongminYoo/focus-study/issues/237) and not yet run on a device for the shield or Screen Time paths, which it does not change.
 Source: three Figma mock frames: node `3:93` (idle screen), node `3:105` (break wait) and node `3:99` (timer screen of an active session).
 This design changes no session, break, authorization, privacy or product rule.
 
@@ -126,6 +126,7 @@ Cards and full-width buttons have a corner radius of 16; full-width buttons are 
   The settings button shows the text "설정" instead of the gear icon; its accessibility label stays "설정".
 - Title: "작은 시작,\n깊은 몰입."
 - Dial: label "집중할 시간", the clock of the focus length, status line "집중 준비 완료" in `AccentText`.
+  The status line shows only when a start can run and no start blocker shows.
 - Line below the dial: "\(N)분 동안, 한 가지에만." with N the focus length in minutes.
 - Action area:
   - "집중 시작하기" with a `play.fill` symbol, `AccentColor` fill and a white label (`AccentLabel` keeps its dark value).
@@ -147,7 +148,7 @@ Cards and full-width buttons have a corner radius of 16; full-width buttons are 
 - Line below the dial: "지금 이 순간에 머물러요".
 - Action area:
   - While breaks are left, a `FocusCard` card: "잠깐 쉬어가도 괜찮아요" with a `FocusChip` chip "N번 남음" in `FocusAmber`, then the full-width button "쉬는 시간 갖기" in `FocusCreamFill` with a `FocusNavy` bold label.
-    While a break request is pending, the request feedback replaces the button inside the card.
+    While a break request is pending, the button stays in the card, disabled, and the request feedback shows below it, because the UI tests tap the disabled button to check that a second request does not start.
     With no break left, the card is not shown.
   - "집중 종료" as a text button in `ErrorText`, 45 high.
 
