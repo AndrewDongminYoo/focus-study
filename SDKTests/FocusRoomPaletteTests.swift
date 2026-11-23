@@ -34,6 +34,43 @@ final class FocusRoomPaletteTests: XCTestCase {
         }
     }
 
+    /// The tokens of docs/specs/2026-11-23-screen-redesign-design.md, in the light and the dark appearance.
+    func testScreenTokensAreTheSpecValues() throws {
+        let expected: [(String, RGBA, RGBA)] = [
+            ("AccentColor", rgb(0xAE5519), rgb(0xF4A64A)),
+            ("AccentText", rgb(0x985019), rgb(0xF4A64A)),
+            ("FocusCanvas", rgb(0xF8F5F0), rgb(0x202C46)),
+            ("FocusCard", rgb(0xFFFFFF), rgb(0x27334E)),
+            ("FocusChip", rgb(0xF2E5D5), rgb(0x37435C)),
+            ("FocusCreamFill", rgb(0xF7DFC0), rgb(0xF7DFC0)),
+            ("FocusInk", rgb(0x1E2744), rgb(0xFFF4E2)),
+            ("FocusPill", rgb(0xF2E5D5), rgb(0x2B3650)),
+            ("FocusSecondaryInk", rgb(0x626D7E), rgb(0xFFF4E2, alpha: 0.62))
+        ]
+        for (name, light, dark) in expected {
+            XCTAssertEqual(try color(name, .light), light, name)
+            XCTAssertEqual(try color(name, .dark), dark, name)
+        }
+    }
+
+    /// Every text pair of the spec's contrast list reads at 4.5:1 or more.
+    func testScreenTextContrast() throws {
+        let pairs: [(String, UIUserInterfaceStyle, String, UIUserInterfaceStyle)] = [
+            ("AccentText", .light, "FocusCanvas", .light), ("AccentText", .light, "FocusCard", .light), ("AccentText", .light, "FocusPill", .light),
+            ("FocusSecondaryInk", .light, "FocusCanvas", .light), ("FocusSecondaryInk", .light, "FocusCard", .light),
+            ("FocusInk", .light, "FocusCanvas", .light), ("FocusNavy", .light, "FocusCreamFill", .light),
+            ("FocusInk", .dark, "FocusCanvas", .dark), ("FocusSecondaryInk", .dark, "FocusCanvas", .dark), ("FocusSecondaryInk", .dark, "FocusCard", .dark),
+            ("AccentText", .dark, "FocusCanvas", .dark), ("AccentText", .dark, "FocusPill", .dark), ("FocusAmber", .dark, "FocusChip", .dark),
+            ("FocusCream", .dark, "FocusCard", .dark), ("FocusCream", .dark, "FocusNavy", .dark)
+        ]
+        for (text, textStyle, surface, surfaceStyle) in pairs {
+            let ratio = try contrast(color(text, textStyle), on: color(surface, surfaceStyle))
+            XCTAssertGreaterThanOrEqual(ratio, 4.5, "\(text) on \(surface), \(textStyle == .dark ? "dark" : "light")")
+        }
+        // The white label of the light start button.
+        XCTAssertGreaterThanOrEqual(try contrast(rgb(0xFFFFFF), on: color("AccentColor", .light)), 4.5)
+    }
+
     func testContrastIsOneForEqualColorsAndTwentyOneForBlackOnWhite() {
         let white = RGBA(red: 255, green: 255, blue: 255, alpha: 1), black = RGBA(red: 0, green: 0, blue: 0, alpha: 1)
         XCTAssertEqual(contrast(white, on: white), 1, accuracy: 0.001)
@@ -58,6 +95,17 @@ final class FocusRoomPaletteTests: XCTestCase {
         let dark = try components(named.resolvedColor(with: UITraitCollection(userInterfaceStyle: .dark)), name, file: file, line: line)
         XCTAssertEqual(light, dark, "\(name) has appearance variants", file: file, line: line)
         return light
+    }
+
+    /// The color in one appearance, for the tokens whose values differ by appearance.
+    private func color(_ name: String, _ style: UIUserInterfaceStyle, file: StaticString = #filePath, line: UInt = #line) throws -> RGBA {
+        let named = try XCTUnwrap(UIColor(named: name, in: Bundle(for: FocusRoomPaletteTests.self), compatibleWith: nil),
+                                  "\(name) is missing from the compiled asset catalog", file: file, line: line)
+        return try components(named.resolvedColor(with: UITraitCollection(userInterfaceStyle: style)), name, file: file, line: line)
+    }
+
+    private func rgb(_ hex: UInt32, alpha: Double = 1) -> RGBA {
+        RGBA(red: Double(hex >> 16 & 0xFF), green: Double(hex >> 8 & 0xFF), blue: Double(hex & 0xFF), alpha: alpha)
     }
 
     private func components(_ color: UIColor, _ name: String, file: StaticString, line: UInt) throws -> RGBA {

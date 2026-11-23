@@ -970,8 +970,10 @@ final class FocusFlowTests: XCTestCase {
         captureReport(app, name: "report-zero")
     }
     /// Waits until a background pixel beside the content is the room navy `#1E2744` (`true`) or the idle surface (`false`), read in sRGB;
-    /// the crossfade takes about 0.35 s. The idle surface is `systemBackground` in the simulator's own appearance, so a forced dark
-    /// appearance left after the room reads black in light mode and fails; an unreadable pixel fails in both cases.
+    /// the crossfade takes about 0.35 s. The idle surface is the canvas of the simulator's own appearance, so a forced dark appearance
+    /// left after the room reads `#202C46` in light mode and fails; an unreadable pixel fails in both cases. In the dark appearance the
+    /// canvas `#202C46` is within the tolerance of the navy (docs/specs/2026-11-23-screen-redesign-design.md, contract 2), so the check
+    /// tells the room from the idle screen only in the light appearance.
     private func waitForRoom(_ app: XCUIApplication, _ expected: Bool, file: StaticString = #filePath, line: UInt = #line) {
         let target = expected ? [0x1E, 0x27, 0x44] : idleSurfacePixel()
         var pixel: [UInt8] = []
@@ -983,12 +985,9 @@ final class FocusFlowTests: XCTestCase {
         } while Date() < deadline
         XCTFail("background \(pixel) is not \(expected ? "the room navy" : "the idle surface \(target)")", file: file, line: line)
     }
-    /// `systemBackground` resolved for the simulator's appearance, in 8-bit sRGB.
+    /// The `FocusCanvas` value for the simulator's appearance, in 8-bit sRGB.
     private func idleSurfacePixel() -> [Int] {
-        let style: UIUserInterfaceStyle = XCUIDevice.shared.appearance == .dark ? .dark : .light
-        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
-        UIColor.systemBackground.resolvedColor(with: UITraitCollection(userInterfaceStyle: style)).getRed(&red, green: &green, blue: &blue, alpha: &alpha)
-        return [red, green, blue].map { Int(($0 * 255).rounded()) }
+        XCUIDevice.shared.appearance == .dark ? [0x20, 0x2C, 0x46] : [0xF8, 0xF5, 0xF0]
     }
     /// The pixel at 2 % of the width and half the height, outside the centered content and the screen inset.
     private func backgroundPixel(_ app: XCUIApplication) -> [UInt8] {

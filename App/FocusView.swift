@@ -2,46 +2,34 @@ import SwiftUI
 import Combine
 import UIKit
 
-/// The main screen (layout A): a full-screen timer, with selection and settings in the top corners and today's summary at the bottom.
+/// The main screen: the idle screen, the timer screen of an active session, the break screen and the completion card
+/// (docs/specs/2026-11-23-screen-redesign-design.md; the completion card keeps docs/specs/2026-11-20-navy-focus-room-design.md).
 struct FocusView: View {
     let model: FocusModel
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @ScaledMetric(relativeTo: .largeTitle) private var countdownSize: CGFloat = 54
-    @ScaledMetric(relativeTo: .subheadline) private var markerSize: CGFloat = 8
+    @ScaledMetric(relativeTo: .largeTitle) private var countdownSize: CGFloat = 57
+    @ScaledMetric(relativeTo: .footnote) private var markerSize: CGFloat = 6
     @ScaledMetric(relativeTo: .title2) private var colonMarkHeight: CGFloat = 56
     @State private var sheet: FocusSheet?
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     var body: some View {
         GeometryReader { geometry in
             ScrollView {
-                VStack(spacing: 0) {
-                    header
+                Group {
                     if model.current?.isPaused == true {
-                        BreakSessionView(model: model, onEnd: { sheet = .endConfirmation })
-                            .frame(minHeight: max(0, geometry.size.height - FocusTheme.Layout.minimumTapTarget))
+                        BreakSessionView(model: model, onEnd: { sheet = .endConfirmation }, onSettings: showsDiagnostics ? { sheet = .settings } : nil)
+                    } else if model.isActive {
+                        activeScreen
+                    } else if model.completedSessionID != nil {
+                        completionScreen
                     } else {
-                        Spacer(minLength: 32)
-                        center.frame(maxWidth: .infinity).padding(.horizontal, FocusTheme.Layout.screenInset)
-                        Spacer(minLength: 64)
-                        if model.isActive {
-                            focusActions.padding(.horizontal, FocusTheme.Layout.screenInset).padding(.bottom, FocusTheme.Layout.sectionSpacing)
-                        } else if model.completedSessionID == nil {
-                            Button { sheet = .history } label: {
-                                HStack {
-                                    Label(todaySummary, systemImage: "clock.arrow.circlepath")
-                                    Image(systemName: "chevron.right").font(.footnote)
-                                }.frame(minWidth: FocusTheme.Layout.minimumTapTarget, minHeight: FocusTheme.Layout.minimumTapTarget).contentShape(Rectangle())
-                            }.font(.subheadline).foregroundStyle(FocusTheme.Palette.primaryText)
-                                .modifier(FocusSecondaryAction())
-                                .disabled(model.isStarting).accessibilityLabel(todaySummary)
-                                .accessibilityIdentifier("todaySummary").padding(.bottom, FocusTheme.Layout.relatedSpacing)
-                        }
+                        idleScreen
                     }
                 }.frame(minHeight: geometry.size.height)
             }
         }
-        .background { (isRoom ? FocusTheme.Room.background : FocusTheme.Palette.surface).ignoresSafeArea().animation(roomAnimation, value: isRoom) }
+        .background { (isRoom ? FocusTheme.Room.background : FocusTheme.Screen.canvas).ignoresSafeArea().animation(roomAnimation, value: isRoom) }
         // The dark appearance makes the controls, the error text and the status bar read light on navy; sheets presented from the room follow it.
         .preferredColorScheme(isRoom ? .dark : nil)
         .sheet(item: $sheet) { item in
@@ -80,111 +68,247 @@ struct FocusView: View {
         .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in refreshIfIdle() }
         .onReceive(NotificationCenter.default.publisher(for: .NSSystemClockDidChange)) { _ in cancelPendingStart(); model.refresh(clockChanged: true) }
     }
-    private var header: some View {
-        HStack {
-            if !model.isInSession {
-                Button { sheet = .selection } label: {
-                    Text("제한할 앱").frame(minWidth: FocusTheme.Layout.minimumTapTarget, minHeight: FocusTheme.Layout.minimumTapTarget).contentShape(Rectangle())
-                }.modifier(FocusSecondaryAction(tint: primaryText))
-                    .disabled(model.isStarting || model.errorMessage != nil).accessibilityIdentifier("selection")
-            }
+
+    // MARK: Idle screen
+
+    private var idleScreen: some View {
+        let selectionDisabled = model.isStarting || model.errorMessage != nil
+        return FocusScreenLayout {
+            headerButton("제한할 앱", identifier: "selection", disabled: selectionDisabled) { sheet = .selection }
             Spacer()
-            if !model.isInSession || showsDiagnostics {
-                Button { sheet = .settings } label: {
-                    Image(systemName: "gearshape").frame(width: FocusTheme.Layout.minimumTapTarget, height: FocusTheme.Layout.minimumTapTarget).contentShape(Rectangle())
-                }.modifier(FocusSecondaryAction(tint: primaryText)).disabled(model.isStarting)
-                    .accessibilityLabel("설정").accessibilityIdentifier("settingsButton")
+            headerButton("설정", identifier: "settingsButton", disabled: model.isStarting) { sheet = .settings }
+        } title: {
+            Text("작은 시작,\n깊은 몰입.").foregroundStyle(FocusTheme.Screen.ink).accessibilityAddTraits(.isHeader)
+        } dial: {
+            FocusDial(turns: 0, background: FocusTheme.Screen.canvas, animatesDot: false) {
+                dialLabel("집중할 시간", color: FocusTheme.Screen.secondaryInk)
+                clock(model.remaining, color: FocusTheme.Screen.ink)
+                    .accessibilityLabel("남은 시간 \(model.remaining / 60)분 \(model.remaining % 60)초").accessibilityIdentifier("countdown")
+                // Only a start that can run is "ready"; the blocker below says what is missing. `canStart` is also true while the
+                // access is `checking`, where the start button runs the access recovery and the blocker shows.
+                if model.canStart, model.startBlocker == nil { dialLabel("집중 준비 완료", color: FocusTheme.Screen.accentText, weight: .medium, style: .footnote) }
+            }
+        } notes: {
+            Text("\(Int(model.services.settings.lengthSeconds) / 60)분 동안, 한 가지에만.").font(.subheadline).foregroundStyle(FocusTheme.Screen.secondaryInk)
+            if let request = model.startRequestID {
+                PendingFeedback(request: request, textColor: FocusTheme.Screen.secondaryInk, ready: model.performPendingStart, cancel: model.cancelPendingStart)
+                    .frame(minHeight: FocusTheme.Layout.minimumTapTarget)
+            }
+            if let blocker = model.startBlocker {
+                Text(blockerText(blocker)).font(.footnote).foregroundStyle(FocusTheme.Screen.secondaryInk).accessibilityIdentifier("startBlocker")
+            }
+            errorLines
+        } actions: {
+            Button { if model.access == .checking { Task { await model.recoverAccessAndStart() } } else { model.requestStart() } } label: {
+                Label("집중 시작하기", systemImage: "play.fill")
+            }
+            .buttonStyle(FocusFillButtonStyle(fill: FocusTheme.Palette.accent, label: FocusTheme.Palette.onAccent))
+            .disabled(!model.canStart).accessibilityIdentifier("start")
+            restrictionCard
+            todayCard
+        }
+    }
+    private func headerButton(_ title: String, identifier: String, disabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            FocusCapsuleLabel(text: title, textColor: FocusTheme.Screen.ink, fill: FocusTheme.Screen.card)
+                .frame(minWidth: FocusTheme.Layout.minimumTapTarget, minHeight: FocusTheme.Layout.minimumTapTarget).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain).opacity(disabled ? 0.4 : 1).disabled(disabled).accessibilityIdentifier(identifier)
+    }
+    private var restrictionCard: some View {
+        VStack(alignment: .leading, spacing: FocusTheme.Layout.relatedSpacing) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("집중 중 제한").foregroundStyle(FocusTheme.Screen.secondaryInk)
+                Spacer(minLength: FocusTheme.Layout.inlineSpacing)
+                Text("앱 \(model.counts.apps)개 · 웹사이트 \(model.counts.websites)개").fontWeight(.medium).foregroundStyle(FocusTheme.Screen.ink)
+                    .multilineTextAlignment(.trailing).monospacedDigit().accessibilityIdentifier("restrictionSummary")
+            }
+            .font(.subheadline)
+            if let line = EverydaySettingsModel.timerLine(model.everydayStatus, calendar: model.services.engine.calendar) {
+                Divider()
+                everydayCardRow(line)
             }
         }
-        .modifier(FocusGlassGroup()).frame(minHeight: FocusTheme.Layout.minimumTapTarget).padding(.horizontal, FocusTheme.Layout.screenInset)
+        .modifier(FocusCard())
     }
-    @ViewBuilder private var center: some View {
-        VStack(spacing: FocusTheme.Layout.controlSpacing) {
-            if model.completedSessionID != nil {
-                ColonMark(height: colonMarkHeight)
-                Text("\(completedMinutes)분 집중을 마쳤어요").font(.title2.weight(.semibold)).multilineTextAlignment(.center).roomForeground(primaryText, animation: roomAnimation).accessibilityIdentifier("completion")
-                Text("오늘의 세션에 기록했어요. 잠시 쉬었다가 다음 집중을 시작해 보세요.").multilineTextAlignment(.center).roomForeground(secondaryText, animation: roomAnimation)
-                Text("제한이 풀리기까지 조금 걸릴 수 있어요.").font(.footnote).multilineTextAlignment(.center).roomForeground(secondaryText, animation: roomAnimation).accessibilityIdentifier("releaseDelayNote")
-                everydayStatusRow
-                Button("닫기") { model.dismissCompletion() }.modifier(FocusSecondaryAction(tint: primaryText)).accessibilityIdentifier("completionDismiss")
-            } else {
-                if let elapsed = model.openElapsed {
-                    clock(elapsed, countsDown: false)
+    /// `EverydaySettingsModel.timerLine` split at its " · ": the state on the leading side, the end time on the trailing side.
+    private func everydayCardRow(_ line: String) -> some View {
+        let parts = line.components(separatedBy: " · "), blocking = line.hasPrefix("매일 제한 중")
+        return Button { sheet = .everydaySettings } label: {
+            HStack(spacing: FocusTheme.Layout.inlineSpacing) {
+                if blocking { Circle().fill(FocusTheme.Screen.accentText).frame(width: markerSize, height: markerSize) }
+                Text(parts[0]).foregroundStyle(blocking ? FocusTheme.Screen.accentText : FocusTheme.Screen.ink)
+                Spacer(minLength: FocusTheme.Layout.inlineSpacing)
+                if parts.count > 1 { Text(parts[1...].joined(separator: " · ")).foregroundStyle(FocusTheme.Screen.ink).monospacedDigit() }
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(FocusTheme.Screen.secondaryInk)
+            }
+            .font(.subheadline.weight(.medium)).frame(minHeight: FocusTheme.Layout.minimumTapTarget).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain).disabled(model.isStarting).accessibilityLabel(line).accessibilityIdentifier("everydayStatusRow")
+    }
+    private var todayCard: some View {
+        let summary = SessionSummary(records: model.records), failed = model.errorMessage != nil
+        return Button { sheet = .history } label: {
+            VStack(alignment: .leading, spacing: FocusTheme.Layout.relatedSpacing) {
+                HStack {
+                    Text("오늘의 집중").fontWeight(.medium)
+                    Spacer()
+                    Text("기록 보기")
+                    Image(systemName: "chevron.right").font(.caption)
+                }
+                .font(.subheadline).foregroundStyle(FocusTheme.Screen.secondaryInk)
+                HStack {
+                    stat(failed ? "–" : "\(Int(summary.focusDuration) / 60)", unit: "분")
+                    stat(failed ? "–" : "\(summary.completedCount)", unit: "회")
+                }
+            }
+            .modifier(FocusCard()).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain).disabled(model.isStarting).accessibilityLabel(todaySummary).accessibilityIdentifier("todaySummary")
+    }
+    private func stat(_ value: String, unit: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
+            Text(value).font(.title2.weight(.semibold)).monospacedDigit().foregroundStyle(FocusTheme.Screen.ink)
+            Text(unit).font(.subheadline).foregroundStyle(FocusTheme.Screen.secondaryInk)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: Timer screen of an active session
+
+    private var activeScreen: some View {
+        let open = model.openElapsed
+        return FocusScreenLayout {
+            Text("나의 집중").font(.subheadline.weight(.medium)).foregroundStyle(FocusTheme.Room.secondaryText)
+            Spacer()
+            // The status line inside the dial says the same, so the pill is hidden from VoiceOver.
+            FocusCapsuleLabel(text: "집중 진행 중", dot: FocusTheme.Room.marker, textColor: FocusTheme.Room.marker, fill: FocusTheme.Screen.pill).accessibilityHidden(true)
+            if showsDiagnostics { diagnosticsButton }
+        } title: {
+            Text("지금은,\n나에게 집중할 시간").foregroundStyle(FocusTheme.Room.text).accessibilityAddTraits(.isHeader)
+        } dial: {
+            FocusDial(turns: focusTurns, background: FocusTheme.Room.background, animatesDot: !reduceMotion) {
+                dialLabel(open == nil ? "남은 집중 시간" : "집중한 시간", color: FocusTheme.Room.secondaryText)
+                if let elapsed = open {
+                    clock(elapsed, countsDown: false, color: FocusTheme.Room.text)
                         .accessibilityLabel("집중한 시간 \(elapsed / 3600 > 0 ? "\(elapsed / 3600)시간 " : "")\(elapsed % 3600 / 60)분 \(elapsed % 60)초").accessibilityIdentifier("countdown")
                 } else {
-                    clock(model.remaining)
+                    clock(model.remaining, color: FocusTheme.Room.text)
                         .accessibilityLabel("남은 시간 \(model.remaining / 60)분 \(model.remaining % 60)초").accessibilityIdentifier("countdown")
                 }
-                if model.isInSession {
-                    HStack(spacing: FocusTheme.Layout.inlineSpacing) {
-                        Circle().fill(FocusTheme.Room.marker).frame(width: markerSize, height: markerSize).accessibilityHidden(true)
-                        Text(model.openElapsed == nil ? "집중 시간 진행 중" : "집중 모드를 끌 때까지 이어져요").font(.subheadline).roomForeground(secondaryText, animation: roomAnimation)
-                            .accessibilityIdentifier("sessionStatus")
-                    }
-                } else {
-                    Button("집중 시작하기") { if model.access == .checking { Task { await model.recoverAccessAndStart() } } else { model.requestStart() } }.modifier(FocusPrimaryAction()).controlSize(.large).modifier(ProminentLabel())
-                        .disabled(!model.canStart).accessibilityIdentifier("start")
-                    if let request = model.startRequestID {
-                        PendingFeedback(request: request, ready: model.performPendingStart, cancel: model.cancelPendingStart)
-                            .frame(minHeight: FocusTheme.Layout.minimumTapTarget)
-                    }
-                    Text("앱 \(model.counts.apps)개 · 웹사이트 \(model.counts.websites)개 제한").font(.footnote).foregroundStyle(FocusTheme.Palette.secondaryText)
-                        .monospacedDigit().accessibilityIdentifier("restrictionSummary")
-                    everydayStatusRow
-                    if let blocker = model.startBlocker {
-                        Text(blockerText(blocker)).font(.footnote).foregroundStyle(FocusTheme.Palette.secondaryText).multilineTextAlignment(.center).accessibilityIdentifier("startBlocker")
-                    }
-                }
-                if let error = model.errorMessage {
-                    Label(error, systemImage: "exclamationmark.circle").font(.footnote).foregroundStyle(FocusTheme.Palette.error).accessibilityIdentifier("startError")
-                    // The room tints it cream (spec contract 6); the idle screen keeps the accent color.
-                    Button("다시 확인하기") { model.refresh() }.tint(isRoom ? FocusTheme.Room.text : nil).accessibilityIdentifier("retry")
+                HStack(spacing: 6) {
+                    Circle().fill(FocusTheme.Room.marker).frame(width: markerSize, height: markerSize).accessibilityHidden(true)
+                    Text(open == nil ? "집중 시간 진행 중" : "집중 모드를 끌 때까지 이어져요").font(.footnote).foregroundStyle(FocusTheme.Room.marker)
+                        .lineLimit(1).minimumScaleFactor(0.5).accessibilityIdentifier("sessionStatus")
                 }
             }
+        } notes: {
+            Text("지금 이 순간에 머물러요").font(.subheadline).foregroundStyle(FocusTheme.Room.secondaryText)
+            errorLines
+        } actions: {
+            // After the third break, the only way to leave before completion is `end`.
+            if model.breaksLeft > 0 { breakCard }
+            FocusEndButton { sheet = .endConfirmation }.disabled(model.pendingBreak != nil)
         }
     }
-    /// Only the idle screen and the completion card place it; the in-progress screen and the break screen never show it.
-    @ViewBuilder private var everydayStatusRow: some View {
-        if let line = EverydaySettingsModel.timerLine(model.everydayStatus, calendar: model.services.engine.calendar) {
-            Button { sheet = .everydaySettings } label: {
-                HStack(spacing: FocusTheme.Layout.detailSpacing) {
-                    Text(line).multilineTextAlignment(.center).monospacedDigit()
-                    Image(systemName: "chevron.right").font(.caption)
-                }.frame(minWidth: FocusTheme.Layout.minimumTapTarget, minHeight: FocusTheme.Layout.minimumTapTarget).contentShape(Rectangle())
-            }.buttonStyle(.plain).font(.footnote).roomForeground(secondaryText, animation: roomAnimation)
-                .disabled(model.isStarting).accessibilityLabel(line).accessibilityIdentifier("everydayStatusRow")
+    private var breakCard: some View {
+        VStack(alignment: .leading, spacing: FocusTheme.Layout.relatedSpacing) {
+            HStack {
+                Text("잠깐 쉬어가도 괜찮아요").font(.subheadline.weight(.medium)).foregroundStyle(FocusTheme.Room.text)
+                Spacer(minLength: FocusTheme.Layout.inlineSpacing)
+                Text("\(model.breaksLeft)번 남음").font(.footnote.weight(.medium)).foregroundStyle(FocusTheme.Room.marker)
+                    .padding(.horizontal, 9).padding(.vertical, 4).background(Capsule().fill(FocusTheme.Screen.chip))
+                    .accessibilityLabel("쉬는 시간 \(model.breaksLeft)번 남았어요").accessibilityIdentifier("breaksLeft")
+            }
+            Button("쉬는 시간 갖기") { model.requestBreakAction(.request) }
+                .buttonStyle(FocusFillButtonStyle(fill: FocusTheme.Screen.creamFill, label: FocusTheme.Room.background))
+                .disabled(model.pendingBreak != nil).accessibilityIdentifier("breakStart")
+            // The request re-registers monitoring synchronously, which can take seconds on a device; the feedback renders first.
+            if let pending = model.pendingBreak, pending.action == .request {
+                BreakFeedback(model: model, pending: pending, textColor: FocusTheme.Room.secondaryText)
+                    .frame(maxWidth: .infinity, minHeight: FocusTheme.Layout.minimumTapTarget)
+            }
         }
+        .modifier(FocusCard())
+    }
+    /// The dot of the timer dial (spec "Dial"): the share of the focus length, or a 60-minute lap of an open session.
+    /// With Reduce Motion on, it moves once per minute.
+    private var focusTurns: Double {
+        var elapsed: Int, lap: Double
+        if let open = model.openElapsed {
+            elapsed = open; lap = 3600
+        } else {
+            lap = max(1, model.current?.length ?? model.services.settings.lengthSeconds); elapsed = Int(lap) - model.remaining
+        }
+        if reduceMotion { elapsed = elapsed / 60 * 60 }
+        return Double(max(0, elapsed)) / lap
+    }
+    private var diagnosticsButton: some View {
+        Button { sheet = .settings } label: {
+            Image(systemName: "gearshape").frame(width: FocusTheme.Layout.minimumTapTarget, height: FocusTheme.Layout.minimumTapTarget).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain).foregroundStyle(FocusTheme.Room.text).accessibilityLabel("설정").accessibilityIdentifier("settingsButton")
+    }
+
+    // MARK: Completion card (navy focus room design)
+
+    private var completionScreen: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button { sheet = .selection } label: {
+                    Text("제한할 앱").frame(minWidth: FocusTheme.Layout.minimumTapTarget, minHeight: FocusTheme.Layout.minimumTapTarget).contentShape(Rectangle())
+                }.modifier(FocusSecondaryAction(tint: FocusTheme.Room.text))
+                    .disabled(model.isStarting || model.errorMessage != nil).accessibilityIdentifier("selection")
+                Spacer()
+                Button { sheet = .settings } label: {
+                    Image(systemName: "gearshape").frame(width: FocusTheme.Layout.minimumTapTarget, height: FocusTheme.Layout.minimumTapTarget).contentShape(Rectangle())
+                }.modifier(FocusSecondaryAction(tint: FocusTheme.Room.text)).disabled(model.isStarting)
+                    .accessibilityLabel("설정").accessibilityIdentifier("settingsButton")
+            }
+            .modifier(FocusGlassGroup()).frame(minHeight: FocusTheme.Layout.minimumTapTarget).padding(.horizontal, FocusTheme.Layout.screenInset)
+            Spacer(minLength: 32)
+            VStack(spacing: FocusTheme.Layout.controlSpacing) {
+                ColonMark(height: colonMarkHeight)
+                Text("\(completedMinutes)분 집중을 마쳤어요").font(.title2.weight(.semibold)).multilineTextAlignment(.center).roomForeground(FocusTheme.Room.text, animation: roomAnimation).accessibilityIdentifier("completion")
+                Text("오늘의 세션에 기록했어요. 잠시 쉬었다가 다음 집중을 시작해 보세요.").multilineTextAlignment(.center).roomForeground(FocusTheme.Room.secondaryText, animation: roomAnimation)
+                Text("제한이 풀리기까지 조금 걸릴 수 있어요.").font(.footnote).multilineTextAlignment(.center).roomForeground(FocusTheme.Room.secondaryText, animation: roomAnimation).accessibilityIdentifier("releaseDelayNote")
+                if let line = EverydaySettingsModel.timerLine(model.everydayStatus, calendar: model.services.engine.calendar) {
+                    Button { sheet = .everydaySettings } label: {
+                        HStack(spacing: FocusTheme.Layout.detailSpacing) {
+                            Text(line).multilineTextAlignment(.center).monospacedDigit()
+                            Image(systemName: "chevron.right").font(.caption)
+                        }.frame(minWidth: FocusTheme.Layout.minimumTapTarget, minHeight: FocusTheme.Layout.minimumTapTarget).contentShape(Rectangle())
+                    }.buttonStyle(.plain).font(.footnote).roomForeground(FocusTheme.Room.secondaryText, animation: roomAnimation)
+                        .disabled(model.isStarting).accessibilityLabel(line).accessibilityIdentifier("everydayStatusRow")
+                }
+                Button("닫기") { model.dismissCompletion() }.modifier(FocusSecondaryAction(tint: FocusTheme.Room.text)).accessibilityIdentifier("completionDismiss")
+            }
+            .frame(maxWidth: .infinity).padding(.horizontal, FocusTheme.Layout.screenInset)
+            Spacer(minLength: 64)
+        }
+    }
+
+    // MARK: Shared parts
+
+    @ViewBuilder private var errorLines: some View {
+        if let error = model.errorMessage {
+            Label(error, systemImage: "exclamationmark.circle").font(.footnote).foregroundStyle(FocusTheme.Palette.error).accessibilityIdentifier("startError")
+            // The room tints it cream (spec contract 6); the idle screen keeps the accent color.
+            Button("다시 확인하기") { model.refresh() }.tint(isRoom ? FocusTheme.Room.text : nil).accessibilityIdentifier("retry")
+        }
+    }
+    private func dialLabel(_ text: String, color: Color, weight: Font.Weight = .regular, style: Font = .subheadline) -> some View {
+        Text(text).font(style.weight(weight)).foregroundStyle(color).lineLimit(1).minimumScaleFactor(0.5)
     }
     /// `mm:ss`, or `h:mm:ss` from one hour, which only the count-up of an open session reaches.
-    private func clock(_ seconds: Int, countsDown: Bool = true) -> some View {
+    private func clock(_ seconds: Int, countsDown: Bool = true, color: Color) -> some View {
         Text(seconds >= 3600 ? String(format: "%d:%02d:%02d", seconds / 3600, seconds % 3600 / 60, seconds % 60) : String(format: "%02d:%02d", seconds / 60, seconds % 60))
-            .font(.system(size: countdownSize, weight: .light, design: .rounded)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5).roomForeground(primaryText, animation: roomAnimation)
+            .font(.system(size: countdownSize, weight: .medium)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(color)
             .contentTransition(.numericText(countsDown: countsDown)).animation(reduceMotion ? nil : .default, value: seconds)
             .accessibilityAddTraits(.updatesFrequently)
     }
-    private var focusActions: some View {
-        VStack(spacing: FocusTheme.Layout.controlSpacing) {
-            // After the third break, the only way to leave before completion is `end`.
-            if model.breaksLeft > 0 {
-                Button("쉬는 시간 갖기") { model.requestBreakAction(.request) }.modifier(FocusSecondaryAction(tint: primaryText)).controlSize(.large)
-                    .disabled(model.pendingBreak != nil).accessibilityIdentifier("breakStart")
-                // The request re-registers monitoring synchronously, which can take seconds on a device; the feedback renders first.
-                if let pending = model.pendingBreak, pending.action == .request {
-                    BreakFeedback(model: model, pending: pending, textColor: FocusTheme.Room.secondaryText).frame(minHeight: FocusTheme.Layout.minimumTapTarget)
-                } else {
-                    Text("쉬는 시간 \(model.breaksLeft)번 남았어요").font(.footnote).roomForeground(secondaryText, animation: roomAnimation).accessibilityIdentifier("breaksLeft")
-                }
-            }
-            // The system red measures about 4.3:1 on navy; the dark `ErrorText` of the room reads at 4.5:1 or more, and the role stays destructive.
-            Button(role: .destructive) { sheet = .endConfirmation } label: { Text("집중 종료").foregroundStyle(FocusTheme.Palette.error) }
-                .frame(minHeight: FocusTheme.Layout.minimumTapTarget)
-                .disabled(model.pendingBreak != nil).accessibilityIdentifier("end")
-        }
-    }
     /// The navy room: an active session (the break screen excluded) and the completion card (docs/specs/2026-11-20-navy-focus-room-design.md).
     private var isRoom: Bool { model.isActive || (model.completedSessionID != nil && !model.isInSession) }
-    private var primaryText: Color { isRoom ? FocusTheme.Room.text : FocusTheme.Palette.primaryText }
-    private var secondaryText: Color { isRoom ? FocusTheme.Room.secondaryText : FocusTheme.Palette.secondaryText }
     /// The crossfade of the room; none with Reduce Motion on.
     private var roomAnimation: Animation? { reduceMotion ? nil : .easeInOut(duration: 0.35) }
     /// DEBUG device diagnostics live in settings and must stay reachable during a session (docs/notes/development-launch-arguments.md, device diagnostics step 2).
