@@ -272,3 +272,7 @@ Follow `AGENTS.md` and [README verification](../../README.md#실행과-검증).
 - `Integration/` changes: SDK tests for the file with and without `offDay`, and for a file that an earlier build wrote.
 - `App/` changes: SDK tests for the wait (`.background` cancels, `.inactive` keeps, the section runs once at the end) and the copy, and UI tests with a DEBUG fixture that never touches real restrictions. Keep every existing accessibility identifier.
 - Simulator results do not prove real Screen Time behavior.
+
+## Amendment of 2026-11-23
+
+The [everyday screen redesign](2026-11-23-everyday-screen-redesign-design.md), approved under issue #236, amends this spec once it is implemented; see its list of amended specs.
