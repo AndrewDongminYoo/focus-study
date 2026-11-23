@@ -248,6 +248,101 @@ def feature(shot: dict, capture: Path, out: Path, tmp: Path) -> None:
            "-annotate", f"+0+{HEADLINE['y']}", shot["headline"], "-alpha", "remove", "-alpha", "off", "-depth", "8", "-strip", out)
 
 
+# App Store Connect creative assets (Header and Search Results). Both are composed on the 16:9 universal canvas,
+# then cropped to their placement's ratio and scaled to its size: header 21:9 at 3840 x 1646, search 3:2 at 3840 x 2560.
+APP_ICON = HERE.parent / "App" / "Assets.xcassets" / "AppIcon.appiconset" / "AppIcon.png"
+CREATIVE_WIDTH, CREATIVE_HEIGHT = 5244, 2950
+HEADER = {"capture": "store-shield", "hand": "01", "screen_top": 470, "screen_height": 2080, "screen_center_x": 3420,
+          "text_center_x": 1700, "title_size": 300, "title_y": 1060, "subtitle_size": 118, "subtitle_y": 1420,
+          "crop": (5244, 2247, 0, 351), "size": (3840, 1646)}
+SEARCH = {"captures": ["store-picker", "store-focus", "store-day-clock"], "screen_width": 900, "screen_top": 560,
+          "first_x": 1466, "gap": 130, "text_center_x": 950, "icon_size": 300, "icon_y": 640, "name_size": 150,
+          "name_y": 990, "headline_size": 132, "headline_y": 1290, "headline": "고른 앱만\n잠그는\n공부 타이머",
+          "crop": (4424, 2950, 410, 0), "size": (3840, 2560)}
+
+
+def fit_placement(universal: Path, spec: dict, out: Path) -> None:
+    w, h, x, y = spec["crop"]
+    magick(universal, "-crop", f"{w}x{h}+{x}+{y}", "+repage", "-resize", "{}x{}!".format(*spec["size"]),
+           "-alpha", "remove", "-alpha", "off", "-depth", "8", "-strip", out)
+
+
+def warm_background(out: Path, width: int, height: int, circle_center: tuple[float, float]) -> None:
+    cx, cy = circle_center
+    circles = " ".join(f"circle {cx},{cy} {cx + height * r},{cy}" for r in (0.43, 0.33, 0.23))
+    magick("-size", f"{width}x{height}", "xc:white", "-sparse-color", "Bilinear",
+           f"0,0 '#FBF8F2' {width - 1},0 '#FFF4E2' 0,{height - 1} '#F9D9A8' {width - 1},{height - 1} '{AMBER}'",
+           "-fill", "rgba(255,255,255,0.10)", "-draw", circles, out)
+
+
+def framed_phone(capture: Path, screen_width: int, out: Path, tmp: Path) -> tuple[int, int]:
+    """A capture in the black rounded phone frame of the feature images, scaled to the screen width; returns its size."""
+    sx, _, sw, sh, sr = FEATURE_SCREEN
+    fx, _, fw, fh, fr = FEATURE_FRAME
+    k = screen_width / sw
+    w, h, r = round(sw * k), round(sh * k), round(sr * k)
+    margin, frame_r = round((sx - fx) * k), round(fr * k)
+    screen = tmp / f"framed-screen-{out.stem}.png"
+    magick(capture, "-resize", f"{w}x{h}!", "(", "-size", f"{w}x{h}", "xc:none", "-fill", "white", "-draw",
+           f"roundrectangle 0,0,{w - 1},{h - 1},{r},{r}", ")", "-alpha", "set", "-compose", "CopyOpacity", "-composite", screen)
+    iw, ih = round(w * ISLAND["width"]), round(w * ISLAND["height"])
+    ix, iy = margin + (w - iw) // 2, margin + round(w * ISLAND["top"])
+    fw2, fh2 = w + 2 * margin, h + 2 * margin
+    magick("-size", f"{fw2}x{fh2}", "xc:none", "-fill", "#0B0D14", "-draw",
+           f"roundrectangle 0,0,{fw2 - 1},{fh2 - 1},{frame_r},{frame_r}", screen, "-geometry", f"+{margin}+{margin}",
+           "-composite", "-fill", "#000000", "-draw", f"roundrectangle {ix},{iy},{ix + iw - 1},{iy + ih - 1},{ih // 2},{ih // 2}", out)
+    return fw2, fh2
+
+
+def header_asset(captures: Path, out: Path, tmp: Path) -> dict:
+    """The header: the brand and its line on the left, the hand holding the shield on the right."""
+    mockup = tmp / "header-mockup.png"
+    info = hand_mockup(HEADER["hand"], captures / f"{HEADER['capture']}.png", mockup, tmp)
+    x0, y0, x1, y1 = info["screen_box"]
+    scale = HEADER["screen_height"] / (y1 - y0)
+    hw, hh = Image.open(mockup).size
+    px = round(HEADER["screen_center_x"] - (x0 + x1) / 2 * scale)
+    py = round(HEADER["screen_top"] - y0 * scale)
+    background, universal = tmp / "header-bg.png", tmp / "header-universal.png"
+    warm_background(background, CREATIVE_WIDTH, CREATIVE_HEIGHT,
+                    (HEADER["screen_center_x"], HEADER["screen_top"] + HEADER["screen_height"] / 2))
+    offset = HEADER["text_center_x"] - CREATIVE_WIDTH // 2
+    magick(background, "(", mockup, "-resize", f"{round(hw * scale)}x{round(hh * scale)}", ")", "-geometry", f"{px:+d}{py:+d}",
+           "-composite", "-gravity", "north",
+           "-font", BRAND_FONT, "-fill", NAVY, "-pointsize", HEADER["title_size"], "-annotate", f"{offset:+d}+{HEADER['title_y']}", TITLE,
+           "-font", SUBTITLE_FONT, "-fill", "#5B6172", "-pointsize", HEADER["subtitle_size"],
+           "-annotate", f"{offset:+d}+{HEADER['subtitle_y']}", SUBTITLE, universal)
+    fit_placement(universal, HEADER, out)
+    return {"universal_screen_box": [round(x0 * scale + px), round(y0 * scale + py), round(x1 * scale + px), round(y1 * scale + py)]}
+
+
+def search_asset(captures: Path, out: Path, tmp: Path) -> dict:
+    """The search result: the app icon, its name and the headline on the left, three framed screens on the right."""
+    background, universal = tmp / "search-bg.png", tmp / "search-universal.png"
+    magick("-size", f"{CREATIVE_WIDTH}x{CREATIVE_HEIGHT}", f"gradient:{CREAM}-#F9DDB0", background)
+    args: list[object] = [background]
+    x, boxes = SEARCH["first_x"], []
+    for name in SEARCH["captures"]:
+        phone = tmp / f"search-{name}.png"
+        fw, fh = framed_phone(captures / f"{name}.png", SEARCH["screen_width"], phone, tmp)
+        args += [phone, "-geometry", f"+{x}+{SEARCH['screen_top']}", "-composite"]
+        boxes.append([x, SEARCH["screen_top"], x + fw, SEARCH["screen_top"] + fh])
+        x += fw + SEARCH["gap"]
+    size = SEARCH["icon_size"]
+    radius = round(size * 0.2237)  # the iOS app icon corner
+    icon = tmp / "search-icon.png"
+    magick(APP_ICON, "-resize", f"{size}x{size}", "(", "-size", f"{size}x{size}", "xc:none", "-fill", "white", "-draw",
+           f"roundrectangle 0,0,{size - 1},{size - 1},{radius},{radius}", ")", "-alpha", "set", "-compose", "CopyOpacity", "-composite", icon)
+    args += [icon, "-geometry", f"+{SEARCH['text_center_x'] - size // 2}+{SEARCH['icon_y']}", "-composite"]
+    offset = SEARCH["text_center_x"] - CREATIVE_WIDTH // 2
+    magick(*args, "-gravity", "north", "-font", BRAND_FONT, "-fill", NAVY, "-pointsize", SEARCH["name_size"],
+           "-annotate", f"{offset:+d}+{SEARCH['name_y']}", TITLE,
+           "-font", HEADLINE_FONT, "-pointsize", SEARCH["headline_size"],
+           "-interline-spacing", "24", "-annotate", f"{offset:+d}+{SEARCH['headline_y']}", SEARCH["headline"], universal)
+    fit_placement(universal, SEARCH, out)
+    return {"universal_phones": boxes}
+
+
 def main() -> None:
     captures, output = Path(sys.argv[1]), Path(sys.argv[2])
     output.mkdir(parents=True, exist_ok=True)
@@ -266,7 +361,15 @@ def main() -> None:
                 feature(shot, capture, out, tmp)
                 report[out.name] = {}
             print(f"wrote {out}")
-    pngs = sorted(str(p) for p in output.glob("focus-study-appstore-*.png"))
+        for name, build, needs in (("focus-study-header.png", header_asset, [HEADER["capture"]]),
+                                   ("focus-study-search.png", search_asset, SEARCH["captures"])):
+            missing = [n for n in needs if not (captures / f"{n}.png").is_file()]
+            if missing:
+                print(f"skip {name}: missing {missing}")
+                continue
+            report[name] = build(captures, output / name, tmp)
+            print(f"wrote {output / name}")
+    pngs = sorted(str(p) for p in output.glob("focus-study-*.png"))
     if pngs:
         subprocess.run(["oxipng", "--strip", "safe", "-q", *pngs], check=True)
     (output / "layout.json").write_text(json.dumps(report, ensure_ascii=False, indent=2))
