@@ -62,7 +62,7 @@ import Observation
     /// An unreadable file can be replaced with the standard draft without inventing an edit.
     private var needsSave: Bool { hasChanges || status?.issue == .unreadable }
     var canSave: Bool { canEdit && needsSave && draftIssue == nil }
-    var canAddWindow: Bool { draft.windows.count < EverydaySchedule.maxWindows }
+    var canAddWindow: Bool { draft.windows.count < EverydaySchedule.maxWindows && !isLocked }
     var counts: (apps: Int, websites: Int) { (draftSelection.applicationTokens.count, draftSelection.webDomainTokens.count) }
     /// The first problem of the draft, before any save.
     var draftIssue: String? {
@@ -116,15 +116,56 @@ import Observation
         if cursor < schedule.rangeEnd { result.append(PreviewSegment(start: cursor, end: schedule.rangeEnd, blocked: true)) }
         return result
     }
-    /// The position of a time on the day clock, as a fraction of one turn: midnight is 0 and each hour is 1/24.
-    /// `EverydaySchedule.issue` keeps every previewed time between 00:00 and `latestRangeEnd`, so no arc passes midnight.
-    nonisolated static func dayClockFraction(_ minutes: Int) -> Double { Double(minutes) / Double(24 * 60) }
-    /// The stored range locks edits even during an unblocked window, on a day that is on; the engine rechecks at save time.
-    var strictOnlyMessage: String? {
-        guard let schedule = status?.schedule, schedule.isLocked(at: clock(), calendar: services.engine.calendar) else { return nil }
-        return "제한 시간에는 더 엄격하게만 바꿀 수 있어요. \(Self.time(schedule.rangeEnd))부터 자유롭게 바꿀 수 있어요."
+
+    // MARK: Locked editing (docs/specs/2026-11-23-everyday-screen-redesign-design.md)
+
+    /// The stored range locks the screen's loosening edits, also during an unblocked window and when the layer is off for today;
+    /// the engine rechecks at save time and accepts every edit that the screen still offers.
+    var isLocked: Bool { lockedSchedule != nil }
+    private var lockedSchedule: EverydaySchedule? {
+        guard let schedule = status?.schedule, schedule.isLocked(at: statusReadAt ?? clock(), calendar: services.engine.calendar) else { return nil }
+        return schedule
     }
-    private func clearFeedback() { refusalMessage = nil; successMessage = nil }
+    var canToggleEnabled: Bool { !isLocked }
+    var canEditSelection: Bool { !isLocked }
+    var canEditWindowTimes: Bool { !isLocked }
+    /// A locked screen adds a weekday but never removes a stored one.
+    func canToggleWeekday(_ day: Int) -> Bool { !(lockedSchedule?.chosenWeekdays.contains(day) ?? false) }
+    /// A locked range start moves only earlier, and a locked range end only later; a range never moves.
+    var rangeStartBounds: ClosedRange<Int> { 0...(lockedSchedule?.rangeStart ?? EverydaySchedule.latestRangeEnd) }
+    var rangeEndBounds: ClosedRange<Int> { (lockedSchedule?.rangeEnd ?? 0)...EverydaySchedule.latestRangeEnd }
+    /// Set when a status read under the lock returned loosening draft edits to the stored values.
+    private(set) var lockRevertMessage: String?
+    /// Returns every draft edit that the locked screen disables to its stored value, and keeps the strict ones.
+    /// Idempotent: every status read runs it, so no lock transition has to be tracked. A window has no identity,
+    /// so the draft keeps only the stored windows that it still has; a removed stored window stays removed.
+    private func clampDraftToLock() {
+        guard let stored = lockedSchedule else { return }
+        var clamped = draft
+        clamped.enabled = true
+        clamped.rangeStart = min(clamped.rangeStart, stored.rangeStart); clamped.rangeEnd = max(clamped.rangeEnd, stored.rangeEnd)
+        clamped.setWeekdays(clamped.chosenWeekdays.union(stored.chosenWeekdays))
+        clamped.windows = clamped.windows.filter { stored.windows.contains($0) }
+        var selection = draftSelection
+        if let storedSelection = services.everydaySelection() {
+            selection.applicationTokens.formUnion(storedSelection.applicationTokens)
+            selection.webDomainTokens.formUnion(storedSelection.webDomainTokens)
+            selection.categoryTokens.formUnion(storedSelection.categoryTokens)
+        }
+        let changed = !Self.sameEditableSchedule(clamped, draft) || !Self.sameSelection(selection, draftSelection)
+        guard changed else { return }
+        draft = clamped; draftSelection = selection
+        lockRevertMessage = "제한 시간이 시작되어 느슨해지는 변경을 되돌렸어요."
+    }
+    /// The status line says only what the switch cannot say: it hides for a layer that is off or blocks now, and shows a day
+    /// that is not chosen, the next range, off for today and every issue.
+    static func showsStatusLine(_ status: EverydayStatus?) -> Bool {
+        guard let status else { return false }
+        if status.issue != nil { return true }
+        guard let schedule = status.schedule, schedule.enabled else { return false }
+        return !status.blocksNow
+    }
+    private func clearFeedback() { refusalMessage = nil; successMessage = nil; lockRevertMessage = nil }
     private static func sameEditableSchedule(_ lhs: EverydaySchedule, _ rhs: EverydaySchedule) -> Bool {
         func windows(_ schedule: EverydaySchedule) -> [EverydayWindow] {
             schedule.windows.sorted {
@@ -158,6 +199,9 @@ import Observation
             kept.issue = .unchecked; status = kept
         }
         statusReadAt = now
+        // A read without a loosening edit to return says nothing; one with such an edit says so once.
+        lockRevertMessage = nil
+        clampDraftToLock()
     }
     /// Seconds after a boundary before the screen reads the status, so that the Monitor callback applies the layer first.
     static let boundaryGrace: TimeInterval = 2

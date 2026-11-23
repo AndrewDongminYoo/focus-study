@@ -154,7 +154,8 @@ final class FocusFlowTests: XCTestCase {
         app.buttons["직접 정하기"].tap()
         XCTAssertTrue(app.otherElements["everydayWindow.1"].waitForExistence(timeout: 5))
         captureReport(app, name: "everyday-unsaved-footer")
-        app.buttons["settingsDone"].tap()
+        // The everyday screen has no "완료" of its own; its back button asks before the changes go.
+        app.buttons["everydayBack"].tap()
         let discard = app.buttons["변경 버리기"]
         XCTAssertTrue(discard.waitForExistence(timeout: 5))
         captureReport(app, name: "everyday-unsaved-confirmation")
@@ -166,7 +167,9 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(keepEditing.isHittable)
         keepEditing.tap()
         XCTAssertTrue(app.otherElements["everydayWindow.1"].exists)
-        app.buttons["settingsDone"].tap(); discard.tap()
+        app.buttons["everydayBack"].tap(); discard.tap()
+        XCTAssertTrue(app.buttons["lengthPicker"].waitForExistence(timeout: 5))
+        app.buttons["settingsDone"].tap()
         XCTAssertTrue(app.buttons["settingsButton"].waitForExistence(timeout: 5))
         _ = openEveryday(app)
         XCTAssertFalse(app.otherElements["everydayWindow.1"].exists)
@@ -247,7 +250,7 @@ final class FocusFlowTests: XCTestCase {
         let draftValue = toggle.value as? String
         XCTAssertTrue(app.buttons["everydaySave"].isHittable)
         captureReport(app, name: "everyday-unsaved-footer-largest-text")
-        app.buttons["settingsDone"].tap()
+        app.buttons["everydayBack"].tap()
         let keepEditing = app.buttons["계속 편집"], discard = app.buttons["변경 버리기"]
         XCTAssertTrue(keepEditing.waitForExistence(timeout: 5))
         XCTAssertTrue(keepEditing.isHittable)
@@ -379,6 +382,7 @@ final class FocusFlowTests: XCTestCase {
     func testKoreanSystemTimePicker() {
         let app = app(extra: ["-AppleLanguages", "(ko)", "-AppleLocale", "ko_KR"])
         _ = openEveryday(app)
+        app.buttons["everydayRange"].tap()
         let picker = app.datePickers["everydayRangeStart"]
         XCTAssertTrue(picker.waitForExistence(timeout: ready))
         picker.tap()
@@ -396,13 +400,21 @@ final class FocusFlowTests: XCTestCase {
     /// The everyday layer opens from its row in the settings sheet.
     private func openEveryday(_ app: XCUIApplication) -> XCUIElement {
         XCTAssertTrue(app.buttons["settingsButton"].waitForExistence(timeout: ready)); app.buttons["settingsButton"].tap()
-        let row = app.buttons["everydayRow"], status = app.staticTexts["everydayStatus"]
+        let row = app.buttons["everydayRow"], status = app.staticTexts["everydayStatus"], toggle = app.switches["everydayToggle"]
         XCTAssertTrue(row.waitForExistence(timeout: ready)); waitHittable(row)
         row.tap()
         // A tap while the settings sheet still slides in can miss; tap again only while the row still takes a tap and the screen has not opened.
-        if !status.waitForExistence(timeout: 3), row.isHittable { row.tap() }
-        XCTAssertTrue(status.waitForExistence(timeout: ready))
+        // The switch marks the screen: the status line shows only what the switch cannot say.
+        if !toggle.waitForExistence(timeout: 3), row.isHittable { row.tap() }
+        XCTAssertTrue(toggle.waitForExistence(timeout: ready))
         return status
+    }
+    /// Taps "저장" and confirms the alert that a save of an enabled layer shows (docs/specs/2026-11-23-everyday-screen-redesign-design.md, "Save confirmation").
+    private func saveEveryday(_ app: XCUIApplication) {
+        app.buttons["everydaySave"].tap()
+        // The alert's "저장" is the only one inside the alert; firstMatch keeps the query single when the system adds an element.
+        let confirm = app.alerts.firstMatch.buttons["저장"].firstMatch
+        if confirm.waitForExistence(timeout: 3) { confirm.tap() }
     }
     /// Precondition waits only absorb CI runner stalls (about 17 s on one wait, 20 s to synthesize one tap and 34 s at launch were measured),
     /// so they share this timeout; assertions about behavior keep their own.
@@ -420,29 +432,29 @@ final class FocusFlowTests: XCTestCase {
     func testEverydayPreviewShowsDraftSeparatelyFromStoredSchedule() {
         let app = app(extra: ["--everyday-fixture", "preview"])
         _ = openEveryday(app)
-        let draftClock = app.descendants(matching: .any)["everydayDraftClock"]
-        scrollEveryday(app, to: draftClock)
-        XCTAssertEqual(draftClock.label, "하루 일정표")
-        captureReport(app, name: "everyday-preview-clock")
+        let draftWeekdays = app.staticTexts["everydayDraftWeekdays"]
+        scrollEveryday(app, to: draftWeekdays)
+        XCTAssertEqual(draftWeekdays.label, "제한 요일 · 매일")
+        captureReport(app, name: "everyday-preview-bar")
         let draft = app.staticTexts["everydayDraftSegment.1"]
         scrollEveryday(app, to: draft)
         XCTAssertEqual(draft.label, "08:00부터 12:00까지, 제한")
         XCTAssertEqual(app.staticTexts["everydayDraftSegment.2"].label, "12:00부터 13:00까지, 해제")
         XCTAssertEqual(app.staticTexts["everydayDraftSegment.3"].label, "13:00부터 18:00까지, 제한")
         captureReport(app, name: "everyday-preview")
-        let stored = app.buttons["저장된 일정"]
+        let stored = app.buttons["저장된 일정 보기"]
         scrollEveryday(app, to: stored); stored.tap()
-        let storedClock = app.descendants(matching: .any)["everydayStoredClock"]
-        scrollEveryday(app, to: storedClock)
-        XCTAssertEqual(storedClock.label, "하루 일정표")
+        let storedWeekdays = app.staticTexts["everydayStoredWeekdays"]
+        scrollEveryday(app, to: storedWeekdays)
+        XCTAssertEqual(storedWeekdays.label, "제한 요일 · 매일")
         let storedFirst = app.staticTexts["everydayStoredSegment.1"]
         scrollEveryday(app, to: storedFirst)
         XCTAssertEqual(storedFirst.label, "08:00부터 12:00까지, 제한")
         captureReport(app, name: "everyday-preview-stored")
         let hierarchy = XCTAttachment(string: app.debugDescription)
         hierarchy.name = "everyday-preview-accessibility"; hierarchy.lifetime = .keepAlways; add(hierarchy)
-        // The two clock rows sit between the stored rows and the windows section; a button under the navigation bar or behind the save area
-        // is hittable but takes no tap, so scroll until it is between the two.
+        // A button under the navigation bar or behind the save area is hittable but takes no tap, so scroll until it is between the two.
+        // The locked screen keeps "삭제": removing a window blocks more.
         let delete = app.buttons["삭제"].firstMatch, belowBar = app.navigationBars["매일 제한"].frame.maxY + 12
         for _ in 0..<8 where !(delete.isHittable && delete.frame.minY > belowBar) { app.swipeDown() }
         scrollEveryday(app, to: delete)
@@ -452,7 +464,7 @@ final class FocusFlowTests: XCTestCase {
         scrollEveryday(app, to: storedFirst)
         XCTAssertEqual(storedFirst.label, "08:00부터 12:00까지, 제한")
         captureReport(app, name: "everyday-preview-unsaved-comparison")
-        app.buttons["everydaySave"].tap()
+        saveEveryday(app)
         XCTAssertTrue(app.descendants(matching: .any)["everydaySaveSuccess"].waitForExistence(timeout: 5))
         XCTAssertEqual(storedFirst.label, "08:00부터 18:00까지, 제한")
         app.navigationBars.buttons.element(boundBy: 0).tap()
@@ -463,7 +475,8 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertEqual(draft.label, "08:00부터 18:00까지, 제한")
     }
     func testEverydayPreviewRejectsOverlappingDraftWithoutReplacingStoredSchedule() {
-        let app = app(extra: ["--everyday-fixture", "preview"])
+        // The same schedule on a day that is off: the screen is not locked, so it offers a new window.
+        let app = app(extra: ["--everyday-fixture", "weekday-off"])
         _ = openEveryday(app)
         let add = app.buttons["everydayAddWindow"]
         scrollEveryday(app, to: add); add.tap()
@@ -475,11 +488,11 @@ final class FocusFlowTests: XCTestCase {
         scrollEveryday(app, to: invalid)
         XCTAssertTrue(invalid.isHittable)
         XCTAssertFalse(app.staticTexts["everydayDraftSegment.1"].exists)
-        XCTAssertFalse(app.descendants(matching: .any)["everydayDraftClock"].exists, "an invalid draft shows no clock")
+        XCTAssertFalse(app.staticTexts["everydayDraftWeekdays"].exists, "an invalid draft shows no bar and no rows")
         XCTAssertFalse(app.buttons["everydaySave"].isEnabled)
-        let stored = app.buttons["저장된 일정"]
+        let stored = app.buttons["저장된 일정 보기"]
         scrollEveryday(app, to: stored); stored.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["everydayStoredClock"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["everydayStoredWeekdays"].waitForExistence(timeout: 5))
         let storedFirst = app.staticTexts["everydayStoredSegment.1"]
         scrollEveryday(app, to: storedFirst)
         XCTAssertEqual(storedFirst.label, "08:00부터 12:00까지, 제한")
@@ -489,25 +502,13 @@ final class FocusFlowTests: XCTestCase {
         let app = app(extra: ["--everyday-fixture", "preview", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
         _ = openEveryday(app)
         let first = app.staticTexts["everydayDraftSegment.1"], second = app.staticTexts["everydayDraftSegment.2"], third = app.staticTexts["everydayDraftSegment.3"]
-        let clock = app.descendants(matching: .any)["everydayDraftClock"]
-        scrollEveryday(app, to: clock)
-        // The large save-status area covers more than scrollEveryday's bottom margin; bring the whole clock above it for the capture.
-        let clockTop = app.navigationBars["매일 제한"].frame.maxY + 12
-        // A drag on a slow runner can scroll farther than its distance, so measure again and correct, at most three times.
-        for _ in 0..<3 {
-            let offset = clockTop - clock.frame.minY
-            if abs(offset) < 8 { break }
-            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45))
-            start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: offset)), withVelocity: .slow, thenHoldForDuration: 0.1)
-        }
-        XCTAssertGreaterThanOrEqual(clock.frame.minX, app.frame.minX)
-        XCTAssertLessThanOrEqual(clock.frame.maxX, app.frame.maxX)
-        XCTAssertGreaterThanOrEqual(clock.frame.minY, app.navigationBars["매일 제한"].frame.maxY)
-        let visible = app.buttons["everydaySave"].frame.minY - app.navigationBars["매일 제한"].frame.maxY
-        XCTAssertLessThanOrEqual(clock.frame.height, visible, "the whole clock fits between the navigation bar and the save button")
-        captureReport(app, name: "everyday-preview-clock-largest-text")
+        let weekdays = app.staticTexts["everydayDraftWeekdays"]
+        scrollEveryday(app, to: weekdays)
+        XCTAssertGreaterThanOrEqual(weekdays.frame.minX, app.frame.minX)
+        XCTAssertLessThanOrEqual(weekdays.frame.maxX, app.frame.maxX)
+        captureReport(app, name: "everyday-preview-bar-largest-text")
         XCTAssertTrue(first.waitForExistence(timeout: 5))
-        XCTAssertLessThan(clock.frame.midY, first.frame.minY, "the clock sits above the text rows")
+        XCTAssertLessThan(weekdays.frame.midY, first.frame.minY, "the weekday line sits above the rows")
         scrollEveryday(app, to: first)
         XCTAssertEqual(first.label, "08:00부터 12:00까지, 제한")
         captureReport(app, name: "everyday-preview-largest-text")
@@ -563,7 +564,8 @@ final class FocusFlowTests: XCTestCase {
     func testEverydayLayerTurnsOnFromSettings() {
         let app = app()
         let status = openEveryday(app)
-        XCTAssertEqual(status.label, "꺼져 있어요")
+        XCTAssertFalse(status.exists, "the switch says that the layer is off")
+        XCTAssertEqual(app.switches["everydayToggle"].value as? String, "0")
         let selection = app.buttons["everydaySelection"], fixtureSelect = app.buttons["fixtureSelect"]
         // A tap while the everyday screen still slides in can miss; tap again only when the sheet did not open and the row still takes a tap.
         // The row can sit behind the save area, which takes the tap, so bring it between the navigation bar and the save area first.
@@ -584,35 +586,34 @@ final class FocusFlowTests: XCTestCase {
         scrollEveryday(app, to: toggle, above: true)
         waitHittable(toggle)
         flip(toggle)
-        app.buttons["everydaySave"].tap()
-        expectation(for: NSPredicate(format: "label BEGINSWITH '켜져 있어요' OR label BEGINSWITH '지금 제한하고 있어요'"), evaluatedWith: status)
-        waitForExpectations(timeout: 5)
+        saveEveryday(app)
         let refusal = app.staticTexts["everydayRefusal"]
         XCTAssertFalse(refusal.exists, refusal.exists ? refusal.label : "")
         let success = app.descendants(matching: .any).matching(NSPredicate(format: "identifier == 'everydaySaveSuccess' AND label CONTAINS '저장했어요' ")).firstMatch
         XCTAssertTrue(success.waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["everydaySave"].isEnabled)
+        XCTAssertEqual(toggle.value as? String, "1")
         captureReport(app, name: "everyday-settings")
     }
-    func testLooserEditInsideTheRangeIsRefused() {
+    /// Inside the stored range the screen disables every looser edit and keeps the off-for-today action; the engine refusals are SDK tests.
+    func testLooserEditsInsideTheRangeAreDisabled() {
         let app = app(extra: ["--everyday-fixture", "blocking"])
         let status = openEveryday(app)
-        XCTAssertTrue(status.label.hasPrefix("지금 제한하고 있어요"), status.label)
-        flip(app.switches["everydayToggle"])
-        app.buttons["everydaySave"].tap()
-        let refusal = app.staticTexts["everydayRefusal"]
-        XCTAssertTrue(refusal.waitForExistence(timeout: 5))
-        // The refusal names the failed condition and points to the off-for-today action, which is offered inside the range.
-        XCTAssertTrue(refusal.label.hasPrefix("제한 시간에는 매일 제한을 끌 수 없어요."), refusal.label)
-        XCTAssertTrue(refusal.label.hasSuffix("‘오늘만 끄기’를 누르면 오늘은 제한을 끌 수 있어요."), refusal.label)
-        XCTAssertTrue(status.label.hasPrefix("지금 제한하고 있어요"), status.label)
+        XCTAssertFalse(status.exists, "the layer blocks now, which the switch says")
+        XCTAssertFalse(app.switches["everydayToggle"].isEnabled)
         XCTAssertTrue(app.buttons["everydayOffToday"].exists)
+        let add = app.buttons["everydayAddWindow"], selection = app.buttons["everydaySelection"]
+        scrollEveryday(app, to: add)
+        XCTAssertFalse(add.isEnabled)
+        scrollEveryday(app, to: selection)
+        XCTAssertFalse(selection.isEnabled)
+        captureReport(app, name: "everyday-locked")
     }
     func testEverydayOffForTodayWaitsCanBeCancelledAndThenTurnsTheLayerOff() {
         // A shortened synthetic wait; nothing reaches real restrictions.
         let app = app(extra: ["--everyday-fixture", "blocking", "--everyday-off-wait", "8"])
         let status = openEveryday(app)
-        XCTAssertTrue(status.label.hasPrefix("지금 제한하고 있어요"), status.label)
+        XCTAssertFalse(status.exists, "the layer blocks now")
         let action = app.buttons["everydayOffToday"], wait = app.descendants(matching: .any)["everydayOffWait"], cancel = app.buttons["everydayOffCancel"]
         XCTAssertTrue(action.waitForExistence(timeout: ready)); waitHittable(action)
         action.tap()
@@ -622,7 +623,7 @@ final class FocusFlowTests: XCTestCase {
         cancel.tap()
         XCTAssertTrue(action.waitForExistence(timeout: ready))
         XCTAssertFalse(wait.exists)
-        XCTAssertTrue(status.label.hasPrefix("지금 제한하고 있어요"), "a cancelled wait changes nothing: \(status.label)")
+        XCTAssertFalse(status.exists, "a cancelled wait changes nothing: the layer still blocks")
         waitHittable(action)
         action.tap()
         XCTAssertTrue(wait.waitForExistence(timeout: ready))
@@ -647,22 +648,26 @@ final class FocusFlowTests: XCTestCase {
         app.activate()
         XCTAssertTrue(action.waitForExistence(timeout: ready), "the cancelled wait gives the action back")
         XCTAssertFalse(wait.exists)
-        XCTAssertTrue(status.label.hasPrefix("지금 제한하고 있어요"), "a cancelled wait changes nothing: \(status.label)")
-        // Closing the settings sheet cancels it too: the layer still blocks after the wait would have ended.
+        XCTAssertFalse(status.exists, "a cancelled wait changes nothing: the layer still blocks")
+        // Leaving the everyday screen cancels it too: the layer still blocks after the wait would have ended.
         waitHittable(action); action.tap()
         XCTAssertTrue(wait.waitForExistence(timeout: ready))
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.buttons["everydayRow"].waitForExistence(timeout: ready))
         app.buttons["settingsDone"].tap()
         XCTAssertTrue(app.buttons["settingsButton"].waitForExistence(timeout: ready))
         _ = XCTWaiter.wait(for: [XCTestExpectation(description: "past the wait end")], timeout: 10)
         status = openEveryday(app)
-        XCTAssertTrue(status.label.hasPrefix("지금 제한하고 있어요"), status.label)
+        XCTAssertFalse(status.exists, "the layer still blocks")
         XCTAssertTrue(action.waitForExistence(timeout: ready))
     }
     /// The day buttons are found by weekday number, 1 for Sunday, not by position.
     private func weekdayButton(_ app: XCUIApplication, _ day: Int) -> XCUIElement { app.buttons["everydayWeekday.\(day)"] }
     func testEverydayWeekdayButtonsToggleAndNameTheChosenDays() {
-        let app = app(extra: ["--everyday-fixture", "preview"])
+        // The stored layer is off, so nothing locks; the draft turns it on to show its preview.
+        let app = app(extra: ["--everyday-fixture", "off"])
         _ = openEveryday(app)
+        flip(app.switches["everydayToggle"])
         let summary = app.staticTexts["everydayWeekdaysSummary"]
         scrollEveryday(app, to: weekdayButton(app, 7))
         XCTAssertEqual(summary.label, "매일")
@@ -684,14 +689,14 @@ final class FocusFlowTests: XCTestCase {
         let draftWeekdays = app.staticTexts["everydayDraftWeekdays"]
         scrollEveryday(app, to: draftWeekdays)
         XCTAssertEqual(draftWeekdays.label, "제한 요일 · 평일")
-        let clock = app.descendants(matching: .any)["everydayDraftClock"]
-        XCTAssertTrue(clock.exists); XCTAssertLessThan(draftWeekdays.frame.midY, clock.frame.minY, "the weekday row sits above the clock")
+        let firstSegment = app.staticTexts["everydayDraftSegment.1"]
+        XCTAssertTrue(firstSegment.exists); XCTAssertLessThan(draftWeekdays.frame.midY, firstSegment.frame.minY, "the weekday line sits above the rows")
         captureReport(app, name: "everyday-weekdays-preview")
-        let stored = app.buttons["저장된 일정"]
+        let stored = app.buttons["저장된 일정 보기"]
         scrollEveryday(app, to: stored); stored.tap()
-        let storedWeekdays = app.staticTexts["everydayStoredWeekdays"]
-        scrollEveryday(app, to: storedWeekdays)
-        XCTAssertEqual(storedWeekdays.label, "제한 요일 · 매일")
+        let storedOff = app.staticTexts["everydayStoredOff"]
+        scrollEveryday(app, to: storedOff)
+        XCTAssertEqual(storedOff.label, "매일 제한이 꺼져 있어요.")
     }
     func testEverydayWithNoWeekdayShowsTheIssueInTheWeekdayRowOnly() {
         let app = app()
@@ -710,19 +715,14 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertEqual(invalid.label, "요일을 고르면 미리보기를 볼 수 있어요.")
         captureReport(app, name: "everyday-weekdays-none-preview")
     }
-    func testRemovingAWeekdayInsideTheRangeIsRefused() {
+    func testStoredWeekdaysInsideTheRangeAreDisabled() {
         let app = app(extra: ["--everyday-fixture", "blocking"])
-        let status = openEveryday(app)
-        XCTAssertTrue(status.label.hasPrefix("지금 제한하고 있어요"), status.label)
+        _ = openEveryday(app)
         let day = weekdayButton(app, 4)
-        scrollEveryday(app, to: day); day.tap()
-        XCTAssertFalse(day.isSelected)
-        app.buttons["everydaySave"].tap()
-        let refusal = app.staticTexts["everydayRefusal"]
-        XCTAssertTrue(refusal.waitForExistence(timeout: ready))
-        XCTAssertTrue(refusal.label.hasPrefix("제한 시간에는 요일을 뺄 수 없어요."), refusal.label)
-        XCTAssertTrue(status.label.hasPrefix("지금 제한하고 있어요"), status.label)
-        captureReport(app, name: "everyday-weekdays-refused")
+        scrollEveryday(app, to: day)
+        XCTAssertTrue(day.isSelected); XCTAssertFalse(day.isEnabled)
+        XCTAssertFalse(app.buttons["everydaySave"].isEnabled)
+        captureReport(app, name: "everyday-weekdays-locked")
     }
     func testLaunchOnADayThatIsOffShowsTheWeekdayLineAndNoTimerRow() {
         // The fixture leaves out the launch day's weekday in its noon calendar, so the launch is on a day that is off at any wall-clock time.
@@ -732,7 +732,7 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertFalse(app.descendants(matching: .any)["everydayStatusRow"].exists, "no timer row on a day that is off")
         let status = openEveryday(app)
         XCTAssertEqual(status.label, line)
-        XCTAssertFalse(app.staticTexts["everydayStrictOnly"].exists)
+        XCTAssertTrue(app.switches["everydayToggle"].isEnabled, "a day that is off locks nothing")
         XCTAssertFalse(app.buttons["everydayOffToday"].exists)
         captureReport(app, name: "everyday-weekday-off-status")
         app.navigationBars.buttons.element(boundBy: 0).tap()
@@ -784,9 +784,9 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(row.frame.minY, app.staticTexts["restrictionSummary"].frame.maxY)
         XCTAssertLessThanOrEqual(row.frame.maxY, app.buttons["todaySummary"].frame.minY)
         captureReport(app, name: "everyday-status-row-idle")
-        let status = openEverydayFromRow(app, row)
+        _ = openEverydayFromRow(app, row)
         // The row and the settings screen read the same planned end in the engine's calendar.
-        XCTAssertEqual(status.label, "지금 제한하고 있어요 · \(time)")
+        XCTAssertTrue(app.buttons["everydayRange"].label.hasSuffix(time), app.buttons["everydayRange"].label)
         // Back returns to the settings list, and closing the sheet returns to the timer.
         app.navigationBars.buttons.element(boundBy: 0).tap()
         let settingsRow = app.buttons["everydayRow"]
@@ -804,7 +804,8 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(row.frame.minY, app.staticTexts["releaseDelayNote"].frame.maxY)
         XCTAssertLessThanOrEqual(row.frame.maxY, app.buttons["completionDismiss"].frame.minY)
         captureReport(app, name: "everyday-status-row-completion")
-        XCTAssertEqual(openEverydayFromRow(app, row).label, "지금 제한하고 있어요 · \(time)")
+        _ = openEverydayFromRow(app, row)
+        XCTAssertTrue(app.buttons["everydayRange"].label.hasSuffix(time), app.buttons["everydayRange"].label)
     }
     func testEverydayStatusRowIsHiddenDuringASessionAndOnBreak() {
         // The standard timing: a slow query can outlast the 3-second short break, and the row must be checked while the break runs.
@@ -855,12 +856,12 @@ final class FocusFlowTests: XCTestCase {
     }
     /// The timer's everyday row opens the settings sheet with the everyday screen already pushed.
     private func openEverydayFromRow(_ app: XCUIApplication, _ row: XCUIElement) -> XCUIElement {
-        let status = app.staticTexts["everydayStatus"]
+        let status = app.staticTexts["everydayStatus"], toggle = app.switches["everydayToggle"]
         waitHittable(row)
         row.tap()
         // Retry only while the row still takes a tap and the sheet has not appeared.
-        if !status.waitForExistence(timeout: 3), row.isHittable { row.tap() }
-        XCTAssertTrue(status.waitForExistence(timeout: ready))
+        if !toggle.waitForExistence(timeout: 3), row.isHittable { row.tap() }
+        XCTAssertTrue(toggle.waitForExistence(timeout: ready))
         return status
     }
     private func openFocusGuide(_ app: XCUIApplication) {

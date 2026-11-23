@@ -90,7 +90,7 @@ struct SettingsView: View {
     }
     /// One builder for the settings row and the timer's status row, so both keep the same unsaved-changes and finish handling.
     private var everydayScreen: some View {
-        EverydaySettingsView(model: model, onUnsavedChanges: { everydayHasChanges = $0 }, onFinish: finish)
+        EverydaySettingsView(model: model, onUnsavedChanges: { everydayHasChanges = $0 })
     }
     private func finish(_ hasChanges: Bool) {
         everydayHasChanges = hasChanges
