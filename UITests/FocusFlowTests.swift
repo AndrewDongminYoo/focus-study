@@ -126,6 +126,8 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertLessThan(done.frame.minY, app.frame.height * 0.2)
         captureReport(app, name: "large-settings-sheet")
         done.tap()
+        // The settings sheet slides away first; a tap during the slide misses the button behind it.
+        waitHittable(app.buttons["selection"])
         app.buttons["selection"].tap()
         let cancel = app.buttons["pickerCancel"]
         XCTAssertTrue(cancel.waitForExistence(timeout: ready))
@@ -596,6 +598,34 @@ final class FocusFlowTests: XCTestCase {
         captureReport(app, name: "everyday-settings")
     }
     /// Inside the stored range the screen disables every looser edit and keeps the off-for-today action; the engine refusals are SDK tests.
+    /// docs/specs/2026-11-23-everyday-screen-redesign-design.md, "Save confirmation": a save of an enabled layer asks first and names the range.
+    func testEverydaySaveAsksFirstAndCancelKeepsTheDraft() {
+        // A day that is off locks nothing, so a weekday edit is offered.
+        let app = app(extra: ["--everyday-fixture", "weekday-off"])
+        _ = openEveryday(app)
+        let day = weekdayButton(app, 1)
+        scrollEveryday(app, to: day); day.tap()
+        XCTAssertTrue(app.staticTexts["everydayUnsavedChanges"].waitForExistence(timeout: 5))
+        app.buttons["everydaySave"].tap()
+        let alert = app.alerts["매일 제한을 저장할까요?"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        let message = alert.descendants(matching: .staticText).matching(NSPredicate(format: "label CONTAINS '제한 시간(08:00–18:00)에는 매일 제한을 끄거나 느슨하게 바꿀 수 없어요'")).firstMatch
+        XCTAssertTrue(message.exists, alert.debugDescription)
+        captureReport(app, name: "everyday-save-confirmation")
+        alert.buttons["취소"].tap()
+        XCTAssertTrue(app.staticTexts["everydayUnsavedChanges"].waitForExistence(timeout: 5), "the draft stays")
+        XCTAssertFalse(app.descendants(matching: .any)["everydaySaveSuccess"].exists)
+    }
+    /// Turning the layer off locks nothing, so its save asks nothing.
+    func testEverydaySaveOfALayerThatIsOffAsksNothing() {
+        let app = app(extra: ["--everyday-fixture", "off"])
+        _ = openEveryday(app)
+        let day = weekdayButton(app, 1)
+        scrollEveryday(app, to: day); day.tap()
+        app.buttons["everydaySave"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["everydaySaveSuccess"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.alerts.firstMatch.exists)
+    }
     func testLooserEditsInsideTheRangeAreDisabled() {
         let app = app(extra: ["--everyday-fixture", "blocking"])
         let status = openEveryday(app)

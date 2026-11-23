@@ -50,6 +50,8 @@ struct EverydaySettingsView: View {
         } message: {
             Text("저장하면 제한 시간(\(EverydaySettingsModel.time(settings.draft.rangeStart))–\(EverydaySettingsModel.time(settings.draft.rangeEnd)))에는 매일 제한을 끄거나 느슨하게 바꿀 수 없어요.")
         }
+        // A draft that the lock changed is not the one the alert named, so the alert closes and the next save asks again.
+        .onChange(of: settings.lockRevertMessage) { _, message in if message != nil { confirmingSave = false } }
         .sensoryFeedback(.success, trigger: saveFeedback)
         .onAppear {
             if !loaded { loaded = true; settings.refresh() }
@@ -187,9 +189,12 @@ struct EverydaySettingsView: View {
                     }
                     .disabled(!settings.canEditWindowTimes)
                     Spacer(minLength: 0)
-                    Button("삭제", role: .destructive) { settings.removeWindow(at: index) }
-                        .font(.footnote).foregroundStyle(FocusTheme.Palette.error).buttonStyle(.borderless)
-                        .frame(minWidth: FocusTheme.Layout.minimumTapTarget, minHeight: FocusTheme.Layout.minimumTapTarget)
+                    // The frame is inside the label, so the whole 44-point area takes the tap.
+                    Button(role: .destructive) { settings.removeWindow(at: index) } label: {
+                        Text("삭제").font(.footnote).foregroundStyle(FocusTheme.Palette.error)
+                            .frame(minWidth: FocusTheme.Layout.minimumTapTarget, minHeight: FocusTheme.Layout.minimumTapTarget).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.borderless)
                 }
                 .accessibilityElement(children: .contain).accessibilityIdentifier("everydayWindow.\(index + 1)")
             }
@@ -328,7 +333,10 @@ struct EverydaySettingsView: View {
                 .animation(reduceMotion ? nil : .linear(duration: 1), value: progress)
                 .accessibilityElement(children: .ignore).accessibilityLabel(line).accessibilityAddTraits(.updatesFrequently)
                 .accessibilityIdentifier("everydayOffWait")
-            Button("그대로 두기") { settings.cancelOffWait() }.tint(EverydayPalette.accent).frame(minHeight: FocusTheme.Layout.minimumTapTarget)
+            Button { settings.cancelOffWait() } label: {
+                Text("그대로 두기").frame(minWidth: FocusTheme.Layout.minimumTapTarget, minHeight: FocusTheme.Layout.minimumTapTarget).contentShape(Rectangle())
+            }
+            .tint(EverydayPalette.accent)
                 .accessibilityIdentifier("everydayOffCancel")
             Spacer(minLength: 48)
         }
@@ -502,8 +510,14 @@ private struct EverydayWeekdayChips: View {
     let toggle: (Int) -> Void
     var body: some View {
         // No spacing between the buttons: the gap is inside each button, so every tap target spans its whole column.
-        HStack(spacing: 0) {
-            ForEach(order, id: \.self) { day in chip(day) }
+        // When seven 44-point columns do not fit (a 375-point screen), the chips wrap into a grid.
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 0) {
+                ForEach(order, id: \.self) { day in chip(day) }
+            }
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: FocusTheme.Layout.minimumTapTarget + 6), spacing: 0)], spacing: 4) {
+                ForEach(order, id: \.self) { day in chip(day) }
+            }
         }
         // The summary above carries the days at every size, so the chips stop growing at the first accessibility size.
         .dynamicTypeSize(...DynamicTypeSize.accessibility1)
@@ -518,7 +532,7 @@ private struct EverydayWeekdayChips: View {
                 .frame(maxWidth: .infinity).frame(height: 32)
                 .background(RoundedRectangle(cornerRadius: 9).fill(isChosen ? EverydayPalette.accentTint : EverydayPalette.neutralTint))
                 .padding(.horizontal, 3)
-                .frame(minHeight: FocusTheme.Layout.minimumTapTarget)
+                .frame(minWidth: FocusTheme.Layout.minimumTapTarget, minHeight: FocusTheme.Layout.minimumTapTarget)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain).opacity(enabled ? 1 : 0.45).disabled(!enabled)

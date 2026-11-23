@@ -146,12 +146,9 @@ import Observation
         clamped.rangeStart = min(clamped.rangeStart, stored.rangeStart); clamped.rangeEnd = max(clamped.rangeEnd, stored.rangeEnd)
         clamped.setWeekdays(clamped.chosenWeekdays.union(stored.chosenWeekdays))
         clamped.windows = clamped.windows.filter { stored.windows.contains($0) }
-        var selection = draftSelection
-        if let storedSelection = services.everydaySelection() {
-            selection.applicationTokens.formUnion(storedSelection.applicationTokens)
-            selection.webDomainTokens.formUnion(storedSelection.webDomainTokens)
-            selection.categoryTokens.formUnion(storedSelection.categoryTokens)
-        }
+        // The locked screen offers no selection edit, so the selection returns to the stored one: a union could pass the selection
+        // limit with no way to remove the extra app until the range ends.
+        let selection = services.everydaySelection() ?? draftSelection
         let changed = !Self.sameEditableSchedule(clamped, draft) || !Self.sameSelection(selection, draftSelection)
         guard changed else { return }
         draft = clamped; draftSelection = selection
@@ -199,8 +196,8 @@ import Observation
             kept.issue = .unchecked; status = kept
         }
         statusReadAt = now
-        // A read without a loosening edit to return says nothing; one with such an edit says so once.
-        lockRevertMessage = nil
+        // The return line stays until the next edit, save or reload: several followers can read at the same boundary,
+        // and a later read that finds nothing to return must not hide the line of the read that did.
         clampDraftToLock()
     }
     /// Seconds after a boundary before the screen reads the status, so that the Monitor callback applies the layer first.
@@ -283,7 +280,10 @@ import Observation
         } catch {
             refusalMessage = "매일 제한을 저장하지 못했어요. 다시 저장해 주세요."
         }
+        // A lock that the read below finds returns the draft, which clears the feedback; the save's own failure stays on the screen.
+        let failure = refusalMessage
         focus.refreshEveryday(); refreshStatus()
+        if refusalMessage == nil { refusalMessage = failure }
         // The pointer to the off-for-today action follows the status read after the refusal.
         if let lockReason { refusalMessage = Self.lockMessage(lockReason, opensAt: storedEnd, offersOffForToday: offersOffForToday) }
         if refusalMessage == nil { refresh(); successMessage = "매일 제한을 저장했어요." }

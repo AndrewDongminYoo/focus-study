@@ -218,7 +218,7 @@ import ManagedSettings
         settings.refresh()
         XCTAssertFalse(settings.isLocked)
         let stored = try XCTUnwrap(layer.schedule)
-        // Loosening edits: off, an earlier end, a removed weekday, a new window, a removed app. Strict edits: an earlier start, a new app.
+        // Loosening edits: off, an earlier end, a removed weekday, a new window, a removed app. Strict edit: an earlier start. The selection, which the locked screen does not edit, returns to the stored one.
         settings.draft.enabled = false; settings.draft.rangeEnd = 1020; settings.draft.rangeStart = 420
         settings.toggleWeekday(3)
         settings.draft.windows.append(EverydayWindow(kind: .custom, start: 900, end: 930))
@@ -229,7 +229,7 @@ import ManagedSettings
         XCTAssertTrue(settings.draft.enabled); XCTAssertEqual(settings.draft.rangeEnd, 1080); XCTAssertEqual(settings.draft.rangeStart, 420, "an earlier start stays")
         XCTAssertTrue(settings.draft.chosenWeekdays.contains(3))
         XCTAssertEqual(settings.draft.windows, stored.windows, "only the stored windows that the draft kept stay")
-        XCTAssertEqual(settings.draftSelection.applicationTokens, syntheticApps(0..<3), "the stored app returns and the new app stays")
+        XCTAssertEqual(settings.draftSelection.applicationTokens, syntheticApps(0..<1), "the selection returns to the stored one")
         XCTAssertEqual(settings.lockRevertMessage, "제한 시간이 시작되어 느슨해지는 변경을 되돌렸어요.")
         XCTAssertNil(settings.draft.lockReason(against: stored, at: tenAM, calendar: calendar))
         XCTAssertTrue(settings.hasChanges)

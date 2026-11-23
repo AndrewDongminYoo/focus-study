@@ -9,9 +9,6 @@ enum FocusTheme {
         static let onAccent = Color("AccentLabel")
         static let error = Color("ErrorText")
         static let surface = Color(uiColor: .systemBackground)
-        static let groupedSurface = Color(uiColor: .systemGroupedBackground)
-        static let progressTrack = Color(uiColor: .quaternarySystemFill)
-        static let progressFill = accent.opacity(0.24)
     }
 
     /// The navy room of an active session and the completion card (docs/specs/2026-11-20-navy-focus-room-design.md); the same values in both appearances.
