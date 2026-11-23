@@ -37,9 +37,11 @@ From top to bottom, in a scroll view with the save area fixed at the bottom:
 1. The navigation bar: the system back button "설정" and no visible title, because the status card below says "매일 제한".
    The navigation title stays "매일 제한" for VoiceOver and the back stack, and the bar does not draw it.
    The toolbar "완료" (`settingsDone`) is removed from this screen; the settings list keeps it.
+   With unsaved changes, the back button stays the one that asks "변경 사항을 버릴까요?" (`everydayBack`), as today; the system back button shows only for a draft without changes.
 2. Status card (white): "매일 제한" in bold, 25 pt at the default text size and scaled with `.title2`, as the screen's header (`isHeader`), with the switch (`everydayToggle`) on the trailing side, and below it the full-width button "오늘만 끄기" (`everydayOffToday`) in the accent tint with accent text.
    The button shows only when `offersOffForToday` is true, as today.
-   The card shows no status line; the saved status stays readable to VoiceOver as the switch's value.
+   The card shows no status line in the ordinary states (the layer is off, blocks now, or waits for its next range), because the switch says them.
+   It shows the status line (`everydayStatus`, `EverydaySettingsModel.statusLine`) below the switch when the switch alone would mislead: when the layer is off for today, and when the status has an issue or could not be read.
 3. Range card (navy in the light appearance): "설정 시간" with the weekday summary and "반복" ("매일 반복", "평일 반복" and so on) on the trailing side, hidden from VoiceOver because the weekday card says the same, the range in a large semibold monospaced font, and the line "이 시간 안에서 제한과 해제를 반복해요".
    The range is one button that opens a sheet with the two time pickers "제한 시작" (`everydayRangeStart`) and "제한 끝" (`everydayRangeEnd`).
    The range issue line (`everydayRangeIssue`) shows below the range inside the card.
@@ -52,7 +54,7 @@ From top to bottom, in a scroll view with the save area fixed at the bottom:
    The selection issue line (`everydaySelectionIssue`) shows below the note.
 7. Preview card (see "Preview").
 8. Save area: the save feedback line ("변경 사항이 없어요" when there is no change, `everydayUnsavedChanges`, `everydaySaveSuccess` or `everydayRefusal`), then the full-width save button (`everydaySave`), 47 pt high.
-   A disabled save button is `#E4E7ED` with `#626C7D` text; an enabled one is the accent with white text.
+   A disabled save button is `#E4E7ED` with `#626C7D` text; an enabled one is the accent with the `AccentLabel` text: white on `#A84F05` (5.55:1) in the light appearance, navy `#1E2744` on `#F4A64A` (7.28:1) in the dark appearance.
 
 The off-for-today waiting screen (`everydayOffWait`, `everydayOffCancel`) keeps its behavior and takes the same background and card style.
 
@@ -90,6 +92,9 @@ While it is locked:
 - A range that moves (for example 08:00–18:00 to 09:00–20:00) cannot be entered, because the start cannot move later.
 - Every edit that the table allows is one that the engine accepts while locked, so a locked save is refused only when the stored state changed after the screen read it; the refusal line stays for that case.
 - The strict-only line (`everydayStrictOnly`) is removed.
+- When the lock starts while the screen is open (the status read after a boundary), every field that the table disables returns to its stored value in the draft: the switch, the stored weekdays, the window times and windows that the draft added, and the selection; a range start later than the stored start and a range end earlier than the stored end return to the stored values too.
+  The strict edits in the draft stay, and the save feedback line says "제한 시간이 시작되어 느슨해지는 변경을 되돌렸어요."
+  So the draft never holds an edit that the screen cannot undo and the engine refuses.
 - The disabled elements use the system disabled appearance and keep their accessibility labels; VoiceOver reads them as dimmed.
 
 ## Save confirmation
@@ -135,5 +140,7 @@ The UI tests that tap `settingsDone` on this screen (`UITests/FocusFlowTests.swi
 ## Verification plan for the implementation
 
 - SDK tests for the locked picker bounds and the enabled state of each element, with a locked, an off-for-today and an unlocked fixture.
+- An SDK test that crosses the lock boundary with a loosening and a strict edit in the draft, and checks that only the loosening edit returns to the stored value.
+- Palette tests for the save button in both appearances, and for the status line colors.
 - UI tests keep their assertions; the tests that used `settingsDone` on this screen change their navigation only.
 - Captures in the light and the dark appearance, locked and unlocked, at the largest text size, then visual approval before the merge.
