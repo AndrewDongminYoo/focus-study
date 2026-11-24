@@ -219,9 +219,36 @@ extension FocusServices {
 #endif
 
 #if DEBUG
+/// Synthetic StoreKit for `--paid-access`: purchases stay in memory and nothing reaches the App Store.
+/// The price is a synthetic string for the temporary sheet; the app's real price always comes from the store.
+@MainActor final class FixturePaidAccessStoreKit: PaidAccessStoreKit {
+    private var bought: [String: PaidPurchase] = [:]
+    func originalAppVersion() async -> String? { "99" }
+    func read(_ productID: String) async -> PaidAccess.ProductRead { bought[productID].map { .transaction($0) } ?? .noSignal }
+    func firstPurchaseDate(_ productID: String) async -> Date? { bought[productID]?.purchaseDate }
+    func displayPrice(_ productID: String) async -> String? { "₩14,000" }
+    func purchase(_ productID: String) async throws -> PaidPurchaseOutcome {
+        let purchase = bought[productID] ?? PaidPurchase(purchaseDate: Date())
+        bought[productID] = purchase
+        return .purchased(purchase)
+    }
+    func sync() async throws {}
+    func listen(_ handle: @escaping @MainActor (String, PaidPurchase) async -> Void) -> Task<Void, Never> { Task {} }
+    /// `--paid-access locked`: a person who downloaded the paid build and bought nothing; every other fixture keeps the gate off.
+    static func store(arguments: [String]) -> PaidAccessStore {
+        guard let index = arguments.firstIndex(of: "--paid-access"), index + 1 < arguments.count, arguments[index + 1] == "locked" else {
+            return PaidAccessStore(configuration: .disabled, cache: nil, kit: FixturePaidAccessStoreKit())
+        }
+        let cache = PaidAccessCache(container: FileManager.default.temporaryDirectory.appendingPathComponent("FocusPaidFixture-\(UUID().uuidString)"))
+        try? cache.save(PaidAccessFacts(originalAppVersion: "99", unlock: nil, trial: nil, confirmedAt: Date()))
+        return PaidAccessStore(configuration: PaidAccessConfiguration(enabled: true, firstPaidBuild: 3), cache: cache, kit: FixturePaidAccessStoreKit())
+    }
+}
 extension FocusRuntime {
     static func fixture(arguments: [String]) throws -> FocusRuntime {
-        let services = FocusServices.fixture(arguments: arguments)
+        var services = FocusServices.fixture(arguments: arguments)
+        let paidAccess = FixturePaidAccessStoreKit.store(arguments: arguments)
+        services.paidAccess = { paidAccess.state }
         if arguments.contains("startup-failure") {
             _ = try services.engine.start(now: Date(), authorized: { .approved }, apply: {}, matches: { true })
         }
@@ -237,7 +264,7 @@ extension FocusRuntime {
                                                          apply: {}, matches: { true })
         }
         var attempts = 0
-        return FocusRuntime(recovery: StartupRecovery(engine: services.engine), accessState: services.authorization.accessState, holder: FocusRuntimeHolder(engine: services.engine, authorization: services.authorization, settings: services.settings, activityDidChange: services.activityDidChange) {
+        return FocusRuntime(recovery: StartupRecovery(engine: services.engine), accessState: services.authorization.accessState, paidAccess: paidAccess, holder: FocusRuntimeHolder(engine: services.engine, authorization: services.authorization, settings: services.settings, activityDidChange: services.activityDidChange) {
             attempts += 1
             if arguments.contains("startup-failure"), attempts == 1 { throw ControlIssue.io }
             let container = try ModelContainer(for: SessionRecord.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none))

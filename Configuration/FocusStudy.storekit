@@ -1,0 +1,47 @@
+{
+  "identifier": "4F0C2A91",
+  "nonRenewingSubscriptions": [],
+  "products": [
+    {
+      "displayPrice": "14000",
+      "familyShareable": false,
+      "internalID": "6755000001",
+      "localizations": [
+        {
+          "description": "Focus sessions and study records, for good.",
+          "displayName": "Full Unlock",
+          "locale": "ko"
+        }
+      ],
+      "productID": "kr.donminzzi.focusStudy.unlock",
+      "referenceName": "Full Unlock",
+      "type": "NonConsumable"
+    },
+    {
+      "displayPrice": "0",
+      "familyShareable": false,
+      "internalID": "6755000002",
+      "localizations": [
+        {
+          "description": "Every paid feature for 3 days.",
+          "displayName": "3-day Trial",
+          "locale": "ko"
+        }
+      ],
+      "productID": "kr.donminzzi.focusStudy.trial3d",
+      "referenceName": "3-day Trial",
+      "type": "NonConsumable"
+    }
+  ],
+  "settings": {
+    "_failTransactionsEnabled": false,
+    "_locale": "ko",
+    "_storefront": "KOR",
+    "_storeKitErrors": []
+  },
+  "subscriptionGroups": [],
+  "version": {
+    "major": 4,
+    "minor": 0
+  }
+}

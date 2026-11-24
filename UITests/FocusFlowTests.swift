@@ -913,6 +913,32 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(row.isHittable, "the scheduled Focus row names the first-unlock delay")
         captureReport(app, name: "focus-guide-scheduled-row")
     }
+    /// `--paid-access locked`: the start tap opens the temporary paywall sheet instead of a session (docs/specs/2026-11-24-paid-access-design.md).
+    func testLockedStartOpensThePaywallSheet() {
+        let app = app(extra: ["--paid-access", "locked"])
+        let start = app.buttons["start"]
+        XCTAssertTrue(start.waitForExistence(timeout: ready)); XCTAssertTrue(start.isEnabled)
+        XCTAssertFalse(app.staticTexts["startBlocker"].exists)
+        waitHittable(start); start.tap()
+        XCTAssertTrue(app.buttons["paywallTrial"].waitForExistence(timeout: ready))
+        for identifier in ["paywallPurchase", "paywallRestore", "paywallClose"] { XCTAssertTrue(app.buttons[identifier].exists, identifier) }
+        XCTAssertTrue(app.buttons["paywallPurchase"].label.contains("₩14,000"))
+        XCTAssertTrue(app.staticTexts["매일 제한은 3일이 지나도 계속 쓸 수 있어요."].exists)
+        XCTAssertFalse(app.buttons["end"].exists)
+        captureReport(app, name: "paywall-temporary-sheet")
+        // The trial grants access and closes the sheet; the next tap starts a session.
+        app.buttons["paywallTrial"].tap()
+        XCTAssertTrue(app.buttons["paywallTrial"].waitForNonExistence(timeout: ready))
+        waitHittable(start); start.tap()
+        XCTAssertTrue(app.buttons["end"].waitForExistence(timeout: ready))
+    }
+    func testLockedRefusalShowsInTheGuide() {
+        let app = app(extra: ["--focus-filter-refusal", "locked"])
+        openFocusGuide(app)
+        let refusal = app.staticTexts["focusFilterRefusal"]
+        XCTAssertTrue(refusal.waitForExistence(timeout: 5))
+        XCTAssertTrue(refusal.label.contains("체험을 시작하거나 구매하면"))
+    }
     func testStoredRefusalShowsInTheGuide() {
         let app = app(extra: ["--focus-filter-refusal", "busy"])
         openFocusGuide(app)

@@ -30,6 +30,8 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
     private(set) var completedLength: TimeInterval?
     /// The everyday layer for the settings row and for the timer screen's everyday status row, which the idle screen and the completion card show.
     private(set) var everydayStatus: EverydayStatus?
+    /// Set when a start found paid access `locked`: the screen opens the temporary paywall sheet instead of a session.
+    private(set) var paywallRequest: UUID?
     /// The time of the last everyday status read; the settings row computes its day word from it, and every read redraws the row.
     private(set) var everydayReadAt: Date?
     /// The session of a thrown `finish`, which can leave the stored phase behind its stopped activities; until one reconcile succeeds, `tick` runs one with no session.
@@ -180,6 +182,8 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
     /// Reserves the UI action before its feedback has had a chance to appear. No control operation runs here.
     @discardableResult func requestStart() -> UUID? {
         guard canStart else { return nil }
+        // The gate applies only at start; `unknown` starts, so an earlier user never sees the paywall (docs/specs/2026-11-24-paid-access-design.md).
+        guard services.paidAccess() != .locked else { paywallRequest = UUID(); return nil }
         let request = UUID()
         startRequestID = request; isStarting = true
         completedSessionID = nil; completedLength = nil
@@ -205,6 +209,8 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
         isStarting = true; defer { startRequestID = nil; isStarting = false }
         refresh()
         guard errorMessage == nil, access == .approved, current == nil else { return }
+        // Access can end between the tap and this section, such as a trial that ends; the cached state is read synchronously.
+        guard services.paidAccess() != .locked else { paywallRequest = UUID(); return }
         do {
             let counts = services.selection.counts
             try SelectionValidator.validate(appCount: counts.apps, webCount: counts.websites, categoryCount: counts.categories)
@@ -238,6 +244,7 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
             failedEndID = id; refresh()
         }
     }
+    func dismissPaywall() { paywallRequest = nil }
     func dismissCompletion() { completedSessionID = nil; completedLength = nil }
     func completeOnboarding() { services.settings.hasCompletedOnboarding = true }
     /// `defersBreakStart`: the timer screen reserves the automatic break start, so its feedback can appear before the engine call.

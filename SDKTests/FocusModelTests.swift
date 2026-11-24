@@ -804,9 +804,12 @@ final class ModelTestStore: ControlStore, LockedControl {
     /// The numbers of the lock sections that throw `lockTimeout` before their body runs.
     var lockTimeoutCalls = Set<Int>()
     private(set) var calls = 0
+    /// Runs with the section's number after the lock is taken and before the body, as a change by another process while this one waited for the lock.
+    var onLock: ((Int) -> Void)?
     func withExclusiveAccess<T>(timeout: TimeInterval?, _ body: (LockedControl) throws -> T) throws -> T {
         calls += 1
         if lockTimeoutCalls.contains(calls) { throw ControlIssue.lockTimeout }
+        onLock?(calls)
         return try body(self)
     }
     func load() throws -> ControlEnvelope { if failRead { throw ModelTestError.storage }; return envelope }

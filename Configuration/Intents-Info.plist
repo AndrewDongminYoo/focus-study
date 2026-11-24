@@ -20,6 +20,10 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>FocusAppGroupIdentifier</key>
 	<string>group.kr.donminzzi.focusStudy</string>
+	<key>FocusPaidUnlockEnabled</key>
+	<string>$(PAID_UNLOCK_ENABLED)</string>
+	<key>FocusPaidUnlockFirstBuild</key>
+	<string>$(PAID_UNLOCK_FIRST_BUILD)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>EXAppExtensionAttributes</key>

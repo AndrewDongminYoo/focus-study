@@ -12,6 +12,8 @@ struct FocusView: View {
     @ScaledMetric(relativeTo: .footnote) private var markerSize: CGFloat = 6
     @ScaledMetric(relativeTo: .title2) private var colonMarkHeight: CGFloat = 56
     @State private var sheet: FocusSheet?
+    /// `nil` only in a preview without a runtime; the start gate then never asks for the sheet.
+    @Environment(PaidAccessStore.self) private var paidAccess: PaidAccessStore?
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     var body: some View {
         GeometryReader { geometry in
@@ -32,15 +34,17 @@ struct FocusView: View {
         .background { (isRoom ? FocusTheme.Room.background : FocusTheme.Screen.canvas).ignoresSafeArea().animation(roomAnimation, value: isRoom) }
         // The dark appearance makes the controls, the error text and the status bar read light on navy; sheets presented from the room follow it.
         .preferredColorScheme(isRoom ? .dark : nil)
-        .sheet(item: $sheet) { item in
+        .sheet(item: $sheet, onDismiss: { model.dismissPaywall() }) { item in
             switch item {
             case .selection: selectionEditor
             case .settings: SettingsView(model: model)
             case .everydaySettings: SettingsView(model: model, opensEveryday: true)
             case .history: TodayHistoryView(model: model)
             case .endConfirmation: FocusEndConfirmation(model: model)
+            case .paywall: if let paidAccess { PaidAccessSheet(store: paidAccess) }
             }
         }
+        .onChange(of: model.paywallRequest) { _, request in if request != nil, paidAccess != nil { sheet = .paywall } }
         .sensoryFeedback(.success, trigger: model.completedSessionID) { _, new in new != nil }
         .task { refreshIfIdle() }
         // While the idle screen or the completion card shows, a range or window boundary changes the everyday row with no lock section of the app, and `tick()` does not read it.
@@ -346,7 +350,7 @@ struct FocusView: View {
         #endif
     }
 }
-private enum FocusSheet: String, Identifiable { case selection, settings, everydaySettings, history, endConfirmation; var id: String { rawValue } }
+private enum FocusSheet: String, Identifiable { case selection, settings, everydaySettings, history, endConfirmation, paywall; var id: String { rawValue } }
 
 /// The feedback of a pending break action, in the place of the action on the screen that shows it.
 struct BreakFeedback: View {

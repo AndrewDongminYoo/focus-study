@@ -8,6 +8,8 @@ import os
     let recovery: StartupRecovery
     /// The main-queue access read of launch recovery; a cold launch reads `unknown` until the published value settles.
     let accessState: () -> AccessState
+    /// Paid access for the start gate and the temporary paywall sheet; one per process.
+    let paidAccess: PaidAccessStore
     /// The services and the `ModelContainer`, built once for the screens and the Focus filter.
     let holder: FocusRuntimeHolder
     private static var current: FocusRuntime?
@@ -81,7 +83,10 @@ import os
         let settings = FocusSettings.app()
         // One writer per process, so its first write check asks for one reload; `group` is `SessionControl/` inside the container.
         let todaySnapshot = TodaySnapshotWriter(container: group.deletingLastPathComponent()) { WidgetCenter.shared.reloadTimelines(ofKind: TodaySnapshot.widgetKind) }
-        return FocusRuntime(recovery: StartupRecovery(engine: engine), accessState: authorization.accessState, holder: FocusRuntimeHolder(engine: engine, authorization: authorization, settings: settings, activityDidChange: activityDidChange) {
+        // The app is the only writer of the paid-access cache; the App Intents extension reads it.
+        let paidAccess = PaidAccessStore(configuration: PaidAccessConfiguration(info: Bundle.main.infoDictionary), cache: PaidAccessCache(container: container),
+                                         kit: SystemPaidAccessStoreKit())
+        return FocusRuntime(recovery: StartupRecovery(engine: engine), accessState: authorization.accessState, paidAccess: paidAccess, holder: FocusRuntimeHolder(engine: engine, authorization: authorization, settings: settings, activityDidChange: activityDidChange) {
             // The length moves first and the selection only after it, so an App Group selection always has a length next to it (2026-11-16 extension design, decision 16).
             let lengthMoved = settings.migrateToAppGroup()
             let legacy = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent("PrivateSelection")
@@ -101,6 +106,7 @@ import os
             services.writeEveryday = { try everyday.write($0, selection: $1) }
             services.writeEverydayOffDay = { try everyday.writeOffDay($0) }
             services.writeTodaySnapshot = { try todaySnapshot.write($0) }
+            services.paidAccess = { paidAccess.state }
             #if DEBUG
             services.diagnostics = diagnostics
             if diagnostics != nil {
