@@ -93,22 +93,17 @@ import ManagedSettings
         schedule.rangeEnd = 1080; schedule.enabled = false
         XCTAssertEqual(EverydaySettingsModel.previewSegments(for: schedule), [])
     }
-    func testDayClockFractionPlacesMidnightAtZeroAndKeepsTheLatestRangeEndBeforeOneTurn() {
-        XCTAssertEqual(EverydaySettingsModel.dayClockFraction(0), 0)
-        XCTAssertEqual(EverydaySettingsModel.dayClockFraction(360), 0.25)
-        XCTAssertEqual(EverydaySettingsModel.dayClockFraction(720), 0.5)
-        XCTAssertEqual(EverydaySettingsModel.dayClockFraction(1080), 0.75)
-        XCTAssertEqual(EverydaySettingsModel.dayClockFraction(EverydaySchedule.latestRangeEnd), 1435.0 / 1440.0)
-        XCTAssertLessThan(EverydaySettingsModel.dayClockFraction(EverydaySchedule.latestRangeEnd), 1)
+    /// The preview bar spans the whole daily range (docs/specs/2026-11-23-everyday-screen-redesign-design.md, "Preview").
+    func testPreviewSegmentsSpanARangeFromMidnightToTheLatestEnd() {
         let schedule = EverydaySchedule(revision: UUID(), enabled: true, rangeStart: 0, rangeEnd: EverydaySchedule.latestRangeEnd, windows: [
             EverydayWindow(kind: .custom, start: 1315, end: EverydaySchedule.latestRangeEnd)
         ])
         let segments = EverydaySettingsModel.previewSegments(for: schedule) ?? []
         XCTAssertEqual(segments.count, 2)
-        let fractions = segments.map { (EverydaySettingsModel.dayClockFraction($0.start), EverydaySettingsModel.dayClockFraction($0.end)) }
-        XCTAssertEqual(fractions.first?.0, 0, "a range that starts at midnight starts at the top")
-        XCTAssertEqual(fractions.last?.1, 1435.0 / 1440.0, "a range that ends at the latest end stops before midnight")
-        for (start, end) in fractions { XCTAssertLessThan(start, end, "no arc wraps past midnight") }
+        let fractions = segments.map { (Double($0.start) / Double(schedule.rangeEnd), Double($0.end) / Double(schedule.rangeEnd)) }
+        XCTAssertEqual(fractions.first?.0, 0, "the bar starts at the range start")
+        XCTAssertEqual(fractions.last?.1, 1, "the bar ends at the range end")
+        for (start, end) in fractions { XCTAssertLessThan(start, end, "every segment has a length") }
     }
     func testPreviewKeepsStoredScheduleThroughRefusalFailureSaveAndReentry() {
         var fail = false
@@ -167,12 +162,14 @@ import ManagedSettings
         let (settings, layer, _, _) = fixture()
         storedLayer(layer, settings)
         settings.refresh()
+        // The locked screen disables the switch; the model still refuses a draft that reaches the save, then returns it to the stored value.
         settings.draft.enabled = false
         settings.save()
         XCTAssertNotNil(settings.refusalMessage); XCTAssertNil(settings.successMessage)
-        XCTAssertTrue(settings.hasChanges); XCTAssertFalse(settings.draft.enabled)
-        settings.draft.enabled = true
-        XCTAssertNil(settings.refusalMessage); XCTAssertFalse(settings.hasChanges)
+        XCTAssertNotNil(settings.lockRevertMessage)
+        XCTAssertFalse(settings.hasChanges); XCTAssertTrue(settings.draft.enabled)
+        settings.draft.rangeEnd += 5
+        XCTAssertNil(settings.refusalMessage, "a new edit clears the refusal"); XCTAssertTrue(settings.hasChanges)
     }
     func testValidationFeedbackBelongsToTheRelatedSectionAndDisablesSave() {
         let (settings, _, _, _) = fixture()
@@ -187,19 +184,74 @@ import ManagedSettings
         settings.draftSelection = apps(0..<1)
         XCTAssertNil(settings.selectionIssue); XCTAssertTrue(settings.canSave)
     }
-    func testStrictOnlyGuidanceIncludesWindowsAndEndsAtTheStoredRangeEnd() {
+    /// docs/specs/2026-11-23-everyday-screen-redesign-design.md, "Locked editing": inside the stored range, also during lunch,
+    /// the screen offers only the strict edits; after the stored range end every edit opens again.
+    func testLockedScreenOffersOnlyStrictEditsUntilTheStoredRangeEnd() {
         let (settings, layer, _, _) = fixture()
         storedLayer(layer, settings)
         settings.refresh()
-        let expected = "제한 시간에는 더 엄격하게만 바꿀 수 있어요. 18:00부터 자유롭게 바꿀 수 있어요."
-        XCTAssertEqual(settings.strictOnlyMessage, expected)
+        func assertLocked(_ note: String) {
+            XCTAssertTrue(settings.isLocked, note)
+            XCTAssertFalse(settings.canToggleEnabled, note); XCTAssertFalse(settings.canEditSelection, note)
+            XCTAssertFalse(settings.canAddWindow, note); XCTAssertFalse(settings.canEditWindowTimes, note)
+            XCTAssertEqual(settings.rangeStartBounds, 0...480, note); XCTAssertEqual(settings.rangeEndBounds, 1080...EverydaySchedule.latestRangeEnd, note)
+            XCTAssertFalse(settings.canToggleWeekday(2), "\(note): a stored weekday stays")
+        }
+        assertLocked("inside the range")
         settings.clock = { self.tenAM.addingTimeInterval(2.5 * 3600) }
         settings.refreshStatus()
         XCTAssertFalse(settings.status?.blocksNow ?? true)
-        XCTAssertEqual(settings.strictOnlyMessage, expected, "lunch still uses the strict-only rule")
+        assertLocked("lunch still locks")
         settings.clock = { self.tenAM.addingTimeInterval(8 * 3600) }
         settings.refreshStatus()
-        XCTAssertNil(settings.strictOnlyMessage)
+        XCTAssertFalse(settings.isLocked)
+        XCTAssertTrue(settings.canToggleEnabled); XCTAssertTrue(settings.canEditSelection); XCTAssertTrue(settings.canAddWindow); XCTAssertTrue(settings.canEditWindowTimes)
+        XCTAssertEqual(settings.rangeStartBounds, 0...EverydaySchedule.latestRangeEnd); XCTAssertEqual(settings.rangeEndBounds, 0...EverydaySchedule.latestRangeEnd)
+        XCTAssertTrue(settings.canToggleWeekday(2))
+    }
+    /// The lock that starts while the screen is open returns only the loosening draft edits, so the draft stays one that the engine accepts.
+    func testLockBoundaryReturnsLooseningDraftEditsAndKeepsStrictOnes() throws {
+        let (settings, layer, _, _) = fixture()
+        storedLayer(layer, settings)
+        let sevenAM = tenAM.addingTimeInterval(-3 * 3600)
+        settings.clock = { sevenAM }
+        settings.refresh()
+        XCTAssertFalse(settings.isLocked)
+        let stored = try XCTUnwrap(layer.schedule)
+        // Loosening edits: off, an earlier end, a removed weekday, a new window, a removed app. Strict edit: an earlier start. The selection, which the locked screen does not edit, returns to the stored one.
+        settings.draft.enabled = false; settings.draft.rangeEnd = 1020; settings.draft.rangeStart = 420
+        settings.toggleWeekday(3)
+        settings.draft.windows.append(EverydayWindow(kind: .custom, start: 900, end: 930))
+        settings.draftSelection = apps(1..<3)
+        settings.clock = { self.tenAM }
+        settings.refreshStatus()
+        XCTAssertTrue(settings.isLocked)
+        XCTAssertTrue(settings.draft.enabled); XCTAssertEqual(settings.draft.rangeEnd, 1080); XCTAssertEqual(settings.draft.rangeStart, 420, "an earlier start stays")
+        XCTAssertTrue(settings.draft.chosenWeekdays.contains(3))
+        XCTAssertEqual(settings.draft.windows, stored.windows, "only the stored windows that the draft kept stay")
+        XCTAssertEqual(settings.draftSelection.applicationTokens, syntheticApps(0..<1), "the selection returns to the stored one")
+        XCTAssertEqual(settings.lockRevertMessage, "제한 시간이 시작되어 느슨해지는 변경을 되돌렸어요.")
+        XCTAssertNil(settings.draft.lockReason(against: stored, at: tenAM, calendar: calendar))
+        XCTAssertTrue(settings.hasChanges)
+        settings.save()
+        XCTAssertNil(settings.refusalMessage); XCTAssertNotNil(settings.successMessage)
+        // A second read changes nothing and says nothing.
+        settings.refreshStatus()
+        XCTAssertNil(settings.lockRevertMessage)
+    }
+    /// The status line says only what the switch cannot say: it hides for a layer that is off or blocks now.
+    func testStatusLineShowsOnlyWhatTheSwitchCannotSay() {
+        let schedule = layerEveryDay
+        XCTAssertFalse(EverydaySettingsModel.showsStatusLine(nil))
+        XCTAssertFalse(EverydaySettingsModel.showsStatusLine(EverydayStatus(schedule: nil, blocksNow: false, nextChange: nil, issue: nil)))
+        var off = schedule; off.enabled = false
+        XCTAssertFalse(EverydaySettingsModel.showsStatusLine(EverydayStatus(schedule: off, blocksNow: false, nextChange: nil, issue: nil)))
+        XCTAssertFalse(EverydaySettingsModel.showsStatusLine(EverydayStatus(schedule: schedule, blocksNow: true, nextChange: at(18), issue: nil)))
+        XCTAssertTrue(EverydaySettingsModel.showsStatusLine(EverydayStatus(schedule: schedule, blocksNow: false, nextChange: at(8, day: 3), issue: nil)), "the next range")
+        XCTAssertTrue(EverydaySettingsModel.showsStatusLine(EverydayStatus(schedule: schedule, blocksNow: false, nextChange: at(8, day: 3), issue: nil, offForToday: true, dayIsOff: false)))
+        XCTAssertTrue(EverydaySettingsModel.showsStatusLine(EverydayStatus(schedule: schedule, blocksNow: false, nextChange: at(8, day: 3), issue: nil, offForToday: false, dayIsOff: true)))
+        XCTAssertTrue(EverydaySettingsModel.showsStatusLine(EverydayStatus(schedule: nil, blocksNow: false, nextChange: nil, issue: .unreadable)))
+        XCTAssertTrue(EverydaySettingsModel.showsStatusLine(EverydayStatus(schedule: schedule, blocksNow: true, nextChange: nil, issue: .notApplied)))
     }
     func testTemplatesAddSuggestedTimesAndCustomHasNone() {
         let (settings, _, _, _) = fixture()
@@ -433,8 +485,8 @@ import ManagedSettings
         XCTAssertEqual(EverydaySettingsModel.statusLine(settings.status, at: tenAM.addingTimeInterval(30), calendar: calendar), "오늘은 꺼 두었어요 · 내일 08:00부터 다시 제한해요")
         XCTAssertFalse(settings.offersOffForToday, "once a day")
         XCTAssertEqual(settings.draft.windows, [], "the action does not save or reset the draft"); XCTAssertTrue(settings.hasChanges)
-        // The strict-only message stays inside the range, because the five conditions still apply.
-        XCTAssertNotNil(settings.strictOnlyMessage)
+        // The lock stays inside the range when the layer is off for today, because the conditions still apply.
+        XCTAssertTrue(settings.isLocked)
         tick(settings, at: tenAM.addingTimeInterval(31))
         XCTAssertEqual(layer.writes, 2, "the section runs once")
         // The timer-screen row shows nothing for a layer that is off for today.
@@ -712,7 +764,7 @@ import ManagedSettings
         let (settings, layer, _, _) = fixture()
         weekdayLayer(layer, settings, [2, 3, 4, 5, 6], now: at(10, day: 7))
         XCTAssertEqual(settings.status?.blocksNow, false)
-        XCTAssertFalse(settings.offersOffForToday); XCTAssertNil(settings.strictOnlyMessage)
+        XCTAssertFalse(settings.offersOffForToday); XCTAssertFalse(settings.isLocked)
         XCTAssertNil(EverydaySettingsModel.timerLine(settings.status, calendar: calendar), "no timer row on a day that is off")
         // Every edit is accepted, also removing an app.
         settings.draftSelection = FamilyActivitySelection(includeEntireCategory: true); settings.draft.enabled = false
@@ -720,7 +772,7 @@ import ManagedSettings
         XCTAssertNil(settings.refusalMessage)
         // On Monday inside the range, the gate holds again.
         weekdayLayer(layer, settings, [2, 3, 4, 5, 6], now: tenAM)
-        XCTAssertTrue(settings.offersOffForToday); XCTAssertNotNil(settings.strictOnlyMessage)
+        XCTAssertTrue(settings.offersOffForToday); XCTAssertTrue(settings.isLocked)
     }
     func testRemovingAWeekdayInsideTheRangeShowsTheWeekdayRefusal() {
         let (settings, layer, _, _) = fixture()
@@ -730,8 +782,8 @@ import ManagedSettings
         settings.save()
         XCTAssertEqual(settings.refusalMessage, "제한 시간에는 요일을 뺄 수 없어요. 18:00부터 자유롭게 바꿀 수 있어요. ‘오늘만 끄기’를 누르면 오늘은 제한을 끌 수 있어요.")
         XCTAssertEqual(layer.schedule, stored)
-        // Adding a day back is accepted.
-        settings.toggleWeekday(4); settings.toggleWeekday(4); settings.toggleWeekday(4)
-        XCTAssertFalse(settings.hasChanges)
+        // The status read after the refusal adds the stored day back, and the locked screen does not offer it again.
+        XCTAssertTrue(settings.draft.chosenWeekdays.contains(4)); XCTAssertFalse(settings.hasChanges)
+        XCTAssertFalse(settings.canToggleWeekday(4))
     }
 }

@@ -7,8 +7,8 @@ import FamilyControls
 struct SettingsView: View {
     let model: FocusModel
     @Environment(\.dismiss) private var dismiss
+    /// The everyday screen's unsaved draft blocks the swipe-down; its own back button asks before the draft goes.
     @State private var everydayHasChanges = false
-    @State private var confirmingDiscard = false
     @State private var path: [SettingsRoute]
     #if DEBUG
     @State private var diagnosticEverydayPicker = false
@@ -59,7 +59,7 @@ struct SettingsView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("완료") { finish(everydayHasChanges) }.accessibilityIdentifier("settingsDone")
+                    Button("완료") { dismiss() }.accessibilityIdentifier("settingsDone")
                 }
             }
         }
@@ -83,19 +83,10 @@ struct SettingsView: View {
         #endif
         .modifier(FocusEditorSheet())
         .interactiveDismissDisabled(everydayHasChanges)
-        .alert("변경 사항을 버릴까요?", isPresented: $confirmingDiscard) {
-            Button("변경 버리기", role: .destructive) { dismiss() }
-            Button("계속 편집", role: .cancel) {}
-        } message: { Text("저장하지 않은 변경은 사라져요.") }
     }
-    /// One builder for the settings row and the timer's status row, so both keep the same unsaved-changes and finish handling.
+    /// One builder for the settings row and the timer's status row, so both keep the same unsaved-changes handling.
     private var everydayScreen: some View {
-        EverydaySettingsView(model: model, onUnsavedChanges: { everydayHasChanges = $0 }, onFinish: finish)
-    }
-    private func finish(_ hasChanges: Bool) {
-        everydayHasChanges = hasChanges
-        if hasChanges { confirmingDiscard = true }
-        else { dismiss() }
+        EverydaySettingsView(model: model, onUnsavedChanges: { everydayHasChanges = $0 })
     }
 }
 /// The one screen that the timer can open already pushed.
