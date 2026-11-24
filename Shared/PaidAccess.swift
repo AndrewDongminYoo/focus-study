@@ -103,12 +103,13 @@ enum PaidAccess {
         var confirmed = false
         if let version = read.originalAppVersion { facts.originalAppVersion = version; confirmed = true }
         if case .transaction(let unlock) = read.unlock { facts.unlock = unlock; confirmed = true }
-        if case .transaction(let trial) = read.trial {
-            let earliest = min(trial.purchaseDate, read.trialFirstPurchase ?? trial.purchaseDate)
+        // The earliest verified trial purchase is a fact of its own: it keeps the start also when the read of the trial's own transaction gave no signal.
+        let trialRead: Date? = if case .transaction(let trial) = read.trial { trial.purchaseDate } else { nil }
+        if let earliest = [trialRead, read.trialFirstPurchase].compactMap({ $0 }).min() {
             facts.trialStartedAt = min(facts.trialStartedAt ?? facts.trial?.purchaseDate ?? earliest, earliest)
-            facts.trial = trial
             confirmed = true
         }
+        if case .transaction(let trial) = read.trial { facts.trial = trial }
         guard confirmed else { return cached }
         facts.confirmedAt = now
         return facts

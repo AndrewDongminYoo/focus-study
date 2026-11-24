@@ -111,6 +111,18 @@ final class PaidAccessTests: XCTestCase {
         XCTAssertEqual(PaidAccess.state(configuration: on, facts: trial, now: second.addingTimeInterval(10)), .granted)
         XCTAssertEqual(PaidAccess.state(configuration: on, facts: trial, now: t0.addingTimeInterval(PaidAccess.trialLength)), .locked)
     }
+    /// A trial read with no signal, such as an unverified latest transaction, still keeps the earliest verified trial purchase as the start.
+    func testMergeKeepsTheFirstTrialPurchaseWhenTheTrialReadHasNoSignal() throws {
+        let read = PaidAccess.Read(originalAppVersion: nil, unlock: .noSignal, trial: .noSignal, trialFirstPurchase: t0)
+        let merged = try XCTUnwrap(PaidAccess.merge(cached: facts(version: "99"), read: read, now: t0.addingTimeInterval(5)))
+        XCTAssertEqual(merged.trialStartedAt, t0)
+        XCTAssertNil(merged.trial)
+        // A later trial transaction cannot move the start.
+        let later = t0.addingTimeInterval(PaidAccess.trialLength + 60)
+        let next = try XCTUnwrap(PaidAccess.merge(cached: merged, read: PaidAccess.Read(originalAppVersion: nil, unlock: .noSignal, trial: .transaction(PaidPurchase(purchaseDate: later))), now: later))
+        XCTAssertEqual(next.trialStartedAt, t0)
+        XCTAssertEqual(PaidAccess.state(configuration: on, facts: next, now: later.addingTimeInterval(10)), .locked)
+    }
     func testConfigurationReadsTheInfoKeys() {
         XCTAssertEqual(PaidAccessConfiguration(info: ["FocusPaidUnlockEnabled": "YES", "FocusPaidUnlockFirstBuild": "7"]), PaidAccessConfiguration(enabled: true, firstPaidBuild: 7))
         XCTAssertEqual(PaidAccessConfiguration(info: ["FocusPaidUnlockEnabled": "NO", "FocusPaidUnlockFirstBuild": "7"]), .disabled)
