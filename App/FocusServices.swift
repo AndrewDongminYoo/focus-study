@@ -25,6 +25,9 @@ import FamilyControls
     var writeEverydayOffDay: (EverydaySchedule) throws -> Void = { _ in throw ControlIssue.io }
     /// Writes the home screen widget's snapshot after a history read of today; only `FocusRuntime.real()` sets it, so a fixture writes nothing and asks for no reload.
     var writeTodaySnapshot: (TodaySnapshot) throws -> Void = { _ in }
+    /// Access to the paid features, read synchronously from the last confirmed facts; never awaits StoreKit.
+    /// The default grants, so every caller that sets nothing keeps the behavior before the paid build (docs/specs/2026-11-24-paid-access-design.md).
+    var paidAccess: () -> PaidAccessState = { .granted }
     #if DEBUG
     var diagnostics: DeviceDiagnostics?
     /// Opt-in timing of the complete synchronous start call; never carries selection or usage data.

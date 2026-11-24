@@ -120,7 +120,8 @@ struct ControlEnvelope: Codable {
     }
 }
 /// Why a Focus on call started no session.
-enum FocusFilterRefusal: String, Codable { case access, selection, busy, history, error }
+/// `locked`: the person has no access to the paid features (docs/specs/2026-11-24-paid-access-design.md); `access` stays the Screen Time access.
+enum FocusFilterRefusal: String, Codable { case access, selection, busy, history, error, locked }
 /// `stale`: an accepted call arrived later, so this one changed nothing of its own (2026-11-16 extension design).
 enum FocusFilterStart: Equatable { case started(ControlSession), repeated, refused(FocusFilterRefusal), stale }
 enum ControlIssue: Error { case unauthorized, busy, pendingHistory, verificationFailed, lockTimeout, io, unsupportedSchema, invalidState, breakUnavailable }

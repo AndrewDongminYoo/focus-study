@@ -32,6 +32,7 @@ import SwiftData
                     case .onboarding(let step): OnboardingView(model: model, start: step)
                     }
                 }.modelContainer(container)
+                .environment(runtime?.paidAccess)
             }
             else if let errorMessage {
                 ContentUnavailableView {
@@ -55,7 +56,7 @@ import SwiftData
         .task { if model == nil && errorMessage == nil { load() } }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             // The off call is one-shot, so each foreground repairs a marker that it left set.
-            if model != nil, let runtime { Task { await runtime.checkActivation() }; return }
+            if model != nil, let runtime { Task { await runtime.checkActivation(); await runtime.paidAccess.refresh() }; return }
             if let outcome = attempts.didBecomeActive(startup) { show(outcome); return }
             guard model == nil, let runtime else { return }
             defer { runtime.holder.notifyActivity() }
@@ -87,6 +88,8 @@ import SwiftData
             loaded?.services.settings.reloadShared(); loaded?.refresh(); runtime.holder.notifyActivity()
         }
         model = loaded
+        // The `Transaction.updates` listener and the first refresh; a gate that is off reads nothing.
+        runtime.paidAccess.start()
         Task { await runtime.checkActivation() }
     }
 }

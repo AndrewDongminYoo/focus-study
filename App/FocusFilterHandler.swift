@@ -95,16 +95,19 @@ enum ControlChangeNotification {
         let length = settings.lengthSeconds, counts = services.selection.counts, frozen = services.selection.selection
         let selectionReady = (try? SelectionValidator.validate(appCount: counts.apps, webCount: counts.websites, categoryCount: counts.categories)) != nil
         // A selection with no stored length is a damaged migration: never start with a length the person did not choose (2026-11-16 extension design, decision 16).
-        // The engine orders this refusal like any other, so a stale call cannot record it.
-        let inputRefusal: FocusFilterRefusal? = counts.apps + counts.websites > 0 && !settings.hasStoredLength ? .error : nil
+        let lengthRefusal: FocusFilterRefusal? = counts.apps + counts.websites > 0 && !settings.hasStoredLength ? .error : nil
         // Step 2: a failure here does not stop step 3, which refuses with `history` while a terminal session stays.
         await importPendingTerminal()
         // Steps 3 and 4.
         do {
             let result = try await retryingLock {
-                try self.engine.startFromFocusFilter(now: self.now(), length: length, authorized: { self.services.authorization.accessState() }, selectionReady: selectionReady,
+                // Only a confirmed `locked` refuses for paid access; `unknown` starts (docs/specs/2026-11-24-paid-access-design.md). It comes before the length check.
+                // `inputRefusal` is an autoclosure that the engine evaluates inside the lock, so a trial that ends or a refund recorded
+                // during the import, a retry pause or the wait for the lock refuses the start.
+                // The engine orders these refusals like any other, so a stale call cannot record them.
+                return try self.engine.startFromFocusFilter(now: self.now(), length: length, authorized: { self.services.authorization.accessState() }, selectionReady: selectionReady,
                                                      apply: { self.services.applySelection(frozen) }, matches: { self.services.matchesSelection(frozen) }, calledAt: calledAt,
-                                                     inputRefusal: inputRefusal)
+                                                     inputRefusal: self.services.paidAccess() == .locked ? .locked : lengthRefusal)
             }
             switch result {
             case .started: settings.clearFilterRefusal(); log("on started"); return true

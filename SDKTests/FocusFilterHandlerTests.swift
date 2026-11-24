@@ -41,6 +41,8 @@ import SwiftData
         let applied: Box<[FamilyActivitySelection]>
         /// Runs inside the injected pause, so a test can send a second call while the first one waits to retry.
         let onPause: Box<(@MainActor () async -> Void)?>
+        /// The paid-access value that the handler reads at each call; `granted` unless a test changes it.
+        let paid: Box<PaidAccessState>
         var engine: SessionControl { services.engine }
     }
     final class Box<T> { var value: T; init(_ value: T) { self.value = value } }
@@ -58,12 +60,14 @@ import SwiftData
         var services = FocusServices(authorization: authorization, selection: selection, engine: engine,
                                      applySelection: { applied.value.append($0); shield.applied = true }, matchesSelection: { _ in shield.applied }, isFixture: true)
         services.settings = FocusSettings(defaults: UserDefaults(suiteName: UUID().uuidString)!, shared: shared)
+        let paid = Box(PaidAccessState.granted)
+        services.paidAccess = { paid.value }
         let history = FilterTestHistory(acknowledge: engine.acknowledgeTerminal)
         let pauses = Box<[TimeInterval]>([]), refreshes = Box(0), posts = Box(0), onPause = Box<(@MainActor () async -> Void)?>(nil)
         let handler = FocusFilterHandler(services: services, history: history, refresh: { refreshes.value += 1 }, now: now,
                                          pause: { pauses.value.append($0); await onPause.value?() }, postChange: { posts.value += 1 })
         return Rig(handler: handler, services: services, store: store, shield: shield, history: history, authorization: authorization, selection: selection,
-                   pauses: pauses, refreshes: refreshes, posts: posts, applied: applied, onPause: onPause)
+                   pauses: pauses, refreshes: refreshes, posts: posts, applied: applied, onPause: onPause, paid: paid)
     }
     private func stored(_ rig: Rig) -> ControlSession? { rig.store.envelope.session }
 
@@ -119,6 +123,50 @@ import SwiftData
         rig.selection.counts = (1, 0, 0)
         await rig.handler.focusDidChange(startsSession: true)
         XCTAssertNil(rig.services.settings.lastFilterRefusal); XCTAssertEqual(stored(rig)?.origin, .focusFilter)
+    }
+    /// docs/specs/2026-11-24-paid-access-design.md: only a confirmed `locked` refuses, as `.locked`; it uses the activation like every refusal.
+    func testLockedPaidAccessRefusesWithLockedAndUnknownStarts() async throws {
+        let rig = rig(); rig.paid.value = .locked
+        await rig.handler.focusDidChange(startsSession: true, calledAt: Date())
+        XCTAssertNil(stored(rig)); XCTAssertTrue(rig.applied.value.isEmpty)
+        XCTAssertEqual(rig.services.settings.lastFilterRefusal?.reason, .locked)
+        XCTAssertNotNil(rig.store.envelope.filterActivation)
+        await rig.handler.focusDidChange(startsSession: false, calledAt: Date())
+        rig.paid.value = .unknown
+        await rig.handler.focusDidChange(startsSession: true, calledAt: Date())
+        XCTAssertEqual(stored(rig)?.phase, .active); XCTAssertNil(rig.services.settings.lastFilterRefusal)
+    }
+    /// Each start attempt reads paid access again, so a trial that ends during a lock-retry pause refuses the start.
+    func testOnCallRetryReadsPaidAccessAgain() async throws {
+        let rig = rig()
+        // The on call takes the lock for the reconcile (1), the snapshot (2), then the start section (3), which times out once.
+        rig.store.lockTimeoutCalls = [rig.store.calls + 3]
+        rig.onPause.value = { rig.paid.value = .locked }
+        await rig.handler.focusDidChange(startsSession: true, calledAt: Date())
+        XCTAssertEqual(rig.pauses.value, [FocusFilterHandler.retryPause])
+        XCTAssertNil(stored(rig)); XCTAssertTrue(rig.applied.value.isEmpty)
+        XCTAssertEqual(rig.services.settings.lastFilterRefusal?.reason, .locked)
+    }
+    /// The start section reads paid access after it takes the lock, so a trial that ends while the call waits for the lock refuses the start.
+    func testOnCallReadsPaidAccessAfterTakingTheLock() async throws {
+        let rig = rig()
+        // The on call takes the lock for the reconcile (1), the snapshot (2), then the start section (3).
+        let startSection = rig.store.calls + 3
+        rig.store.onLock = { if $0 == startSection { rig.paid.value = .locked } }
+        await rig.handler.focusDidChange(startsSession: true, calledAt: Date())
+        XCTAssertTrue(rig.pauses.value.isEmpty)
+        XCTAssertNil(stored(rig)); XCTAssertTrue(rig.applied.value.isEmpty)
+        XCTAssertEqual(rig.services.settings.lastFilterRefusal?.reason, .locked)
+    }
+    /// A filter session continues when access ends; only the next start reads it.
+    func testARunningFilterSessionContinuesWhenAccessEnds() async throws {
+        let rig = rig()
+        await rig.handler.focusDidChange(startsSession: true, calledAt: Date())
+        XCTAssertEqual(stored(rig)?.phase, .active)
+        rig.paid.value = .locked
+        await rig.handler.focusDidChange(startsSession: true, calledAt: Date())
+        XCTAssertEqual(stored(rig)?.phase, .active)
+        XCTAssertNotEqual(rig.services.settings.lastFilterRefusal?.reason, .locked)
     }
     func testThrownErrorIsStoredAsError() async throws {
         let rig = rig(); rig.store.failRead = true

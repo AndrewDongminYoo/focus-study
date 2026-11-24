@@ -50,9 +50,10 @@ final class SessionControl {
 
     /// The spec "Filter start", step 3. One activation starts at most one session: a refusal also stores the marker.
     /// `calledAt` is the arrival time of the call (2026-11-16 extension design, "Call order across processes"); `nil` skips the order check.
-    /// `inputRefusal` is a refusal that the caller found in its inputs outside the lock, such as a missing focus length; it is ordered and marked like any refusal.
+    /// `inputRefusal` is a refusal that the caller found in its inputs, such as a missing focus length; it is ordered and marked like any refusal.
+    /// It is evaluated inside the lock, after the access check, so an input that changes while the call waits for the lock, such as paid access, is read late.
     func startFromFocusFilter(now: Date, length: TimeInterval, authorized: () -> AccessState, selectionReady: Bool, apply: () -> Void, matches: () -> Bool,
-                              calledAt: Date? = nil, inputRefusal: FocusFilterRefusal? = nil) throws -> FocusFilterStart {
+                              calledAt: Date? = nil, inputRefusal: @autoclosure () -> FocusFilterRefusal? = nil) throws -> FocusFilterStart {
         try section(now: now) { locked in
             var envelope = try read(locked)
             try cleanup(&envelope, locked: locked, now: now)
@@ -66,7 +67,7 @@ final class SessionControl {
             let refusal: FocusFilterRefusal?
             // Only `denied` refuses: a fresh extension process usually reads `unknown` (2026-11-16 extension design, decision 20).
             if locked.access == .denied { refusal = .access }
-            else if let inputRefusal { refusal = inputRefusal }
+            else if let input = inputRefusal() { refusal = input }
             else if !selectionReady { refusal = .selection }
             else if let prior = envelope.session { refusal = prior.phase == .terminal ? .history : .busy }
             else { refusal = nil }

@@ -47,6 +47,10 @@ import SwiftData
         let selection = try SelectionRepository(directory: GroupConfiguration.container().appendingPathComponent("FocusSelection", isDirectory: true))
         var services = FocusServices(authorization: authorization, selection: selection, engine: engine, applySelection: shield.apply, matchesSelection: shield.matches)
         services.settings = settings
+        // The extension reads the App Group cache that the app writes, at each call; it never calls StoreKit (docs/specs/2026-11-24-paid-access-design.md).
+        let paidCache = try? PaidAccessCache(container: GroupConfiguration.container())
+        let paidConfiguration = PaidAccessConfiguration(info: Bundle.main.infoDictionary)
+        services.paidAccess = { paidCache?.state(configuration: paidConfiguration, now: Date()) ?? (paidConfiguration.enabled ? .unknown : .granted) }
         // The app stays the only writer of the today snapshot (decision 26), and no screen of this process refreshes.
         return FocusFilterHandler(services: services, history: try loadHistory(engine: engine), refresh: {}, pause: pause, writesTodaySnapshot: false)
     }
