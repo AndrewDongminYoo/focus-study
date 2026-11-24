@@ -62,7 +62,8 @@ struct PaidAccessSheet: View {
         VStack(alignment: .leading, spacing: 4) {
             if canStartTrial {
                 Text("시작하면 3일 동안 무료예요.").font(.subheadline.bold())
-                Text("체험이 끝나면 위 기능이 잠기고, 자동으로 결제되지 않아요.").font(.subheadline).foregroundStyle(.secondary)
+                // Guideline 3.1.1: name what stops at the trial end; breaks and the Focus filter start are parts of a focus session.
+                Text("체험이 끝나면 집중 세션, 순공 캘린더, 주간 회고가 잠기고, 자동으로 결제되지 않아요.").font(.subheadline).foregroundStyle(.secondary)
             }
             Text("매일 제한은 3일이 지나도 계속 쓸 수 있어요.").font(.subheadline).foregroundStyle(.secondary)
         }
