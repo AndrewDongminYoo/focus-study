@@ -42,8 +42,10 @@ The calendar reads the same session history as today's history and the streak.
 - A day's value is the sum of the focus time of its completed sessions.
   A day with no completed session shows "—". A day after today shows only its date, dimmed, and cannot be selected.
 - The month card's total is the sum over the shown month's days. "기록한 날" counts the days of that month with at least one completed session.
-- A session row shows the start and end clock times (`startedAt`–`endedAt`, so breaks are inside that span) and the focus minutes.
-  So "09:00–09:55" with "50분" is a correct row for a session with a 5-minute break.
+- A session row shows the stored clock times `startedAt`–`endedAt` and the focus minutes.
+  For a completed session `endedAt` is `recordedEnd`, which is clamped to `expiresAt`, the start plus the focus time; breaks never move `expiresAt`.
+  So the span equals the focus minutes, and "09:00–09:50" with "50분" is the row of a 50-minute session also when it had a 5-minute break.
+  The history keeps no wall-clock end that includes breaks, and adding one (a new stored value and its treatment of existing records) is out of scope.
 - Times in a cell use `H:MM` ("1:30", "0:50"). The selected-day total and the month total use the words of the mock ("2시간 30분", "35시간 0분").
   Session rows use minutes ("50분").
 - Months: the first shown month is the month of today. The previous control goes back without a limit; the next control stops at the month of today.
