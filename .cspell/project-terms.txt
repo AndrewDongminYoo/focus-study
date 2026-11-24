@@ -39,6 +39,7 @@ gearshape
 GENERATE_INFOPLIST_FILE
 INFOPLIST_FILE
 iphoneos
+iphonesimulator
 irfft
 ITMS
 KakaoTalk
@@ -71,6 +72,7 @@ showsdks
 simctl
 Siri
 srgb
+storekit
 subheadline
 swiftc
 swiftinterface
@@ -81,6 +83,7 @@ UICT
 unixepoch
 Unretained
 unscored
+uppercased
 WCAG
 wholemodule
 WWDC
