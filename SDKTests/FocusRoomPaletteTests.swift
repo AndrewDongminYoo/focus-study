@@ -71,6 +71,48 @@ final class FocusRoomPaletteTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(try contrast(rgb(0xFFFFFF), on: color("AccentColor", .light)), 4.5)
     }
 
+    /// The tokens of docs/specs/2026-11-23-everyday-screen-redesign-design.md, "Tokens".
+    func testEverydayTokensAreTheSpecValues() throws {
+        let expected: [(String, RGBA, RGBA)] = [
+            ("EverydayAccent", rgb(0xA84F05), rgb(0xF4A64A)),
+            ("EverydayAccentTint", rgb(0xFFF0E1), rgb(0x553F22)),
+            ("EverydayCanvas", rgb(0xF5F6F8), rgb(0x202C46)),
+            ("EverydayDisabledFill", rgb(0xE4E7ED), rgb(0x37435C)),
+            ("EverydayDisabledText", rgb(0x626C7D), rgb(0xFFF4E2, alpha: 0.62)),
+            ("EverydayDivider", rgb(0xE6E9EF), rgb(0x37435C)),
+            ("EverydayInk", rgb(0x202C46), rgb(0xFFF4E2)),
+            ("EverydayNeutralTint", rgb(0xEFF1F5), rgb(0x37435C)),
+            ("EverydayRangeCard", rgb(0x202C46), rgb(0xF7DFC0)),
+            ("EverydayRangeSecondary", rgb(0xD2D9E6), rgb(0x1E2744)),
+            ("EverydayRangeSummary", rgb(0xFFE0BB), rgb(0x1E2744)),
+            ("EverydayRangeText", rgb(0xFFFFFF), rgb(0x1E2744)),
+            ("EverydayUnblockedBar", rgb(0xC8D0DD), rgb(0x48536C))
+        ]
+        for (name, light, dark) in expected {
+            XCTAssertEqual(try color(name, .light), light, name)
+            XCTAssertEqual(try color(name, .dark), dark, name)
+        }
+    }
+
+    /// Every text pair of the everyday screen reads at 4.5:1 or more in both appearances, the save button and the status line included.
+    func testEverydayTextContrast() throws {
+        let pairs: [(String, String)] = [
+            ("EverydayInk", "EverydayCanvas"), ("EverydayInk", "FocusCard"),
+            ("FocusSecondaryInk", "EverydayCanvas"), ("FocusSecondaryInk", "FocusCard"), ("FocusSecondaryInk", "EverydayNeutralTint"),
+            ("EverydayAccent", "FocusCard"), ("EverydayAccent", "EverydayCanvas"), ("EverydayAccent", "EverydayAccentTint"),
+            ("EverydayRangeText", "EverydayRangeCard"), ("EverydayRangeSecondary", "EverydayRangeCard"), ("EverydayRangeSummary", "EverydayRangeCard"),
+            ("AccentLabel", "EverydayAccent"), ("ErrorText", "FocusCard"), ("ErrorText", "EverydayCanvas")
+        ]
+        for style in [UIUserInterfaceStyle.light, .dark] {
+            for (text, surface) in pairs {
+                let ratio = try contrast(color(text, style), on: color(surface, style))
+                XCTAssertGreaterThanOrEqual(ratio, 4.5, "\(text) on \(surface), \(style == .dark ? "dark" : "light")")
+            }
+        }
+        // The restricted and unblocked bar segments differ by the 3:1 of non-text contrast.
+        XCTAssertGreaterThanOrEqual(try contrast(color("EverydayAccent", .light), on: color("EverydayUnblockedBar", .light)), 3)
+    }
+
     func testContrastIsOneForEqualColorsAndTwentyOneForBlackOnWhite() {
         let white = RGBA(red: 255, green: 255, blue: 255, alpha: 1), black = RGBA(red: 0, green: 0, blue: 0, alpha: 1)
         XCTAssertEqual(contrast(white, on: white), 1, accuracy: 0.001)

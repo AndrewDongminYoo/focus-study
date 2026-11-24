@@ -1,7 +1,7 @@
 # Everyday screen redesign
 
 Date: 2026-11-23.
-Status: approved on 2026-11-23 under [issue #236](https://github.com/AndrewDongminYoo/focus-study/issues/236); no code implements it yet.
+Status: approved on 2026-11-23 under [issue #236](https://github.com/AndrewDongminYoo/focus-study/issues/236); implemented under [issue #241](https://github.com/AndrewDongminYoo/focus-study/issues/241).
 Source: the Figma mock frame node `6:2`, which adds editing elements to the mock node `3:7`, and the decisions below.
 The engine rules of the everyday layer do not change: the screen offers fewer edits while the layer is locked than the engine accepts, never more.
 
@@ -40,15 +40,17 @@ From top to bottom, in a scroll view with the save area fixed at the bottom:
    With unsaved changes, the back button stays the one that asks "변경 사항을 버릴까요?" (`everydayBack`), as today; the system back button shows only for a draft without changes.
 2. Status card (white): "매일 제한" in bold, 25 pt at the default text size and scaled with `.title2`, as the screen's header (`isHeader`), with the switch (`everydayToggle`) on the trailing side, and below it the full-width button "오늘만 끄기" (`everydayOffToday`) in the accent tint with accent text.
    The button shows only when `offersOffForToday` is true, as today.
-   The card shows no status line in the ordinary states (the layer is off, blocks now, or waits for its next range), because the switch says them.
-   It shows the status line (`everydayStatus`, `EverydaySettingsModel.statusLine`) below the switch when the switch alone would mislead: when the layer is off for today, and when the status has an issue or could not be read.
+   The card shows no status line while the layer is off or blocks now, because the switch says them.
+   It shows the status line (`everydayStatus`, `EverydaySettingsModel.statusLine`) below the switch in every other state, which the switch cannot say: a day that is not chosen, the next range or an unblocked window, off for today, and every issue (`EverydaySettingsModel.showsStatusLine`).
+   Amended on 2026-11-24 during the implementation: the approved text hid the next range too, which left a day that is not chosen and the next range unreadable on the screen.
 3. Range card (navy in the light appearance): "설정 시간" with the weekday summary and "반복" ("매일 반복", "평일 반복" and so on) on the trailing side, hidden from VoiceOver because the weekday card says the same, the range in a large semibold monospaced font, and the line "이 시간 안에서 제한과 해제를 반복해요".
    The range is one button that opens a sheet with the two time pickers "제한 시작" (`everydayRangeStart`) and "제한 끝" (`everydayRangeEnd`).
-   The range issue line (`everydayRangeIssue`) shows below the range inside the card.
+   The range button has the identifier `everydayRange`, and the sheet's "완료" has `everydayRangeDone`.
+   The range issue line (`everydayRangeIssue`) shows below the card, because the error color does not read on the navy card; the sheet repeats it (`everydayRangeEditorIssue`).
 4. Weekday card: "제한 요일" with the summary (`everydayWeekdaysSummary`) on the trailing side, then seven chips (`everydayWeekday.N`); a chosen chip is the accent tint with accent text, and a chip that is not chosen is the neutral tint with secondary text.
    The weekday issue line (`everydayWeekdaysIssue`) shows below the chips.
 5. Unblocked window card: "잠시 풀어 두는 시간" with "N/3" on the trailing side, one row per window with its time range and "삭제", a divider, "+ 시간 추가하기" (`everydayAddWindow`), and the note "점심이나 등하교처럼 제한을 풀어 둘 시간을 3개까지 정할 수 있어요. 한 번에 15분에서 2시간까지예요."
-   A window's time range opens its two time pickers, as the rows do today.
+   A window's time range is its two time pickers, as the rows are today; the row shows no kind name ("점심" and so on), as in the mock.
    The window issue line (`everydayWindowsIssue`) shows above the note.
 6. App card: "제한할 앱" with "앱 N개 · 웹사이트 M개" and a chevron on the trailing side (`everydaySelection`, opens the picker), and the note "집중 시간에 제한할 앱과 따로 골라요."
    The selection issue line (`everydaySelectionIssue`) shows below the note.
@@ -92,10 +94,14 @@ While it is locked:
 - A range that moves (for example 08:00–18:00 to 09:00–20:00) cannot be entered, because the start cannot move later.
 - Every edit that the table allows is one that the engine accepts while locked, so a locked save is refused only when the stored state changed after the screen read it; the refusal line stays for that case.
 - The strict-only line (`everydayStrictOnly`) is removed.
-- When the lock starts while the screen is open (the status read after a boundary), every field that the table disables returns to its stored value in the draft: the switch, the stored weekdays, the window times and windows that the draft added, and the selection; a range start later than the stored start and a range end earlier than the stored end return to the stored values too.
+- When the lock starts while the screen is open (the status read after a boundary), every field that the table disables returns to its stored value in the draft: the switch, the stored weekdays and the selection, and the windows keep only the stored windows that the draft still has (see the window rule below); a range start later than the stored start and a range end earlier than the stored end return to the stored values too.
   The strict edits in the draft stay, and the save feedback line says "제한 시간이 시작되어 느슨해지는 변경을 되돌렸어요."
   So the draft never holds an edit that the screen cannot undo and the engine refuses.
-- The disabled elements use the system disabled appearance and keep their accessibility labels; VoiceOver reads them as dimmed.
+- The model returns these edits at every status read while the layer is locked, not only at the boundary, so a refused save also leaves a draft without the refused edit; the refusal line and the return line (`everydayLockRevert`) both show.
+  The return line stays until the next edit, save or reload, also when a later status read finds nothing to return, and a failed save keeps its refusal line after the read.
+- A lock that starts on a later day is read only at that day's next status read (`statusReadDelay` reads at today's range edges, the next change and midnight); until then a loosening save is refused by the engine with its reason.
+- A window has no identity, so the draft keeps only the stored windows that it still has: a window that the draft added or changed goes away, and a stored window that the draft removed stays removed.
+- The disabled switch and time pickers use the system disabled appearance; the disabled chips, the app card and "+ 시간 추가하기" draw at 45 % opacity. All keep their accessibility labels, and VoiceOver reads them as dimmed.
 
 ## Save confirmation
 
@@ -107,20 +113,20 @@ While it is locked:
 
 The light values are the mock values; the dark values follow the screen redesign, except the range card.
 
-| Role                                                       | Light                                                      | Dark                             |
-| ---------------------------------------------------------- | ---------------------------------------------------------- | -------------------------------- |
-| Background                                                 | `#F5F6F8`                                                  | `#202C46`                        |
-| Card                                                       | `#FFFFFF`                                                  | `#27334E`                        |
-| Primary text                                               | `#202C46`                                                  | `#FFF4E2`                        |
-| Secondary text                                             | `#626D7E`                                                  | `FocusCreamSecondary`            |
-| Accent (text, switch, restricted bar)                      | `#A84F05`                                                  | `#F4A64A`                        |
-| Accent tint (chosen chip, restricted badge, "오늘만 끄기") | `#FFF0E1`                                                  | `#2B3650` (the dark `FocusPill`) |
-| Neutral tint (unblocked badge, chip not chosen)            | `#EFF1F5`                                                  | `#37435C`                        |
-| Unblocked bar                                              | `#C8D0DD`                                                  | `#48536C`                        |
-| Divider                                                    | `#E6E9EF`                                                  | `#37435C`                        |
-| Range card                                                 | `#202C46` with white and `#D2D9E6` text, `#FFE0BB` summary | `#F7DFC0` with `#1E2744` text    |
-| Disabled save                                              | `#E4E7ED` with `#626C7D`                                   | system disabled                  |
-| Destructive "삭제"                                         | `ErrorText`                                                | `ErrorText`                      |
+| Role                                                       | Light                                                      | Dark                          |
+| ---------------------------------------------------------- | ---------------------------------------------------------- | ----------------------------- |
+| Background                                                 | `#F5F6F8`                                                  | `#202C46`                     |
+| Card                                                       | `#FFFFFF`                                                  | `#27334E`                     |
+| Primary text                                               | `#202C46`                                                  | `#FFF4E2`                     |
+| Secondary text                                             | `#626D7E`                                                  | `FocusCreamSecondary`         |
+| Accent (text, switch, restricted bar)                      | `#A84F05`                                                  | `#F4A64A`                     |
+| Accent tint (chosen chip, restricted badge, "오늘만 끄기") | `#FFF0E1`                                                  | `#553F22`                     |
+| Neutral tint (unblocked badge, chip not chosen)            | `#EFF1F5`                                                  | `#37435C`                     |
+| Unblocked bar                                              | `#C8D0DD`                                                  | `#48536C`                     |
+| Divider                                                    | `#E6E9EF`                                                  | `#37435C`                     |
+| Range card                                                 | `#202C46` with white and `#D2D9E6` text, `#FFE0BB` summary | `#F7DFC0` with `#1E2744` text |
+| Disabled save                                              | `#E4E7ED` with `#626C7D`                                   | `#37435C` with cream at 62 %  |
+| Destructive "삭제"                                         | `ErrorText`                                                | `ErrorText`                   |
 
 The dark values are not drawn in a mock; the implementation captures them for approval.
 
@@ -134,7 +140,7 @@ The UI tests that tap `settingsDone` on this screen (`UITests/FocusFlowTests.swi
 - `App/EverydaySettingsModel.swift` at `46f7457`: `offersOffForToday`, `strictOnlyMessage`, `lockMessage` with the six refusals, and `previewSegments`.
 - `Shared/EverydaySchedule.swift`: `isLocked` reads `enabled`, the weekdays and the range, never `offDay` (line 158); `Shared/SessionControl.swift` line 350 checks the lock and `lockReason` at save.
 - WCAG contrast computed on 2026-11-23: `#A84F05` 5.55:1 on white, 4.97:1 on `#FFF0E1`, 5.13:1 on `#F5F6F8`; `#626D7E` 5.24:1 on white and 4.63:1 on `#EFF1F5`; `#677184` 4.55:1 on `#F5F6F8`; `#202C46` 12.86:1 on `#F5F6F8`; on `#202C46`: white 13.91:1, `#D2D9E6` 9.81:1, `#FFE0BB` 11.01:1; `#1E2744` 11.39:1 on `#F7DFC0`; white 5.55:1 on `#A84F05`.
-- Dark: `#F4A64A` 5.96:1 on `#2B3650`; the other dark text pairs are the ones that the screen redesign measured.
+- Dark: `#F4A64A` 4.9:1 on `#553F22`; the warm tint differs from the navy card `#27334E` by hue, because no dark tint differs from it much by luminance (1.27:1). The other dark text pairs are the ones that the screen redesign measured.
 - The restricted and unblocked bar colors measure 3.57:1 against each other, above the 3:1 of non-text contrast.
 
 ## Verification plan for the implementation
