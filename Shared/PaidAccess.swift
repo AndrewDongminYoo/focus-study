@@ -116,6 +116,44 @@ enum PaidAccess {
     }
 }
 
+/// The two forms of the weekly review (docs/specs/2026-11-25-weekly-review-design.md, contract item 3).
+enum ReviewForm: Equatable {
+    /// Form B: pages, while the access is granted by the trial.
+    case pages
+    /// Form A: one scrolling sheet, in every other `granted` or `unknown` case.
+    case sheet
+}
+
+/// The weekly review's reads of paid access. They live here, because the Monitor compiles every other `Shared/` file and never reads paid access.
+extension PaidAccess {
+    /// The unlock, when it is recorded and not refunded.
+    private static func grantingUnlock(_ facts: PaidAccessFacts?) -> PaidPurchase? { facts?.unlock.flatMap { $0.isRevoked ? nil : $0 } }
+    /// The trial grants now and the unlock does not.
+    static func isTrialAccess(configuration: PaidAccessConfiguration, facts: PaidAccessFacts?, now: Date) -> Bool {
+        guard configuration.enabled, let facts, grantingUnlock(facts) == nil, let trial = facts.trial, !trial.isRevoked else { return false }
+        return now < trialEnd(facts, trial: trial)
+    }
+    static func reviewForm(configuration: PaidAccessConfiguration, facts: PaidAccessFacts?, now: Date) -> ReviewForm {
+        isTrialAccess(configuration: configuration, facts: facts, now: now) ? .pages : .sheet
+    }
+    /// Day 1: the trial start, the purchase of the unlock when there was no trial, or, for an earlier user and while the gate is off, `firstRun`,
+    /// the first time a build with the review ran on the device.
+    static func reviewDayOne(configuration: PaidAccessConfiguration, facts: PaidAccessFacts?, firstRun: Date) -> Date {
+        guard configuration.enabled, let facts else { return firstRun }
+        if let start = facts.trialStartedAt ?? facts.trial?.purchaseDate { return start }
+        return grantingUnlock(facts)?.purchaseDate ?? firstRun
+    }
+    static func reviewAccessKind(state: PaidAccessState, configuration: PaidAccessConfiguration, facts: PaidAccessFacts?, now: Date) -> ReviewAccessKind {
+        guard state == .granted else { return .none }
+        return isTrialAccess(configuration: configuration, facts: facts, now: now) ? .trial : .ongoing
+    }
+    /// The end of the trial that grants now; `nil` otherwise.
+    static func grantingTrialEnd(configuration: PaidAccessConfiguration, facts: PaidAccessFacts?, now: Date) -> Date? {
+        guard isTrialAccess(configuration: configuration, facts: facts, now: now), let facts, let trial = facts.trial else { return nil }
+        return trialEnd(facts, trial: trial)
+    }
+}
+
 /// The last confirmed facts in the App Group container. The app is the only writer; the App Intents extension reads it at each Focus filter call.
 /// The Monitor never reads it, because the gate applies only at session start.
 struct PaidAccessCache {
