@@ -328,6 +328,10 @@ struct SungongCalendar {
         state.records = records; state.values = SessionMonth(records: records, month: state.month, calendar: calendar)
         sungong = state
     }
+    /// The completed sessions whose `startedAt` is inside `interval`, for the weekly review (docs/specs/2026-11-25-weekly-review-design.md, "Data rules").
+    func completedSessions(in interval: DateInterval) throws -> [ReviewEntry] {
+        try history.records(in: interval).filter(\.counts).map { ReviewEntry(startedAt: $0.startedAt, focusDuration: $0.focusDuration) }
+    }
     func dismissCompletion() { completedSessionID = nil; completedLength = nil }
     func completeOnboarding() { services.settings.hasCompletedOnboarding = true }
     /// `defersBreakStart`: the timer screen reserves the automatic break start, so its feedback can appear before the engine call.

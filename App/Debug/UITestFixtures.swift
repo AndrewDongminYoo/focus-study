@@ -235,13 +235,17 @@ extension FocusServices {
     }
     func sync() async throws {}
     func listen(_ handle: @escaping @MainActor (String, PaidPurchase) async -> Void) -> Task<Void, Never> { Task {} }
-    /// `--paid-access locked`: a person who downloaded the paid build and bought nothing; every other fixture keeps the gate off.
+    /// `--paid-access locked`: a person who downloaded the paid build and bought nothing.
+    /// `--paid-access trial`: the same person 48 hours into the 3-day trial, so day 1 of the weekly review is two days before today.
+    /// Every other fixture keeps the gate off.
     static func store(arguments: [String]) -> PaidAccessStore {
-        guard let index = arguments.firstIndex(of: "--paid-access"), index + 1 < arguments.count, arguments[index + 1] == "locked" else {
+        guard let index = arguments.firstIndex(of: "--paid-access"), index + 1 < arguments.count, ["locked", "trial"].contains(arguments[index + 1]) else {
             return PaidAccessStore(configuration: .disabled, cache: nil, kit: FixturePaidAccessStoreKit())
         }
         let cache = PaidAccessCache(container: FileManager.default.temporaryDirectory.appendingPathComponent("FocusPaidFixture-\(UUID().uuidString)"))
-        try? cache.save(PaidAccessFacts(originalAppVersion: "99", unlock: nil, trial: nil, confirmedAt: Date()))
+        let trialStart = Date().addingTimeInterval(-48 * 3600)
+        let trial = arguments[index + 1] == "trial" ? PaidPurchase(purchaseDate: trialStart) : nil
+        try? cache.save(PaidAccessFacts(originalAppVersion: "99", unlock: nil, trial: trial, trialStartedAt: trial?.purchaseDate, confirmedAt: Date()))
         return PaidAccessStore(configuration: PaidAccessConfiguration(enabled: true, firstPaidBuild: 3), cache: cache, kit: FixturePaidAccessStoreKit())
     }
 }
@@ -250,6 +254,7 @@ extension FocusRuntime {
         var services = FocusServices.fixture(arguments: arguments)
         let paidAccess = FixturePaidAccessStoreKit.store(arguments: arguments)
         services.paidAccess = { paidAccess.state }
+        let review = FixtureReviewNotificationCenter.model(arguments: arguments)
         if arguments.contains("startup-failure") {
             _ = try services.engine.start(now: Date(), authorized: { .approved }, apply: {}, matches: { true })
         }
@@ -265,7 +270,7 @@ extension FocusRuntime {
                                                          apply: {}, matches: { true })
         }
         var attempts = 0
-        return FocusRuntime(recovery: StartupRecovery(engine: services.engine), accessState: services.authorization.accessState, paidAccess: paidAccess, holder: FocusRuntimeHolder(engine: services.engine, authorization: services.authorization, settings: services.settings, activityDidChange: services.activityDidChange) {
+        return FocusRuntime(recovery: StartupRecovery(engine: services.engine), accessState: services.authorization.accessState, paidAccess: paidAccess, review: review, holder: FocusRuntimeHolder(engine: services.engine, authorization: services.authorization, settings: services.settings, activityDidChange: services.activityDidChange) {
             attempts += 1
             if arguments.contains("startup-failure"), attempts == 1 { throw ControlIssue.io }
             let container = try ModelContainer(for: SessionRecord.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none))
@@ -295,8 +300,58 @@ extension FocusRuntime {
                     try history.importTerminal(session)
                 }
             }
+            if let index = arguments.firstIndex(of: "--ui-testing"), index + 1 < arguments.count, arguments[index + 1] == "review" {
+                try FixtureReviewNotificationCenter.seed(SessionHistory(context: ModelContext(container), acknowledge: { _ in }))
+            }
             return (services, container)
         })
+    }
+}
+#endif
+
+#if DEBUG
+/// The weekly review's notification center in memory: it never shows a permission prompt and never schedules a real notification.
+@MainActor final class FixtureReviewNotificationCenter: ReviewNotificationScheduling {
+    private var status: ReviewPermission
+    private(set) var plan: ReviewNotificationPlan = .none
+    init(status: ReviewPermission) { self.status = status }
+    func permission() async -> ReviewPermission { status }
+    func requestPermission() async { if status == .notDetermined { status = .authorized } }
+    func replace(with plan: ReviewNotificationPlan, calendar: Calendar) async -> Bool { self.plan = plan; return true }
+
+    /// In-memory defaults. Every fixture has seen the explanation and allowed notifications, so the explanation sheet never shows in the existing flows;
+    /// `--review-explanation` is a person who has not been asked yet. Without `--paid-access trial`, `--ui-testing review` stores day 1 seven days before today,
+    /// so the current period runs from 4 days before today to 2 days after it, and a note in the previous period.
+    static func model(arguments: [String]) -> WeeklyReviewModel {
+        let store = WeeklyReviewStore(defaults: UserDefaults(suiteName: "FocusReviewFixture-\(UUID().uuidString)")!)
+        let explains = arguments.contains("--review-explanation")
+        store.explanationShown = !explains
+        let reviewMode = arguments.firstIndex(of: "--ui-testing").map { $0 + 1 < arguments.count && arguments[$0 + 1] == "review" } ?? false
+        let trial = arguments.firstIndex(of: "--paid-access").map { $0 + 1 < arguments.count && arguments[$0 + 1] == "trial" } ?? false
+        if reviewMode, !trial {
+            let calendar = Calendar.current, today = ReviewDay(Date(), calendar: calendar)
+            let schedule = ReviewSchedule.start(dayOne: today.adding(-7, calendar: calendar), calendar: calendar)
+            store.schedule = schedule; store.firstRun = schedule.dayOne
+            store.setNote("월요일 아침, 영어 단어부터 다시 시작하기", for: schedule.period(containing: schedule.dayOne, calendar: calendar))
+        }
+        return WeeklyReviewModel(store: store, center: FixtureReviewNotificationCenter(status: explains ? .notDetermined : .authorized))
+    }
+    /// `--ui-testing review`: completed sessions whose first starts give a repetition within 60 minutes, a day without a record, a session ended early, and one in the previous period.
+    /// Today's sessions start no later than one hour before launch, so they stay on today.
+    static func seed(_ history: SessionHistory) throws {
+        let calendar = Calendar.current, now = Date(), today = calendar.startOfDay(for: now)
+        let samples: [(day: Int, hour: Int, minute: Int, length: TimeInterval, reason: EndReason)] = [
+            (-6, 9, 0, 1500, .expired), (-4, 19, 10, 1500, .expired), (-4, 21, 0, 1500, .expired), (-2, 19, 40, 3000, .expired),
+            (-1, 8, 0, 1500, .expired), (0, 9, 0, 1500, .expired), (0, 10, 0, 1500, .earlyExit),
+        ]
+        for sample in samples {
+            let day = calendar.date(byAdding: .day, value: sample.day, to: today) ?? today
+            var start = calendar.startOfDay(for: day).addingTimeInterval(TimeInterval(sample.hour * 3600 + sample.minute * 60))
+            if sample.day == 0 { start = max(today, min(start, now.addingTimeInterval(-3600 - TimeInterval(sample.hour - 9) * 600))) }
+            var session = ControlSession(startedAt: start, length: sample.length)
+            session.phase = .terminal; session.reason = sample.reason; session.observedAt = session.expiresAt
+            try history.importTerminal(session)
+        }
     }
 }
 #endif

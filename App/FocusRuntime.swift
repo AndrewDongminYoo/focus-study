@@ -10,6 +10,8 @@ import os
     let accessState: () -> AccessState
     /// Paid access for the start gate and the temporary paywall sheet; one per process.
     let paidAccess: PaidAccessStore
+    /// The weekly review: its notes and settings in the app's own defaults, and the app's only notification code.
+    let review: WeeklyReviewModel
     /// The services and the `ModelContainer`, built once for the screens and the Focus filter.
     let holder: FocusRuntimeHolder
     private static var current: FocusRuntime?
@@ -86,7 +88,8 @@ import os
         // The app is the only writer of the paid-access cache; the App Intents extension reads it.
         let paidAccess = PaidAccessStore(configuration: PaidAccessConfiguration(info: Bundle.main.infoDictionary), cache: PaidAccessCache(container: container),
                                          kit: SystemPaidAccessStoreKit())
-        return FocusRuntime(recovery: StartupRecovery(engine: engine), accessState: authorization.accessState, paidAccess: paidAccess, holder: FocusRuntimeHolder(engine: engine, authorization: authorization, settings: settings, activityDidChange: activityDidChange) {
+        let review = WeeklyReviewModel(store: WeeklyReviewStore(defaults: .standard), center: SystemReviewNotificationCenter())
+        return FocusRuntime(recovery: StartupRecovery(engine: engine), accessState: authorization.accessState, paidAccess: paidAccess, review: review, holder: FocusRuntimeHolder(engine: engine, authorization: authorization, settings: settings, activityDidChange: activityDidChange) {
             // The length moves first and the selection only after it, so an App Group selection always has a length next to it (2026-11-16 extension design, decision 16).
             let lengthMoved = settings.migrateToAppGroup()
             let legacy = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent("PrivateSelection")

@@ -5,6 +5,8 @@ import SwiftUI
 struct SungongCalendarView: View {
     let model: FocusModel
     @Environment(\.dismiss) private var dismiss
+    /// `nil` only in a preview without a runtime; the review entry is then absent.
+    @Environment(WeeklyReviewModel.self) private var review: WeeklyReviewModel?
     @ScaledMetric(relativeTo: .title2) private var arrowSize: CGFloat = 23
     @ScaledMetric(relativeTo: .subheadline) private var cellHeight: CGFloat = 48
     private var calendar: Calendar { .current }
@@ -26,6 +28,7 @@ struct SungongCalendarView: View {
                             gridCard(state, values)
                         }
                         dayCard(state, records: records, values: values)
+                        if !locked, let review { reviewEntry(review) }
                     }
                     notes
                     reportLink
@@ -242,6 +245,23 @@ struct SungongCalendarView: View {
             }
         }
         .padding(.vertical, FocusTheme.Layout.inlineSpacing)
+    }
+
+    // MARK: Weekly review entry
+
+    /// The review of the current period (docs/specs/2026-11-25-weekly-review-design.md, contract item 5); absent with access `locked`.
+    /// The idle screen replaces this sheet with the review sheet.
+    private func reviewEntry(_ review: WeeklyReviewModel) -> some View {
+        Button { review.requestOpenCurrent() } label: {
+            HStack {
+                Label("이번 주 돌아보기", systemImage: "text.book.closed").foregroundStyle(FocusTheme.Screen.ink)
+                Spacer()
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(FocusTheme.Screen.secondaryInk)
+            }
+            .font(.subheadline.weight(.medium)).frame(minHeight: FocusTheme.Layout.minimumTapTarget).contentShape(Rectangle())
+            .modifier(FocusCard())
+        }
+        .buttonStyle(.plain).accessibilityIdentifier("calendarReview")
     }
 
     // MARK: Note and usage report

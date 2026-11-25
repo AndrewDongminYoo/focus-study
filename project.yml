@@ -61,9 +61,9 @@ targets:
     platform: iOS
     sources:
       - Monitor
-      # The Monitor never reads paid access (docs/specs/2026-11-24-paid-access-design.md).
+      # The Monitor never reads paid access (docs/specs/2026-11-24-paid-access-design.md) or the weekly review (docs/specs/2026-11-25-weekly-review-design.md).
       - path: Shared
-        excludes: [PaidAccess.swift]
+        excludes: [PaidAccess.swift, WeeklyReview.swift]
       - Integration
       - path: Activity
         excludes: [FocusActivityViews.swift]
@@ -173,6 +173,7 @@ targets:
         App/StartupAttempts.swift,
         App/TodaySnapshotWriter.swift,
         App/PaidAccessStore.swift,
+        App/WeeklyReviewModel.swift,
         Activity/FocusActivityAttributes.swift,
         Activity/SystemFocusActivityClient.swift,
         Shield,
