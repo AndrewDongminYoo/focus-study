@@ -233,44 +233,52 @@ final class WeeklyReviewTests: XCTestCase {
         let calendar = calendar()
         // Wednesday 19:10 and Friday 19:40 are first sessions; Monday's 19:20 is a later session of a day that started at 08:00.
         let entries = [entry(day(11, 23), 8), entry(day(11, 23), 19, 20), entry(day(11, 25), 19, 10), entry(day(11, 27), 19, 40)]
-        let moment = WeeklyReview.moment(entries: entries, period: week, calendar: calendar)
+        let moment = WeeklyReview.moment(entries: entries, period: week, today: week.last, calendar: calendar)
         XCTAssertEqual(moment, .repetition(first: day(11, 25), firstStart: at(day(11, 25), 19, 10), second: day(11, 27), secondStart: at(day(11, 27), 19, 40)))
         XCTAssertEqual(WeeklyReview.text(moment!, calendar: calendar), "수요일 오후 7시 10분, 금요일 오후 7시 40분에 그날 첫 집중을 시작했어요.")
     }
     func testRepetitionAllowsExactlySixtyMinutesAndNeverWrapsMidnight() {
         let calendar = calendar()
-        XCTAssertEqual(WeeklyReview.moment(entries: [entry(day(11, 23), 8), entry(day(11, 24), 9)], period: week, calendar: calendar),
+        XCTAssertEqual(WeeklyReview.moment(entries: [entry(day(11, 23), 8), entry(day(11, 24), 9)], period: week, today: week.last, calendar: calendar),
                        .repetition(first: day(11, 23), firstStart: at(day(11, 23), 8, 0), second: day(11, 24), secondStart: at(day(11, 24), 9, 0)))
-        XCTAssertNil(WeeklyReview.moment(entries: [entry(day(11, 23), 8), entry(day(11, 24), 9, 1)], period: week, calendar: calendar))
+        XCTAssertNil(WeeklyReview.moment(entries: [entry(day(11, 23), 8), entry(day(11, 24), 9, 1)], period: week, today: week.last, calendar: calendar))
         // 23:50 and 00:10 are 20 minutes apart across midnight, but the rule does not wrap.
-        XCTAssertNil(WeeklyReview.moment(entries: [entry(day(11, 23), 23, 50), entry(day(11, 24), 0, 10)], period: week, calendar: calendar))
+        XCTAssertNil(WeeklyReview.moment(entries: [entry(day(11, 23), 23, 50), entry(day(11, 24), 0, 10)], period: week, today: week.last, calendar: calendar))
     }
     func testRepetitionTakesTheSmallestDifferenceThenTheMoreRecentLaterDay() {
         let calendar = calendar()
         // Mon 9:00, Tue 9:30, Thu 20:00, Sat 20:30: two pairs of 30 minutes; the pair that ends on Saturday wins.
         let entries = [entry(day(11, 23), 9), entry(day(11, 24), 9, 30), entry(day(11, 26), 20), entry(day(11, 28), 20, 30)]
-        XCTAssertEqual(WeeklyReview.moment(entries: entries, period: week, calendar: calendar),
+        XCTAssertEqual(WeeklyReview.moment(entries: entries, period: week, today: week.last, calendar: calendar),
                        .repetition(first: day(11, 26), firstStart: at(day(11, 26), 20, 0), second: day(11, 28), secondStart: at(day(11, 28), 20, 30)))
         // A 10-minute pair beats them.
         let closer = entries + [entry(day(11, 25), 9, 10)]
-        XCTAssertEqual(WeeklyReview.moment(entries: closer, period: week, calendar: calendar),
+        XCTAssertEqual(WeeklyReview.moment(entries: closer, period: week, today: week.last, calendar: calendar),
                        .repetition(first: day(11, 23), firstStart: at(day(11, 23), 9, 0), second: day(11, 25), secondStart: at(day(11, 25), 9, 10)))
     }
     func testReturnAfterGapTakesTheMostRecentDay() {
         let calendar = calendar()
         // Mon 8:00, (Tue none), Wed 13:00, (Thu none), Fri 16:00: no repetition; Friday returns after Thursday.
         let entries = [entry(day(11, 23), 8), entry(day(11, 25), 13), entry(day(11, 27), 16)]
-        let moment = WeeklyReview.moment(entries: entries, period: week, calendar: calendar)
+        let moment = WeeklyReview.moment(entries: entries, period: week, today: week.last, calendar: calendar)
         XCTAssertEqual(moment, .returnAfterGap(gap: day(11, 26), day: day(11, 27), start: at(day(11, 27), 16, 0)))
         XCTAssertEqual(WeeklyReview.text(moment!, calendar: calendar), "목요일엔 온:공 기록이 없었고, 금요일 오후 4시에 시작한 세션을 마쳤어요.")
     }
     func testTheGapDayMustBeInsideThePeriod() {
         let calendar = calendar()
         // Only the first day of the period has a session: its previous day is outside the period.
-        XCTAssertNil(WeeklyReview.moment(entries: [entry(day(11, 23), 8), entry(day(11, 22), 8)], period: week, calendar: calendar))
+        XCTAssertNil(WeeklyReview.moment(entries: [entry(day(11, 23), 8), entry(day(11, 22), 8)], period: week, today: week.last, calendar: calendar))
         // Consecutive days far apart in time and no gap: nothing.
-        XCTAssertNil(WeeklyReview.moment(entries: [entry(day(11, 23), 8), entry(day(11, 24), 13), entry(day(11, 25), 20)], period: week, calendar: calendar))
-        XCTAssertNil(WeeklyReview.moment(entries: [], period: week, calendar: calendar))
+        XCTAssertNil(WeeklyReview.moment(entries: [entry(day(11, 23), 8), entry(day(11, 24), 13), entry(day(11, 25), 20)], period: week, today: week.last, calendar: calendar))
+        XCTAssertNil(WeeklyReview.moment(entries: [], period: week, today: week.last, calendar: calendar))
+    }
+    func testMomentLeavesOutDaysAfterToday() {
+        let calendar = calendar()
+        // After a clock rollback, Friday 8:10 is after today (Wednesday): the summary hides it, so the moment must not pair it with Monday 8:00.
+        let entries = [entry(day(11, 23), 8), entry(day(11, 25), 13), entry(day(11, 27), 8, 10)]
+        XCTAssertEqual(WeeklyReview.moment(entries: entries, period: week, today: day(11, 25), calendar: calendar),
+                       .returnAfterGap(gap: day(11, 24), day: day(11, 25), start: at(day(11, 25), 13, 0)))
+        XCTAssertNil(WeeklyReview.moment(entries: [entry(day(11, 23), 8), entry(day(11, 27), 16)], period: week, today: day(11, 25), calendar: calendar))
     }
 
     // MARK: Notification plan and paid access

@@ -132,10 +132,17 @@ struct ReviewPage: Equatable {
         if page != nil, let loadedDay { reload(day: loadedDay) }
         kind = PaidAccess.reviewAccessKind(state: state, configuration: configuration, facts: facts, now: now)
         trialEnd = PaidAccess.grantingTrialEnd(configuration: configuration, facts: facts, now: now)
-        permission = await center.permission()
+        // Refreshes can overlap and their permission reads can resume out of order; only the newest one writes what it read with its own `state`.
+        refreshGeneration += 1
+        let generation = refreshGeneration
+        let read = await center.permission()
+        guard generation == refreshGeneration else { return }
+        permission = read
         await applyPlan()
+        guard generation == refreshGeneration else { return }
         explanationDue = state == .granted && permission == .notDetermined && !store.explanationShown && schedule.map { today >= $0.dayOne } == true
     }
+    @ObservationIgnored private var refreshGeneration = 0
     /// The last replacement handed to the center. A replacement suspends between its remove and its adds, so each one waits for the one before it;
     /// otherwise an older call's remaining adds could follow a newer call's remove and leave a stale notification.
     @ObservationIgnored private var planReplacement: Task<Void, Never>?
@@ -165,12 +172,21 @@ struct ReviewPage: Equatable {
     }
     /// Closing the explanation; it never shows again, and the notification row can still turn the notification on.
     func dismissExplanation() {
-        guard !explanationSuspended else { explanationSuspended = false; return }
+        guard !explanationSuspended else { explanationSuspended = false; explanationPresented = false; return }
         store.explanationShown = true; explanationDue = false
     }
     /// A session that starts while the explanation shows closes it without an answer, so it stays due and shows again after the session.
     func suspendExplanation() { explanationSuspended = true }
     @ObservationIgnored private var explanationSuspended = false
+    /// Marks the explanation as shown on screen and returns true when it is due and not shown yet.
+    /// The mark stays set after the sheet closes, so that a swiped explanation does not open again when `onDismiss` runs before `onDisappear`;
+    /// only a session that suspends it clears the mark.
+    func presentExplanation() -> Bool {
+        guard explanationDue, !explanationPresented else { return false }
+        explanationPresented = true
+        return true
+    }
+    @ObservationIgnored private var explanationPresented = false
     /// The switch of the notification row. Turning it on asks for the permission once, when it was never asked; a denied permission is never asked again.
     /// The system prompt never shows before the explanation: while the explanation has not shown, the switch only saves, and the explanation stays due.
     func setNotificationsOn(_ on: Bool) async {
@@ -245,7 +261,7 @@ struct ReviewPage: Equatable {
             let summary = ReviewSummary(entries: entries, period: period, today: today, calendar: calendar)
             let lastNote = schedule.period(before: period, calendar: calendar).flatMap(store.note(for:))
             page = ReviewPage(period: period, today: today, summary: summary, sentence: WeeklyReview.sentence(summary, inProgress: today <= period.last),
-                              moment: WeeklyReview.moment(entries: entries, period: period, calendar: calendar).map { WeeklyReview.text($0, calendar: calendar) },
+                              moment: WeeklyReview.moment(entries: entries, period: period, today: today, calendar: calendar).map { WeeklyReview.text($0, calendar: calendar) },
                               lastNote: lastNote, note: store.note(for: period) ?? "", noteEditable: schedule.isNoteEditable(period, today: today, calendar: calendar))
             loadFailed = false
         } catch {

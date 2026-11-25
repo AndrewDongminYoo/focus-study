@@ -33,6 +33,15 @@ import XCTest
     func release() { gate?.resume(); gate = nil }
 }
 
+/// A center whose permission reads wait until the test resumes them, in any order.
+@MainActor private final class HeldPermissionCenter: ReviewNotificationScheduling {
+    private(set) var held: [CheckedContinuation<ReviewPermission, Never>] = []
+    func permission() async -> ReviewPermission { await withCheckedContinuation { held.append($0) } }
+    func requestPermission() async {}
+    func replace(with plan: ReviewNotificationPlan, calendar: Calendar) async -> Bool { true }
+    func resume(_ index: Int, with permission: ReviewPermission) { held[index].resume(returning: permission) }
+}
+
 /// The weekly review's store, notification and open review (docs/specs/2026-11-25-weekly-review-design.md, contract items 1, 6 and 8).
 @MainActor final class WeeklyReviewModelTests: XCTestCase {
     private var calendar: Calendar = {
@@ -192,6 +201,20 @@ import XCTest
         await model.refresh(state: .locked, configuration: enabled, facts: nil)
         XCTAssertFalse(model.explanationDue)
     }
+    func testAnOlderRefreshThatResumesLastDoesNotMakeTheExplanationDue() async {
+        let center = HeldPermissionCenter(), calendar = calendar, facts = trialFacts, enabled = enabled
+        let model = WeeklyReviewModel(store: store(), center: center, now: { self.at(self.day(11, 24), 10) }, calendar: { calendar })
+        let older = Task { await model.refresh(state: .granted, configuration: enabled, facts: facts) }
+        while center.held.count < 1 { await Task.yield() }
+        // A refund makes access read locked while the older refresh waits for its permission read.
+        let newer = Task { await model.refresh(state: .locked, configuration: enabled, facts: facts) }
+        while center.held.count < 2 { await Task.yield() }
+        center.resume(1, with: .notDetermined)
+        await newer.value
+        center.resume(0, with: .notDetermined)
+        await older.value
+        XCTAssertFalse(model.explanationDue, "the explanation shows only while access reads granted")
+    }
     func testWeekdayTimeAndSwitchReplaceThePendingNotification() async {
         let center = RecordingCenter(status: .authorized)
         let model = model(store(), center) { self.at(self.day(11, 27), 10) }
@@ -293,16 +316,29 @@ import XCTest
         let model = model(store, center) { self.at(self.day(11, 24), 10) }
         await model.refresh(state: .granted, configuration: enabled, facts: trialFacts)
         XCTAssertTrue(model.explanationDue)
+        XCTAssertTrue(model.presentExplanation())
         // A Focus filter session starts: the sheet closes, and its `onDisappear` calls `dismissExplanation()`.
         model.suspendExplanation()
         model.dismissExplanation()
         XCTAssertTrue(model.explanationDue)
         XCTAssertFalse(store.explanationShown)
         // After the session the explanation shows again; closing it then marks it shown.
+        XCTAssertTrue(model.presentExplanation(), "the explanation shows again after the session")
         model.dismissExplanation()
         XCTAssertFalse(model.explanationDue)
         XCTAssertTrue(store.explanationShown)
         XCTAssertEqual(center.requests, 0)
+    }
+    func testASwipedExplanationDoesNotOpenAgainWhenOnDismissRunsFirst() async {
+        let store = store(), center = RecordingCenter(status: .notDetermined)
+        let model = model(store, center) { self.at(self.day(11, 24), 10) }
+        await model.refresh(state: .granted, configuration: enabled, facts: trialFacts)
+        XCTAssertTrue(model.presentExplanation())
+        // A swipe down: the sheet's `onDismiss` asks to present again before the view's `onDisappear` closes the explanation.
+        XCTAssertFalse(model.presentExplanation(), "a dismissed explanation never presents again")
+        model.dismissExplanation()
+        XCTAssertFalse(model.explanationDue)
+        XCTAssertTrue(store.explanationShown)
     }
     func testANoteSavedAfterTheEditWindowClosedIsNotStored() async throws {
         let store = store(), center = RecordingCenter(status: .authorized)

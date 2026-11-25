@@ -231,12 +231,13 @@ enum WeeklyReview {
         return "\(half) \(twelve)시" + (minute == 0 ? "" : " \(minute)분")
     }
 
-    /// The rule reads only the first completed session of each local day of the period. It never fills an empty result with something else.
-    static func moment(entries: [ReviewEntry], period: ReviewPeriod, calendar: Calendar) -> ReviewMoment? {
+    /// The rule reads only the first completed session of each local day of the period up to today. It never fills an empty result with something else.
+    /// A day after today is left out as in `ReviewSummary`, so a session dated later after a clock rollback never shows in the moment.
+    static func moment(entries: [ReviewEntry], period: ReviewPeriod, today: ReviewDay, calendar: Calendar) -> ReviewMoment? {
         var firsts: [ReviewDay: Date] = [:]
         for entry in entries {
             let day = ReviewDay(entry.startedAt, calendar: calendar)
-            guard period.contains(day) else { continue }
+            guard period.contains(day), day <= today else { continue }
             firsts[day] = min(firsts[day] ?? entry.startedAt, entry.startedAt)
         }
         let days = firsts.keys.sorted()

@@ -81,6 +81,8 @@ struct FocusView: View {
             if inSession, sheet == .review { review?.suspendOpenReview(); sheet = nil }
             if inSession, sheet == .reviewExplanation { review?.suspendExplanation(); sheet = nil }
         }
+        // A start that ends without a session is a retry point; after a successful start `isInSession` is already true and the guard waits.
+        .onChange(of: model.isStarting) { _, starting in if !starting { presentReviewOrExplanation() } }
         .onReceive(timer) { _ in
             if scenePhase == .active, !model.isStarting, model.pendingBreak == nil { model.tick(defersBreakStart: true) }
             // A trial end changes access by time alone; an open review closes within a second when access reads `locked`.
@@ -374,7 +376,7 @@ struct FocusView: View {
             }
             guard sheet == nil || sheet == .history, review.presentRequest() else { return }
             sheet = .review
-        } else if review.explanationDue, sheet == nil, model.completedSessionID == nil {
+        } else if review.explanationDue, sheet == nil, model.completedSessionID == nil, review.presentExplanation() {
             sheet = .reviewExplanation
         }
     }
