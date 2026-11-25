@@ -57,7 +57,7 @@ Proposed on 2026-11-25:
 2. **Content, from top to bottom.**
    1. **Last note**: the note that the student wrote in the previous review period, under the label "지난주의 내가 남긴 말".
       It shows only when such a note exists and is not empty.
-   2. **What I did**: one sentence with the number of days and of completed sessions, the total focus time under it, and a row of seven day bars, one per day of the period.
+   2. **What I did**: one sentence with the number of days and of completed sessions, the total focus time under it, and a row of day bars, one per day of the period, so one to seven bars.
    3. **A moment to use again**: one sentence chosen by the [moment rule](#moment-rule).
       When the rule finds nothing, this part is absent.
    4. **To me next week**: the title "다음 주의 나에게", the prompt "다음엔 어디서 다시 시작할까요?" and a text field.
@@ -121,8 +121,10 @@ Its focus time is `focusDuration`.
 
 - A review period is seven local days that end on the review weekday.
 - The first period is shorter: it runs from day 1 to day 3.
-- After the student changes the weekday, the current period ends on the next occurrence of the new weekday (writing session's call).
-  It can be shorter or longer than seven days once.
+- A period is never longer than seven days. After the student changes the weekday (writing session's call):
+  - when the new weekday comes on or after today and on or before the last day of the current period, the current period ends on that day, and it is shorter once;
+  - otherwise the current period keeps its last day, and the next period runs from the day after it to the first following occurrence of the new weekday, which is one to seven days.
+  - So no day falls between two periods, and no day belongs to two periods.
 - When the review opens before the last day of its period, it shows the period up to today.
   Days after today show as dimmed bars without a value.
 
