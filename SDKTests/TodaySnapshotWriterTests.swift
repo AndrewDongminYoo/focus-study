@@ -16,6 +16,10 @@ import FamilyControls
         let day = TimeRules.today(now: date, calendar: calendar)
         return stored.filter { day.contains($0.startedAt) && $0.startedAt < day.end }
     }
+    func records(in interval: DateInterval) throws -> [SessionRecord] {
+        if failFetch { throw ModelTestError.storage }
+        return stored.filter { $0.startedAt >= interval.start && $0.startedAt < interval.end }.sorted { $0.startedAt > $1.startedAt }
+    }
     func streak(at date: Date, calendar: Calendar) throws -> Int { 0 }
 }
 

@@ -39,7 +39,7 @@ struct FocusView: View {
             case .selection: selectionEditor
             case .settings: SettingsView(model: model)
             case .everydaySettings: SettingsView(model: model, opensEveryday: true)
-            case .history: TodayHistoryView(model: model)
+            case .history: SungongCalendarView(model: model)
             case .endConfirmation: FocusEndConfirmation(model: model)
             case .paywall: if let paidAccess { PaidAccessSheet(store: paidAccess) }
             }

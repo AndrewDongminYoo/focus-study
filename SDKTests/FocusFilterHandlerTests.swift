@@ -22,6 +22,7 @@ import SwiftData
         try acknowledge(session.id)
     }
     func records(on date: Date, calendar: Calendar) throws -> [SessionRecord] { [] }
+    func records(in interval: DateInterval) throws -> [SessionRecord] { [] }
     func streak(at date: Date, calendar: Calendar) throws -> Int { 0 }
 }
 

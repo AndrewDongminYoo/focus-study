@@ -335,6 +335,83 @@ import SwiftData
         XCTAssertNil(model.streak)
         XCTAssertEqual(model.errorMessage, "기록을 불러오지 못했어요. 다시 확인해 주세요. 진행 중인 세션은 종료할 수 있어요.")
     }
+    private func completed(_ start: Date, _ reason: EndReason = .expired) -> SessionRecord {
+        var session = ControlSession(startedAt: start)
+        session.phase = .terminal; session.reason = reason; session.observedAt = session.expiresAt
+        return SessionRecord(session: session)
+    }
+    /// The 순공 calendar opens on the month of today with today selected, and reads the month only while it is open.
+    func testCalendarOpensOnTodayAndReadsOnlyWhileOpen() throws {
+        let (model, history, _, _, _) = fixture()
+        let today = Calendar.current.startOfDay(for: Date())
+        history.monthRecords = [completed(today.addingTimeInterval(60)), completed(today.addingTimeInterval(120), .earlyExit)]
+        model.refresh(); XCTAssertEqual(history.monthReads, 0, "no month read while the calendar is closed")
+        model.openCalendar()
+        let state = try XCTUnwrap(model.sungong)
+        XCTAssertEqual(state.selectedDay, today); XCTAssertTrue(state.isTodaysMonth)
+        XCTAssertEqual(state.records?.count, 2, "the records of every end reason")
+        XCTAssertEqual(state.values?.recordedDays, 1); XCTAssertEqual(state.values?.focusDuration, 1500)
+        model.refresh(); XCTAssertEqual(history.monthReads, 2, "a refresh reads the open month again")
+        model.closeCalendar(); model.refresh()
+        XCTAssertNil(model.sungong); XCTAssertEqual(history.monthReads, 2)
+    }
+    /// The previous control has no limit, the next stops at the month of today, a later day cannot be selected and "오늘" returns.
+    /// The shown month is half-open: on the 1st, today is in this month only, so the previous month neither selects today nor disables "오늘".
+    func testCalendarMonthIsHalfOpenOnTheFirst() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Seoul"))
+        let december1 = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 12, day: 1)))
+        let november1 = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 11, day: 1)))
+        let november = SessionMonth.interval(containing: november1, calendar: calendar)
+        XCTAssertEqual(november.end, december1)
+        let state = SungongCalendar(today: december1, month: november, selectedDay: november1)
+        XCTAssertFalse(state.holds(december1))
+        XCTAssertFalse(state.isTodaysMonth)
+        XCTAssertTrue(state.holds(november1))
+        let december = SungongCalendar(today: december1, month: SessionMonth.interval(containing: december1, calendar: calendar), selectedDay: december1)
+        XCTAssertTrue(december.isTodaysMonth)
+    }
+    func testCalendarMonthNavigationAndSelection() throws {
+        let (model, _, _, _, _) = fixture()
+        let calendar = Calendar.current, today = calendar.startOfDay(for: Date())
+        model.refresh(); model.openCalendar()
+        let thisMonth = try XCTUnwrap(model.sungong?.month)
+        model.showCalendarMonth(1)
+        XCTAssertEqual(model.sungong?.month, thisMonth, "no month after the month of today")
+        model.showCalendarMonth(-1); model.showCalendarMonth(-1)
+        let earlier = try XCTUnwrap(model.sungong)
+        XCTAssertEqual(earlier.month.start, calendar.date(byAdding: .month, value: -2, to: thisMonth.start))
+        XCTAssertEqual(earlier.selectedDay, earlier.month.start, "another month selects its first day")
+        let second = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: earlier.month.start))
+        model.selectCalendarDay(second); XCTAssertEqual(model.sungong?.selectedDay, second)
+        model.selectCalendarDay(today); XCTAssertEqual(model.sungong?.selectedDay, second, "a day outside the shown month")
+        model.showCalendarMonth(1); model.showCalendarMonth(1)
+        XCTAssertEqual(model.sungong?.month, thisMonth); XCTAssertEqual(model.sungong?.selectedDay, today)
+        if let tomorrow = calendar.date(byAdding: .day, value: 1, to: today), thisMonth.contains(tomorrow) {
+            model.selectCalendarDay(tomorrow); XCTAssertEqual(model.sungong?.selectedDay, today, "a later day")
+        }
+        model.showCalendarMonth(-1); model.showCalendarToday()
+        XCTAssertEqual(model.sungong?.month, thisMonth); XCTAssertEqual(model.sungong?.selectedDay, today)
+    }
+    /// A failed month read is a history failure: the error shows, no month stays, and "다시 확인하기" reads the month again.
+    func testCalendarMonthReadFailureShowsTheHistoryErrorUntilARetrySucceeds() {
+        let (model, history, _, _, _) = fixture()
+        model.refresh(); model.openCalendar(); XCTAssertNotNil(model.sungong?.values)
+        history.failMonth = true
+        model.showCalendarMonth(-1)
+        XCTAssertEqual(model.errorMessage, "기록을 불러오지 못했어요. 다시 확인해 주세요. 진행 중인 세션은 종료할 수 있어요.")
+        XCTAssertNil(model.sungong?.values); XCTAssertNil(model.sungong?.records)
+        model.refresh(); XCTAssertNotNil(model.errorMessage, "a retry that fails"); XCTAssertNil(model.streak)
+        history.failMonth = false
+        model.refresh()
+        XCTAssertNil(model.errorMessage); XCTAssertNotNil(model.sungong?.values)
+    }
+    /// The locked card's button asks for the paywall sheet, as the start gate does.
+    func testRequestPaywallSetsTheRequest() {
+        let (model, _, _, _, _) = fixture()
+        model.requestPaywall(); XCTAssertNotNil(model.paywallRequest)
+        model.dismissPaywall(); XCTAssertNil(model.paywallRequest)
+    }
     /// A refresh that stops at the control read does not finish the history read, so the number goes too.
     func testStreakIsNilAfterAControlReadFailure() {
         let (model, history, store, _, _) = fixture()
@@ -868,6 +945,15 @@ final class ModelTestShield: ShieldClient {
     init(acknowledge: @escaping (UUID) throws -> Void) { self.acknowledge = acknowledge }
     func importTerminal(_ session: ControlSession) throws { try acknowledge(session.id) }
     func records(on date: Date, calendar: Calendar) throws -> [SessionRecord] { if failFetch { throw ModelTestError.storage }; return [] }
+    /// The shown month of the calendar; `failMonth` fails only this read.
+    var monthRecords: [SessionRecord] = []
+    var failMonth = false
+    private(set) var monthReads = 0
+    func records(in interval: DateInterval) throws -> [SessionRecord] {
+        monthReads += 1
+        if failFetch || failMonth { throw ModelTestError.storage }
+        return monthRecords.filter { $0.startedAt >= interval.start && $0.startedAt < interval.end }
+    }
     /// The streak that a read returns; `failStreak` fails only this read, after today's records were read.
     var streakDays = 0
     var failStreak = false
@@ -883,6 +969,7 @@ final class ModelTestShield: ShieldClient {
         if !failed { failed = true; throw ModelTestError.storage }
         return try base.records(on: date, calendar: calendar)
     }
+    func records(in interval: DateInterval) throws -> [SessionRecord] { try base.records(in: interval) }
     func streak(at date: Date, calendar: Calendar) throws -> Int { try base.streak(at: date, calendar: calendar) }
 }
 @MainActor final class ModelTestAuthorization: AuthorizationProviding {

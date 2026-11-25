@@ -11,7 +11,7 @@ final class FocusFlowTests: XCTestCase {
         let seconds = Int(Date().timeIntervalSince1970) % 86_400, lateHalf = seconds % 3600 >= 1800
         return ["TZ": TimeZone(secondsFromGMT: (12 - seconds / 3600) * 3600 - (lateHalf ? 1800 : 0))!.identifier]
     }
-    /// Today's history and the usage report open from the one-line summary at the bottom of the timer screen.
+    /// The 순공 calendar and the usage report open from the "오늘의 집중" card at the bottom of the idle screen.
     private func openToday(_ app: XCUIApplication) {
         let summary = app.buttons["todaySummary"], done = app.buttons["historyDone"]
         XCTAssertTrue(summary.waitForExistence(timeout: ready))
@@ -22,7 +22,12 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(done.waitForExistence(timeout: ready))
     }
     private func openReport(_ app: XCUIApplication) {
-        openToday(app); XCTAssertTrue(app.buttons["report"].waitForExistence(timeout: 5)); app.buttons["report"].tap()
+        openToday(app)
+        // The link is the last part of the calendar sheet, below the cards.
+        let report = app.buttons["report"]
+        XCTAssertTrue(report.waitForExistence(timeout: 5))
+        for _ in 0..<4 where !report.isHittable { app.swipeUp() }
+        report.tap()
     }
     func testStartupStorageFailureAllowsSafeEndAndRetry() {
         let app = app("startup-failure")
@@ -302,12 +307,15 @@ final class FocusFlowTests: XCTestCase {
         let summary = app.buttons["todaySummary"].label
         captureReport(app, name: "timer-summary-mixed-history")
         openToday(app)
+        // The selected-day card of today: the same completed time and count as the idle screen's summary.
         XCTAssertTrue(app.staticTexts["historySummary"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.staticTexts["historySummary"].label, summary)
+        XCTAssertEqual(app.staticTexts["historySummary"].label, "1시간 15분")
+        XCTAssertEqual(app.staticTexts["historyCount"].label, "집중 세션 2회")
         XCTAssertEqual(summary, "오늘 집중 1시간 15분 · 2회")
-        XCTAssertTrue(app.staticTexts["25분 완료"].exists)
-        XCTAssertTrue(app.staticTexts["50분 완료"].exists)
-        XCTAssertEqual(app.images.matching(identifier: "completedSessionIcon").count, 2)
+        // A completed row shows its minutes; a row that did not complete shows its reason and no minutes.
+        XCTAssertTrue(app.staticTexts["25분"].exists)
+        XCTAssertTrue(app.staticTexts["50분"].exists)
+        XCTAssertEqual(app.staticTexts.matching(identifier: "completedSession").count, 2)
         XCTAssertTrue(app.staticTexts["집중 종료"].exists)
         XCTAssertTrue(app.staticTexts["시간 초과로 집중에서 제외"].exists)
         XCTAssertFalse(app.staticTexts["50분 만료"].exists)
@@ -319,7 +327,8 @@ final class FocusFlowTests: XCTestCase {
         let summary = app.buttons["todaySummary"].label
         openToday(app)
         XCTAssertTrue(app.staticTexts["historySummary"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.staticTexts["historySummary"].label, summary)
+        XCTAssertEqual(app.staticTexts["historySummary"].label, "0분")
+        XCTAssertEqual(app.staticTexts["historyCount"].label, "집중 세션 0회")
         XCTAssertEqual(summary, "오늘 집중 0분 · 0회")
         XCTAssertTrue(app.staticTexts["아직 기록이 없어요."].exists)
         XCTAssertTrue(app.staticTexts["historyStreak"].waitForExistence(timeout: ready))
@@ -333,13 +342,15 @@ final class FocusFlowTests: XCTestCase {
         openToday(app)
         let summary = app.staticTexts["historySummary"], streak = app.staticTexts["historyStreak"]
         XCTAssertTrue(summary.waitForExistence(timeout: ready)); XCTAssertTrue(streak.waitForExistence(timeout: ready))
-        XCTAssertEqual(summary.label, "오늘 집중 25분 · 1회")
+        XCTAssertEqual(summary.label, "25분")
         XCTAssertEqual(streak.label, "연속 집중 3일")
-        XCTAssertGreaterThanOrEqual(streak.frame.minY, summary.frame.maxY, "the streak line is below the summary")
+        let recordedDays = app.staticTexts["calendarRecordedDays"]
+        XCTAssertGreaterThanOrEqual(streak.frame.minY, recordedDays.frame.maxY, "the streak line is below the recorded days of the month card")
+        XCTAssertLessThanOrEqual(streak.frame.maxY, summary.frame.minY, "the month card is above the selected-day card")
         XCTAssertFalse(app.buttons["historyStreak"].exists, "the streak line is plain text, not a control")
         captureReport(app, name: "history-streak")
     }
-    /// The streak belongs to the history sheet only: the idle screen, a running session, the break screen and the completion card never show it.
+    /// The streak belongs to the calendar sheet only: the idle screen, a running session, the break screen and the completion card never show it.
     func testTimerScreenNeverShowsTheStreak() {
         let app = shortBreaks("streak", lenient: true, environment: noonZone())
         let start = app.buttons["start"], breakStart = app.buttons["breakStart"], streak = app.descendants(matching: .any)["historyStreak"]
@@ -380,6 +391,55 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertEqual(message.label, error)
         XCTAssertFalse(app.descendants(matching: .any)["historyStreak"].exists)
         XCTAssertFalse(app.staticTexts["아직 기록이 없어요."].exists)
+    }
+    /// The 순공 calendar opens on the month of today with today selected; a day cell selects another day, and "오늘" returns.
+    func testCalendarOpensOnTodayAndSelectsAnotherDay() {
+        let zone = noonZone()
+        let app = app("history", extra: ["-AppleLanguages", "(ko)", "-AppleLocale", "ko_KR"], environment: zone)
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: zone["TZ"]!)!
+        let todayCell = app.buttons["calendarDay-\(calendar.component(.day, from: Date()))"]
+        let summary = app.staticTexts["historySummary"], back = app.buttons["calendarToday"], next = app.buttons["calendarNext"]
+        openToday(app)
+        XCTAssertTrue(todayCell.waitForExistence(timeout: ready))
+        XCTAssertTrue(todayCell.isSelected)
+        XCTAssertTrue(todayCell.label.hasSuffix("일, 1시간 15분"), todayCell.label)
+        XCTAssertEqual(summary.label, "1시간 15분")
+        XCTAssertEqual(app.staticTexts["calendarMonthTotal"].label, "1시간 15분")
+        XCTAssertEqual(app.staticTexts["calendarRecordedDays"].label, "1일")
+        XCTAssertFalse(back.isEnabled, "the month of today is shown and today is selected")
+        XCTAssertFalse(next.isEnabled, "the next control stops at the month of today")
+        captureReport(app, name: "calendar-today")
+        app.buttons["calendarPrevious"].tap()
+        let second = app.buttons["calendarDay-2"]
+        XCTAssertTrue(second.waitForExistence(timeout: 5))
+        second.tap()
+        expectation(for: NSPredicate(format: "isSelected == true"), evaluatedWith: second); waitForExpectations(timeout: 5)
+        XCTAssertTrue(second.label.hasSuffix("2일, 기록 없음"), second.label)
+        XCTAssertEqual(summary.label, "0분")
+        XCTAssertEqual(app.staticTexts["calendarMonthTotal"].label, "0분")
+        XCTAssertTrue(back.isEnabled); XCTAssertTrue(next.isEnabled)
+        back.tap()
+        expectation(for: NSPredicate(format: "isSelected == true"), evaluatedWith: todayCell); waitForExpectations(timeout: 5)
+        XCTAssertEqual(summary.label, "1시간 15분")
+        XCTAssertFalse(back.isEnabled)
+    }
+    /// With access `locked`, the calendar keeps today's card and the streak, a card replaces the month, and its button replaces the sheet with the paywall.
+    func testLockedCalendarShowsTodayAndOpensThePaywall() {
+        let app = app("history", extra: ["--paid-access", "locked", "-AppleLanguages", "(ko)", "-AppleLocale", "ko_KR"], environment: noonZone())
+        openToday(app)
+        let locked = app.staticTexts["calendarLocked"]
+        XCTAssertTrue(locked.waitForExistence(timeout: ready))
+        XCTAssertEqual(locked.label, "구매하면 순공 캘린더를 볼 수 있어요")
+        XCTAssertEqual(app.staticTexts["historySummary"].label, "1시간 15분")
+        XCTAssertEqual(app.staticTexts["historyStreak"].label, "연속 집중 1일")
+        XCTAssertFalse(app.staticTexts["calendarMonthTotal"].exists)
+        XCTAssertFalse(app.buttons["calendarPrevious"].exists)
+        XCTAssertFalse(app.buttons["calendarDay-1"].exists)
+        XCTAssertTrue(app.buttons["report"].exists)
+        captureReport(app, name: "calendar-locked")
+        app.buttons["calendarPurchase"].tap()
+        XCTAssertTrue(app.buttons["paywallTrial"].waitForExistence(timeout: ready))
+        XCTAssertFalse(app.buttons["historyDone"].exists)
     }
     func testKoreanSystemTimePicker() {
         let app = app(extra: ["-AppleLanguages", "(ko)", "-AppleLocale", "ko_KR"])

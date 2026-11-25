@@ -114,6 +114,7 @@ final class FixtureEverydayLayer: EverydayLayerStore {
     init(base: any SessionHistoryProviding) { self.base = base }
     func importTerminal(_ session: ControlSession) throws { try base.importTerminal(session) }
     func records(on date: Date, calendar: Calendar) throws -> [SessionRecord] { throw ControlIssue.io }
+    func records(in interval: DateInterval) throws -> [SessionRecord] { throw ControlIssue.io }
     func streak(at date: Date, calendar: Calendar) throws -> Int { throw ControlIssue.io }
 }
 /// In-memory selection copies; a restore never touches real restrictions.
