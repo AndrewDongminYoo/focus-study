@@ -1227,7 +1227,7 @@ final class FocusFlowTests: XCTestCase {
         let app = app(extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
         app.buttons["start"].tap()
         let takeBreak = app.buttons["breakStart"]
-        XCTAssertTrue(takeBreak.waitForExistence(timeout: 5))
+        XCTAssertTrue(takeBreak.waitForExistence(timeout: ready))
         if !takeBreak.isHittable { app.swipeUp() }
         takeBreak.tap()
         XCTAssertTrue(app.otherElements["breakScreen"].waitForExistence(timeout: 5))
@@ -1378,7 +1378,7 @@ final class FocusFlowTests: XCTestCase {
     }
     func testRegistrationFailureNeverShowsActiveAndCanRetry() {
         let app = app("registration-failure"); app.buttons["start"].tap()
-        XCTAssertTrue(app.staticTexts["startError"].waitForExistence(timeout: 5)); XCTAssertFalse(app.buttons["end"].exists)
+        XCTAssertTrue(app.staticTexts["startError"].waitForExistence(timeout: ready)); XCTAssertFalse(app.buttons["end"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["completion"].exists)
         XCTAssertEqual(app.staticTexts["startBlocker"].label, "오류를 다시 확인한 뒤에 시작할 수 있어요.")
         XCTAssertFalse(app.buttons["selection"].isEnabled)
