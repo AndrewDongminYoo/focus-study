@@ -89,9 +89,50 @@ enum Streak {
         }
     }
 }
+/// The completed focus time of one shown month, by local day, for the 순공 calendar (docs/specs/2026-11-25-sungong-calendar-design.md).
+/// A record belongs to the local day of its `startedAt`, also when it ends after midnight; only a record that counts adds time or a count.
+struct SessionMonth: Equatable {
+    struct Day: Equatable {
+        var focusDuration: TimeInterval = 0
+        var completedCount = 0
+    }
+    /// The month that `init` was given; records outside it are left out.
+    let interval: DateInterval
+    /// The days with at least one completed session, keyed by the start of the local day.
+    let days: [Date: Day]
+    init(records: [SessionRecord], month interval: DateInterval, calendar: Calendar) {
+        self.interval = interval
+        var days: [Date: Day] = [:]
+        for record in records where record.counts && record.startedAt >= interval.start && record.startedAt < interval.end {
+            let day = calendar.startOfDay(for: record.startedAt)
+            days[day, default: Day()].focusDuration += record.focusDuration
+            days[day, default: Day()].completedCount += 1
+        }
+        self.days = days
+    }
+    /// The local month that contains `date`.
+    static func interval(containing date: Date, calendar: Calendar) -> DateInterval {
+        calendar.dateInterval(of: .month, for: date) ?? DateInterval(start: calendar.startOfDay(for: date), duration: 86_400)
+    }
+    func day(_ date: Date, calendar: Calendar) -> Day { days[calendar.startOfDay(for: date)] ?? Day() }
+    var focusDuration: TimeInterval { days.values.reduce(0) { $0 + $1.focusDuration } }
+    var recordedDays: Int { days.count }
+    /// "H:MM" of a day cell, such as "1:30" or "0:50".
+    static func cellText(_ seconds: TimeInterval) -> String {
+        let minutes = Int(seconds) / 60
+        return "\(minutes / 60):" + (minutes % 60 < 10 ? "0" : "") + "\(minutes % 60)"
+    }
+    /// The words of a total, such as "2시간 30분" or "35시간 0분"; under one hour only the minutes, such as "25분".
+    static func totalText(_ seconds: TimeInterval) -> String {
+        let minutes = Int(seconds) / 60
+        return minutes < 60 ? "\(minutes)분" : "\(minutes / 60)시간 \(minutes % 60)분"
+    }
+}
 @MainActor protocol SessionHistoryProviding {
     func importTerminal(_ session: ControlSession) throws
     func records(on date: Date, calendar: Calendar) throws -> [SessionRecord]
+    /// The records whose `startedAt` is inside `interval`, newest first.
+    func records(in interval: DateInterval) throws -> [SessionRecord]
     /// The streak at `date`: see `Streak`.
     func streak(at date: Date, calendar: Calendar) throws -> Int
 }
@@ -115,6 +156,10 @@ enum Streak {
     }
     func records(on date: Date, calendar: Calendar = .current) throws -> [SessionRecord] {
         let interval = TimeRules.today(now: date, calendar: calendar), start = interval.start, end = interval.end
+        return try context.fetch(FetchDescriptor<SessionRecord>(predicate: #Predicate { $0.startedAt >= start && $0.startedAt < end }, sortBy: [SortDescriptor(\.startedAt, order: .reverse)]))
+    }
+    func records(in interval: DateInterval) throws -> [SessionRecord] {
+        let start = interval.start, end = interval.end
         return try context.fetch(FetchDescriptor<SessionRecord>(predicate: #Predicate { $0.startedAt >= start && $0.startedAt < end }, sortBy: [SortDescriptor(\.startedAt, order: .reverse)]))
     }
     func streak(at date: Date, calendar: Calendar = .current) throws -> Int {

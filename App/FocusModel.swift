@@ -9,6 +9,20 @@ struct PendingBreak: Equatable { let id: UUID; let action: BreakAction; let requ
 enum StartBlocker: Equatable { case access, checking, error, selection }
 enum OnboardingStep: Int, CaseIterable { case intro, permission, selection, length }
 enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
+/// The open 순공 calendar sheet (docs/specs/2026-11-25-sungong-calendar-design.md): the shown month, the selected day and the month's records.
+struct SungongCalendar {
+    /// The start of today at the last read; days after it are dimmed and cannot be selected.
+    var today: Date
+    var month: DateInterval
+    var selectedDay: Date
+    /// The shown month's records of every end reason, newest first; `nil` before a read succeeds and after a read fails.
+    var records: [SessionRecord]?
+    var values: SessionMonth?
+    var isTodaysMonth: Bool { holds(today) }
+    /// Whether `date` falls in the shown month. `DateInterval.contains` includes the end, the next month's first instant,
+    /// so on the 1st it would place today in the previous month too; the month is half-open, as `records(in:)` reads it.
+    func holds(_ date: Date) -> Bool { month.start <= date && date < month.end }
+}
 @MainActor @Observable final class FocusModel {
     let services: FocusServices
     private let history: any SessionHistoryProviding
@@ -36,7 +50,10 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
     private(set) var everydayReadAt: Date?
     /// The session of a thrown `finish`, which can leave the stored phase behind its stopped activities; until one reconcile succeeds, `tick` runs one with no session.
     private var failedEndID: UUID?
+    /// `nil` while the 순공 calendar sheet is closed; a refresh reads its month only while it is open.
+    private(set) var sungong: SungongCalendar?
     private static let endFailure = "종료 상태를 저장하지 못했어요. 다시 확인해 주세요."
+    private static let historyFailure = "기록을 불러오지 못했어요. 다시 확인해 주세요. 진행 중인 세션은 종료할 수 있어요."
     var access: AccessStatus { services.authorization.status }
     var isActive: Bool { current?.phase == .active }
     /// Focusing or paused for a break: the selection editor and the settings stay locked.
@@ -136,11 +153,13 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
             // A failed snapshot write never sets `errorMessage` or changes `records`; the next refresh writes again.
             try? services.writeTodaySnapshot(TodaySnapshot(records: records, now: now, calendar: .current))
             streak = try history.streak(at: now, calendar: .current)
+            // A failed month read of the open calendar is a history failure, as a failed streak read is.
+            if sungong != nil { try readCalendarMonth() }
             errorMessage = nil
         } catch {
-            streak = nil
+            streak = nil; sungong?.records = nil; sungong?.values = nil
             // A history failure does not invalidate a confirmed control session or its early-exit action.
-            errorMessage = "기록을 불러오지 못했어요. 다시 확인해 주세요. 진행 중인 세션은 종료할 수 있어요."
+            errorMessage = Self.historyFailure
         }
         // The reconcile found nothing to repair (a lock timeout threw before the end's section), so the session still runs and the end stays reported.
         if let current, current.id == failedEnd, current.phase != .terminal { errorMessage = Self.endFailure }
@@ -245,6 +264,70 @@ enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
         }
     }
     func dismissPaywall() { paywallRequest = nil }
+    /// The button of the locked calendar card: the screen replaces the calendar sheet with the paywall sheet, as the start gate does.
+    func requestPaywall() { paywallRequest = UUID() }
+
+    // MARK: 순공 calendar
+
+    /// The sheet appears: the month of today, with today selected.
+    func openCalendar() {
+        let calendar = Calendar.current, today = calendar.startOfDay(for: Date())
+        sungong = SungongCalendar(today: today, month: SessionMonth.interval(containing: today, calendar: calendar), selectedDay: today)
+        loadCalendarMonth()
+    }
+    func closeCalendar() { sungong = nil }
+    /// One month back (`-1`), without a limit, or forward (`1`), up to the month of today.
+    /// The new month selects today when it is the month of today, and its first day otherwise.
+    func showCalendarMonth(_ offset: Int) {
+        guard let state = sungong, let start = Calendar.current.date(byAdding: .month, value: offset, to: state.month.start) else { return }
+        guard offset < 0 || start <= state.today else { return }
+        showMonth(containing: start)
+    }
+    /// "오늘": the month of today, with today selected.
+    func showCalendarToday() { if let today = sungong?.today { showMonth(containing: today) } }
+    /// A day of the shown month up to today; a later day cannot be selected.
+    func selectCalendarDay(_ day: Date) {
+        guard let state = sungong else { return }
+        let day = Calendar.current.startOfDay(for: day)
+        guard state.holds(day), day <= state.today else { return }
+        sungong?.selectedDay = day
+    }
+    private func showMonth(containing date: Date) {
+        guard var state = sungong else { return }
+        let month = SessionMonth.interval(containing: date, calendar: Calendar.current)
+        state.month = month
+        state.selectedDay = state.holds(state.today) ? state.today : month.start
+        sungong = state
+        loadCalendarMonth()
+    }
+    /// A month read outside `refresh()`; its failure shows the history error, and "다시 확인하기" (`refresh()`) reads it again.
+    private func loadCalendarMonth() {
+        do { try readCalendarMonth() }
+        catch { sungong?.records = nil; sungong?.values = nil; streak = nil; errorMessage = Self.historyFailure }
+    }
+    private func readCalendarMonth() throws {
+        guard var state = sungong else { return }
+        let calendar = Calendar.current
+        let wasOnToday = state.isTodaysMonth && state.selectedDay == state.today
+        state.today = calendar.startOfDay(for: Date())
+        // The month and the selected day are computed again with the current calendar, so a time zone change or a new day
+        // while the sheet is open never reads the old interval. Following today: the sheet was on today, or access is locked,
+        // where only today's card shows; a shown month after today (the clock moved back) also returns to today.
+        let middle = state.month.start.addingTimeInterval(state.month.duration / 2)
+        state.month = SessionMonth.interval(containing: middle, calendar: calendar)
+        if wasOnToday || services.paidAccess() == .locked || state.month.start > state.today {
+            state.month = SessionMonth.interval(containing: state.today, calendar: calendar)
+            state.selectedDay = state.today
+        } else {
+            let selected = calendar.startOfDay(for: state.selectedDay.addingTimeInterval(12 * 3600))
+            state.selectedDay = state.holds(selected) && selected <= state.today ? selected : (state.holds(state.today) ? state.today : state.month.start)
+        }
+        state.records = nil; state.values = nil
+        sungong = state
+        let records = try history.records(in: state.month)
+        state.records = records; state.values = SessionMonth(records: records, month: state.month, calendar: calendar)
+        sungong = state
+    }
     func dismissCompletion() { completedSessionID = nil; completedLength = nil }
     func completeOnboarding() { services.settings.hasCompletedOnboarding = true }
     /// `defersBreakStart`: the timer screen reserves the automatic break start, so its feedback can appear before the engine call.

@@ -1,7 +1,7 @@
 # 순공 calendar design
 
 Date: 2026-11-25.
-Status: approved on 2026-11-25, not yet implemented.
+Status: approved on 2026-11-25, implemented under issue #249.
 Source: [issue #248](https://github.com/AndrewDongminYoo/focus-study/issues/248), under the paid build parent #244.
 Authority: the [paid unlock decision](2026-11-24-paid-unlock-decision.md) (decisions 2 and 7, and "Behavior at the edges") and the [paid access design](2026-11-24-paid-access-design.md).
 Look: Figma frames node `32:2` (light) and node `32:23` (dark), with the tokens of the [screen redesign](2026-11-23-screen-redesign-design.md).
@@ -95,3 +95,17 @@ Keep the existing identifiers that `UITests/FocusFlowTests.swift` reads on the i
 - Whether the locked card's button opens the paywall over the calendar sheet or in its place; the idle screen presents one `.sheet(item:)` today.
 - The exact layout of the locked card, inside the card style above, with the copy written by the `user-facing-copy` rules.
 - Captures for approval: light, dark and the largest accessibility text size, with access `granted` and `locked`.
+
+## Amendment of 2026-11-25
+
+Decided after the approval, for the implementation under issue #249:
+
+1. **Every session of the selected day.** The selected-day card lists every session of that day, also a session that did not complete.
+   A completed session row shows the stored span `startedAt`–`endedAt` and the focus minutes.
+   A row of a session that did not complete shows its start time and its end reason, with the reason text of today's history sheet ("집중 종료", "시작 실패" and the others), and no minutes.
+   The totals, the session count ("집중 세션 N회"), the cell values and the month card still count completed sessions only.
+2. **Usage report link.** The "오늘의 사용 보고서" link of today's history sheet moves to the bottom of the calendar sheet, under the note, for every access state.
+   It opens the usage report inside the sheet, as before; the sheet has its own `NavigationStack`, and the idle screen still has none.
+   The link keeps its identifier `report` and its footer text.
+3. **Locked card button.** With access `locked`, the button of the locked card replaces the calendar sheet with the paywall sheet.
+   It calls `FocusModel.requestPaywall()`, which sets `paywallRequest` as the start gate does, and the idle screen's one `.sheet(item:)` then shows the paywall.
