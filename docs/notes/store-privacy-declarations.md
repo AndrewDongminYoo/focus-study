@@ -37,7 +37,7 @@ Unsigned Release build of `project.yml` at 1.0.0 (2), all 7 executables (`FocusS
 
 Repeat these checks before a release that adds a dependency, an extension, a usage description or a network call.
 
-The weekly review of issue #251 adds the first usage description, `NSPhotoLibraryAddUsageDescription` in the app's Info.plist, for the save of its share image to Photos with add-only access, and the first local notification; the release of issue #255 repeats the checks above with them.
+The weekly review of issue #251 adds the first usage description, `NSPhotoLibraryAddUsageDescription` in the app's Info.plist, for the save of its share image to Photos with add-only access (the 순공 calendar share image of issue #253 uses the same text, through the share sheet's "이미지 저장"), and the first local notification; the release of issue #255 repeats the checks above with them.
 
 ## Age rating
 
