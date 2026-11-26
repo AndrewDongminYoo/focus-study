@@ -355,12 +355,12 @@ struct SungongCalendarView: View {
         var firstWeekday: Int
         var timeZone: TimeZone
     }
-    /// `nil` when there is nothing to share: access `locked`, a history read failure, no loaded month or no recorded day up to today.
-    /// The stamps, the summary and the button read the same days, also when a clock set back leaves a record on a day after today.
+    /// `nil` when there is nothing to share: access `locked`, a history read failure, no loaded month or no recorded day in the month.
+    /// The summary reads the same values as the month card (contract item 6); the card draws stamps only up to today, so a record
+    /// that a clock set back left on a day after today counts in the summary and shows no stamp, as in the calendar grid.
     private var shareKey: ShareKey? {
-        guard !locked, model.errorMessage == nil, let state = model.sungong, let values = state.values else { return nil }
-        let days = values.days.filter { $0.key <= state.today }
-        return days.isEmpty ? nil : ShareKey(month: state.month, today: state.today, days: days, firstWeekday: calendar.firstWeekday, timeZone: calendar.timeZone)
+        guard !locked, model.errorMessage == nil, let state = model.sungong, let values = state.values, values.recordedDays > 0 else { return nil }
+        return ShareKey(month: state.month, today: state.today, days: values.days, firstWeekday: calendar.firstWeekday, timeZone: calendar.timeZone)
     }
     private func renderShareImage(_ key: ShareKey?) {
         guard let key else { shareImage = nil; return }

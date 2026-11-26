@@ -158,7 +158,7 @@ The values are in a 44 × 44 unit box that is drawn at 30 pt.
 - The colon mark reads the `AccentColor` asset by name, because `Color.accentColor` resolves to the system blue inside `ImageRenderer`.
 - The share button's glyph stops growing at the first accessibility text size. The hidden copy on the left mirrors the share button and "닫기", or "닫기" alone with access `locked`.
   When "순공시간" does not fit between the controls at its full size, as at the largest text sizes, the controls take their own row at the right and the title goes centered under them.
-- The stamps, the summary and the button read only the recorded days up to today. A clock set back can leave a completed session on a day after today; that day shows its dimmed date, and the summary and the button leave it out too.
+- The summary and the button read the same values as the month card (contract item 6), and the stamps stop at today (contract item 5). A clock set back can leave a completed session on a day after today; that day shows its dimmed date with no stamp, and the summary still counts it, as the month card does.
 - The image renders again when the shown month, today or the recorded days change, never inside the view body. While there is nothing to share, the button stays a disabled button with the same identifier.
 - The share preview title is "N월 순공 캘린더". The button's accessibility label is "공유하기" and its identifier is `calendarShare`.
 - The Photos usage text is "주간 회고와 순공 캘린더 이미지를 사진 앱에 저장할 때만 사용해요."
