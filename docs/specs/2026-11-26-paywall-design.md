@@ -1,7 +1,7 @@
 # Paywall and trial offer design
 
 Date: 2026-11-26.
-Status: approved on 2026-11-26, not yet implemented.
+Status: approved on 2026-11-26, implemented under issue #247.
 Source: [issue #246](https://github.com/AndrewDongminYoo/focus-study/issues/246), under the paid build parent #244.
 Authority: the [paid unlock decision](2026-11-24-paid-unlock-decision.md) (decisions 3 to 7 and "Behavior at the edges") and the [paid access design](2026-11-24-paid-access-design.md), which this document amends in [Amendment of the paid access design](#amendment-of-the-paid-access-design).
 Look: the tokens of the [screen redesign](2026-11-23-screen-redesign-design.md) and the sheet layout of the [weekly review](2026-11-25-weekly-review-design.md) form A; there is no Figma frame.
@@ -124,3 +124,16 @@ Contract item 5 replaces the paid access design's rule that no session starts by
 - The copy of the messages for a failed purchase, a pending purchase and a restore with nothing to restore, by the `user-facing-copy` rules; the current temporary sheet's behavior for these cases stays.
 - Accessibility identifiers: keep `paywall`, `paywallClose`, `paywallTrial`, `paywallPurchase`, `paywallRestore`, `paywallMessage` and `paywallPriceRetry`, which the current sheet sets; new ones are the builder's.
 - Whether the colon mark is the app's existing `ColonMark` view.
+
+## Builder decisions of issue #247
+
+- The start request: `FocusModel` keeps a `PaywallRequest` that the start action, the access recovery tap and the recheck in `performStart()` create. The sheet marks it confirmed after its own trial or purchase returns `confirmed` while access reads `granted`, and the sheet's close (`dismissPaywall()`) then runs `requestStart()` once, so the start keeps every check of the start path.
+- The report: `PaidAccessStore.startTrial()` and `purchaseUnlock()` return a `PaidActionResult`. The result is `confirmed` only when the action's own verified transaction opens access; a transaction that does not, such as a trial that already ended, returns `notGranted`, also when another transaction opened access meanwhile. While the sheet's own action runs, access that opens does not close the sheet by itself, so the confirmation always comes before the close. Access that opens in any other way, such as an approval from `Transaction.updates` or a restore, closes the sheet without a confirmation.
+- Contract item 5 is read literally: a pending purchase, a cancel or a failure drops the start request at that moment, and the start line goes away. A trial or purchase that succeeds later in the same sheet opens access and starts nothing.
+- Leaving the foreground drops the start request of an open paywall, as it cancels a reserved start; the sheet stays open, and a trial or purchase confirmed after the return opens access and starts nothing.
+- The calendar entry: the paywall shows as a sheet over the 순공 calendar sheet, so the month, the selected day and the scroll position stay as they are. That paywall holds no start request and never reaches the model.
+- The sheet keeps its form, before or after the trial, only while its own trial, purchase or restore runs and while it closes after one, so a confirmed trial does not change the text during the close. At all other times the form follows the facts that the store confirms, also when they arrive after the sheet opened.
+- Every result of the sheet carries the id of the start request that the sheet opened for, so a result that arrives after that sheet closed never reaches a later request. "나중에" drops the start request before the sheet closes, and a swipe cannot close the sheet while its own action runs, so a result that arrives during the close starts nothing.
+- The colon mark is the existing `ColonMark` on a navy tile, as on the review explanation, because its cream ring does not show on the light canvas.
+- The messages for a failed purchase, a failed trial start, a pending purchase and a restore with nothing to restore keep the copy of the temporary sheet.
+- New accessibility identifiers: `paywallTitle`, `paywallStartLine`, `paywallPrice` and `paywallPriceLoading`.

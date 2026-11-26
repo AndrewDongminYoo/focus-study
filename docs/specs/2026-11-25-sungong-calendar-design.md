@@ -109,3 +109,10 @@ Decided after the approval, for the implementation under issue #249:
    The link keeps its identifier `report` and its footer text.
 3. **Locked card button.** With access `locked`, the button of the locked card replaces the calendar sheet with the paywall sheet.
    It calls `FocusModel.requestPaywall()`, which sets `paywallRequest` as the start gate does, and the idle screen's one `.sheet(item:)` then shows the paywall.
+
+## Amendment of 2026-11-26
+
+The [paywall design](2026-11-26-paywall-design.md) (issue #246, implemented under issue #247) changes two items of this document; the items above keep their original text as the record of what was approved.
+
+- "Paid and free" (item 3 of the design): the paywall is the one of the paywall design, not the temporary sheet.
+- Item 3 of the amendment of 2026-11-25: the locked card's button no longer replaces the calendar sheet. The paywall shows as a sheet over the calendar sheet, so the month, the selected day and the scroll position stay as they are, and every outcome returns to the calendar with no start. `FocusModel.requestPaywall()` no longer exists; the calendar sheet presents the paywall itself. The paywall design's "Builder decisions of issue #247" owns the rule.
