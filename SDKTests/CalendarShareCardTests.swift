@@ -39,6 +39,16 @@ import XCTest
         let otherDay = try XCTUnwrap(render(month: 11, days: [1, 6], minutes: 25).cgImage?.cropping(to: crop)).png
         XCTAssertNotEqual(shortTop, otherDay, "a stamp on another day changes the crop")
     }
+    /// After a clock set back, a recorded day after today (the 30th, with today on the 24th) counts in the summary like the month card,
+    /// but its cell shows only the dimmed date: the grid is the same as without that day.
+    func testRecordedDayAfterTodayHasNoStamp() throws {
+        let crop = CGRect(x: 0, y: 0, width: 1206, height: Int(try render(month: 11, days: [1]).size.height * 3) - 150)
+        let without = try XCTUnwrap(render(month: 11, days: [1]).cgImage?.cropping(to: crop)).png
+        let withLater = try XCTUnwrap(render(month: 11, days: [1, 30]).cgImage?.cropping(to: crop)).png
+        XCTAssertEqual(without, withLater)
+        let withEarlier = try XCTUnwrap(render(month: 11, days: [1, 23]).cgImage?.cropping(to: crop)).png
+        XCTAssertNotEqual(without, withEarlier, "a recorded day up to today does get a stamp")
+    }
     func testImageHeightFollowsTheWeekRows() throws {
         // February 2026 needs four rows and August 2026 six, at 60 pt and a 1 pt line each.
         let four = try render(month: 2, days: [3]), six = try render(month: 8, days: [3])
