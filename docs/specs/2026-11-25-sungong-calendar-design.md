@@ -116,3 +116,5 @@ The [paywall design](2026-11-26-paywall-design.md) (issue #246, implemented unde
 
 - "Paid and free" (item 3 of the design): the paywall is the one of the paywall design, not the temporary sheet.
 - Item 3 of the amendment of 2026-11-25: the locked card's button no longer replaces the calendar sheet. The paywall shows as a sheet over the calendar sheet, so the month, the selected day and the scroll position stay as they are, and every outcome returns to the calendar with no start. `FocusModel.requestPaywall()` no longer exists; the calendar sheet presents the paywall itself. The paywall design's "Builder decisions of issue #247" owns the rule.
+
+The [share image design](2026-11-26-share-image-design.md) (issue #252, implemented under issue #253) adds one share icon button next to "닫기" in the header (item 2.1 of the layout), which shares an image of the shown month; that design owns its rules.
