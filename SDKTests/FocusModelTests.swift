@@ -406,12 +406,6 @@ import SwiftData
         model.refresh()
         XCTAssertNil(model.errorMessage); XCTAssertNotNil(model.sungong?.values)
     }
-    /// The locked card's button asks for the paywall sheet, as the start gate does.
-    func testRequestPaywallSetsTheRequest() {
-        let (model, _, _, _, _) = fixture()
-        model.requestPaywall(); XCTAssertNotNil(model.paywallRequest)
-        model.dismissPaywall(); XCTAssertNil(model.paywallRequest)
-    }
     /// A refresh that stops at the control read does not finish the history read, so the number goes too.
     func testStreakIsNilAfterAControlReadFailure() {
         let (model, history, store, _, _) = fixture()

@@ -43,12 +43,20 @@ struct FocusView: View {
             case .everydaySettings: SettingsView(model: model, opensEveryday: true)
             case .history: SungongCalendarView(model: model)
             case .endConfirmation: FocusEndConfirmation(model: model)
-            case .paywall: if let paidAccess { PaidAccessSheet(store: paidAccess) }
+            case .paywall:
+                if let paidAccess {
+                    // The callbacks carry the request that this sheet opened for, so a late result never reaches another request.
+                    let request = model.paywallRequest
+                    PaidAccessSheet(store: paidAccess, startMinutes: request?.holdsStart == true ? Int(model.services.settings.lengthSeconds) / 60 : nil,
+                                    onConfirmed: { if let request { model.confirmPaywallStart(request.id) } },
+                                    onDropStart: { if let request { model.dropPaywallStart(request.id) } })
+                }
             case .review: if let review, let request = review.presented { WeeklyReviewView(model: model, review: review, day: request.day, requestID: request.id, form: reviewForm) }
             case .reviewExplanation: if let review { ReviewExplanationView(review: review) }
             }
         }
-        .onChange(of: model.paywallRequest) { _, request in if request != nil, paidAccess != nil { sheet = .paywall } }
+        // The start entry's paywall; its close (`onDismiss`) runs the start path once after a trial or purchase confirmed inside it.
+        .onChange(of: model.paywallRequest?.id) { _, request in if request != nil, paidAccess != nil { sheet = .paywall } }
         // The calendar entry replaces the calendar sheet with the review; a notification tap waits until no session runs.
         .onChange(of: review?.request) { _, request in if request != nil { presentReviewOrExplanation() } }
         .onChange(of: review?.explanationDue) { _, _ in presentReviewOrExplanation() }

@@ -8,7 +8,7 @@ import os
     let recovery: StartupRecovery
     /// The main-queue access read of launch recovery; a cold launch reads `unknown` until the published value settles.
     let accessState: () -> AccessState
-    /// Paid access for the start gate and the temporary paywall sheet; one per process.
+    /// Paid access for the start gate and the paywall; one per process.
     let paidAccess: PaidAccessStore
     /// The weekly review: its notes and settings in the app's own defaults, and the app's only notification code.
     let review: WeeklyReviewModel

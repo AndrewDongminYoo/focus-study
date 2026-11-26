@@ -7,6 +7,11 @@ struct SungongCalendarView: View {
     @Environment(\.dismiss) private var dismiss
     /// `nil` only in a preview without a runtime; the review entry is then absent.
     @Environment(WeeklyReviewModel.self) private var review: WeeklyReviewModel?
+    /// `nil` only in a preview without a runtime; the locked card's button then does nothing.
+    @Environment(PaidAccessStore.self) private var paidAccess: PaidAccessStore?
+    /// The paywall of the locked card shows over this sheet, so the month, the selected day and the scroll position stay as they are
+    /// in every outcome (docs/specs/2026-11-26-paywall-design.md, contract item 7). It holds no start request.
+    @State private var showsPaywall = false
     @ScaledMetric(relativeTo: .title2) private var arrowSize: CGFloat = 23
     @ScaledMetric(relativeTo: .subheadline) private var cellHeight: CGFloat = 48
     private var calendar: Calendar { .current }
@@ -43,6 +48,7 @@ struct SungongCalendarView: View {
         .onDisappear { model.closeCalendar() }
         // Access that turns `locked` while the sheet is open fixes the selected day on today.
         .onChange(of: locked) { _, locked in if locked { model.showCalendarToday() } }
+        .sheet(isPresented: $showsPaywall) { if let paidAccess { PaidAccessSheet(store: paidAccess) } }
     }
 
     // MARK: Header
@@ -193,7 +199,7 @@ struct SungongCalendarView: View {
         VStack(alignment: .leading, spacing: FocusTheme.Layout.relatedSpacing) {
             Text("구매하면 순공 캘린더를 볼 수 있어요").font(.headline).foregroundStyle(FocusTheme.Screen.ink).fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("calendarLocked")
-            Button("구매하기") { model.requestPaywall() }
+            Button("구매하기") { if paidAccess != nil { showsPaywall = true } }
                 .buttonStyle(FocusFillButtonStyle(fill: FocusTheme.Palette.accent, label: FocusTheme.Palette.onAccent))
                 .accessibilityIdentifier("calendarPurchase")
         }

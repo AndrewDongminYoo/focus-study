@@ -423,9 +423,12 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertEqual(summary.label, "1시간 15분")
         XCTAssertFalse(back.isEnabled)
     }
-    /// With access `locked`, the calendar keeps today's card and the streak, a card replaces the month, and its button replaces the sheet with the paywall.
+    /// With access `locked`, the calendar keeps today's card and the streak, a card replaces the month, and its button opens the paywall over the calendar.
+    /// A trial from there returns to the same calendar, now unlocked, with no start line and no timer (docs/specs/2026-11-26-paywall-design.md, contract item 7).
     func testLockedCalendarShowsTodayAndOpensThePaywall() {
-        let app = app("history", extra: ["--paid-access", "locked", "-AppleLanguages", "(ko)", "-AppleLocale", "ko_KR"], environment: noonZone())
+        let zone = noonZone()
+        let app = app("history", extra: ["--paid-access", "locked", "-AppleLanguages", "(ko)", "-AppleLocale", "ko_KR"], environment: zone)
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: zone["TZ"]!)!
         openToday(app)
         let locked = app.staticTexts["calendarLocked"]
         XCTAssertTrue(locked.waitForExistence(timeout: ready))
@@ -439,8 +442,20 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["report"].exists)
         captureReport(app, name: "calendar-locked")
         app.buttons["calendarPurchase"].tap()
-        XCTAssertTrue(app.buttons["paywallTrial"].waitForExistence(timeout: ready))
-        XCTAssertFalse(app.buttons["historyDone"].exists)
+        let trial = app.buttons["paywallTrial"]
+        XCTAssertTrue(trial.waitForExistence(timeout: ready))
+        XCTAssertFalse(app.staticTexts["paywallStartLine"].exists, "only the start entry holds a start")
+        captureReport(app, name: "paywall-calendar-entry")
+        waitHittable(trial); trial.tap()
+        XCTAssertTrue(trial.waitForNonExistence(timeout: ready))
+        XCTAssertTrue(app.staticTexts["calendarMonthTotal"].waitForExistence(timeout: ready))
+        XCTAssertTrue(app.buttons["historyDone"].exists)
+        XCTAssertFalse(app.staticTexts["calendarLocked"].exists)
+        XCTAssertTrue(app.buttons["calendarDay-\(calendar.component(.day, from: Date()))"].isSelected, "the same month with today selected")
+        XCTAssertEqual(app.staticTexts["historySummary"].label, "1시간 15분")
+        app.buttons["historyDone"].tap()
+        XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: ready))
+        XCTAssertFalse(app.buttons["end"].exists, "a trial from the calendar starts no timer")
     }
     // MARK: Weekly review (docs/specs/2026-11-25-weekly-review-design.md)
 
@@ -1111,24 +1126,190 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(row.isHittable, "the scheduled Focus row names the first-unlock delay")
         captureReport(app, name: "focus-guide-scheduled-row")
     }
-    /// `--paid-access locked`: the start tap opens the temporary paywall sheet instead of a session (docs/specs/2026-11-24-paid-access-design.md).
-    func testLockedStartOpensThePaywallSheet() {
-        let app = app(extra: ["--paid-access", "locked"])
+    // MARK: Paywall (docs/specs/2026-11-26-paywall-design.md)
+
+    /// Taps the start action with access `locked` and waits for the paywall.
+    private func openStartPaywall(_ app: XCUIApplication) {
         let start = app.buttons["start"]
         XCTAssertTrue(start.waitForExistence(timeout: ready)); XCTAssertTrue(start.isEnabled)
         XCTAssertFalse(app.staticTexts["startBlocker"].exists)
         waitHittable(start); start.tap()
-        XCTAssertTrue(app.buttons["paywallTrial"].waitForExistence(timeout: ready))
-        for identifier in ["paywallPurchase", "paywallRestore", "paywallClose"] { XCTAssertTrue(app.buttons[identifier].exists, identifier) }
+        XCTAssertTrue(app.buttons["paywallClose"].waitForExistence(timeout: ready))
+    }
+    /// Start entry, trial confirmed: the sheet closes and one session starts with the student's length, without a second tap.
+    func testLockedStartTrialContinuesTheStart() {
+        let app = app(extra: ["--paid-access", "locked", "--length", "30"])
+        openStartPaywall(app)
+        for identifier in ["paywallTrial", "paywallPurchase", "paywallRestore"] { XCTAssertTrue(app.buttons[identifier].isEnabled, identifier) }
         XCTAssertTrue(app.buttons["paywallPurchase"].label.contains("₩14,000"))
-        XCTAssertTrue(app.staticTexts["매일 제한은 3일이 지나도 계속 쓸 수 있어요."].exists)
+        XCTAssertEqual(app.staticTexts["paywallTitle"].label, "집중 타이머를 3일 동안 무료로 써보세요")
+        XCTAssertEqual(app.staticTexts["paywallStartLine"].label, "무료 체험을 시작하면, 하려던 30분 집중이 이어져요.")
+        XCTAssertTrue(app.staticTexts["체험이 끝나도 자동으로 결제되지 않아요."].exists)
+        XCTAssertTrue(app.staticTexts["구매하지 않아도 평소 앱·웹사이트 제한은 계속 쓸 수 있어요."].exists)
         XCTAssertFalse(app.buttons["end"].exists)
-        captureReport(app, name: "paywall-temporary-sheet")
-        // The trial grants access and closes the sheet; the next tap starts a session.
-        app.buttons["paywallTrial"].tap()
-        XCTAssertTrue(app.buttons["paywallTrial"].waitForNonExistence(timeout: ready))
-        waitHittable(start); start.tap()
+        captureReport(app, name: "paywall-start-entry")
+        let trial = app.buttons["paywallTrial"]
+        for _ in 0..<4 where !trial.isHittable { app.swipeUp() }
+        trial.tap()
         XCTAssertTrue(app.buttons["end"].waitForExistence(timeout: ready))
+        XCTAssertFalse(app.buttons["paywallClose"].exists)
+        let clock = app.staticTexts["countdown"]
+        // A 30-minute session counts down through 29 minutes; the 25-minute default never shows it.
+        expectation(for: NSPredicate(format: "label BEGINSWITH %@", "남은 시간 29분"), evaluatedWith: clock); waitForExpectations(timeout: ready)
+    }
+    /// After the trial was used: the purchase is the primary action, and a confirmed purchase continues the start.
+    func testTrialEndedPaywallPurchaseContinuesTheStart() {
+        let app = app(extra: ["--paid-access", "trial-ended", "--length", "30"])
+        openStartPaywall(app)
+        XCTAssertEqual(app.staticTexts["paywallTitle"].label, "3일 체험이 끝났어요")
+        XCTAssertEqual(app.staticTexts["paywallStartLine"].label, "평생권을 구매하면, 하려던 30분 집중이 이어져요.")
+        XCTAssertTrue(app.staticTexts["지금까지의 기록은 기기에 그대로 있어요."].exists)
+        XCTAssertFalse(app.buttons["paywallTrial"].exists)
+        captureReport(app, name: "paywall-after-trial")
+        let purchase = app.buttons["paywallPurchase"]
+        for _ in 0..<4 where !purchase.isHittable { app.swipeUp() }
+        purchase.tap()
+        XCTAssertTrue(app.buttons["end"].waitForExistence(timeout: ready))
+    }
+    /// "나중에" and a swipe close the sheet and start nothing; the next tap opens the paywall again.
+    func testLockedStartCloseAndSwipeStartNothing() {
+        let app = app(extra: ["--paid-access", "locked"])
+        openStartPaywall(app)
+        app.buttons["paywallClose"].tap()
+        XCTAssertTrue(app.buttons["paywallClose"].waitForNonExistence(timeout: ready))
+        XCTAssertFalse(app.buttons["end"].exists)
+        openStartPaywall(app)
+        // A drag from the sheet's grabber to the bottom of the screen, as a swipe down closes the sheet.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1))
+            .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.98)), withVelocity: .fast, thenHoldForDuration: 0)
+        XCTAssertTrue(app.buttons["paywallClose"].waitForNonExistence(timeout: ready))
+        XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: ready))
+        XCTAssertFalse(app.buttons["end"].exists)
+    }
+    /// The required test: start entry, a pending purchase, "나중에", then the approval: access reads `granted` and no session starts.
+    func testPendingPurchaseApprovedLaterStartsNothing() {
+        // `pending-later` holds the approval until the app returns to the foreground, so it cannot arrive before the close.
+        let app = app(extra: ["--paid-access", "locked", "--paid-purchase", "pending-later"])
+        openStartPaywall(app)
+        let purchase = app.buttons["paywallPurchase"]
+        for _ in 0..<4 where !purchase.isHittable { app.swipeUp() }
+        purchase.tap()
+        XCTAssertTrue(app.staticTexts["paywallMessage"].waitForExistence(timeout: ready))
+        XCTAssertFalse(app.staticTexts["paywallStartLine"].exists, "a pending purchase drops the start request")
+        app.buttons["paywallClose"].tap()
+        XCTAssertTrue(app.buttons["paywallClose"].waitForNonExistence(timeout: ready))
+        // The student leaves the app and returns: the approval arrives through the update listener.
+        XCUIDevice.shared.press(.home)
+        expectation(for: NSPredicate { _, _ in app.state != .runningForeground }, evaluatedWith: nil)
+        waitForExpectations(timeout: ready)
+        app.activate()
+        XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: ready))
+        // The calendar unlocks when the approval arrives through the update listener.
+        openToday(app)
+        XCTAssertTrue(app.staticTexts["calendarMonthTotal"].waitForExistence(timeout: ready))
+        app.buttons["historyDone"].tap()
+        XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: ready))
+        XCTAssertFalse(app.buttons["end"].exists, "an approval opens access only")
+        // The student taps the start action again.
+        waitHittable(app.buttons["start"]); app.buttons["start"].tap()
+        XCTAssertTrue(app.buttons["end"].waitForExistence(timeout: ready))
+    }
+    /// Start entry, a pending purchase, and the approval while the sheet is still open: the sheet closes by itself and no session starts.
+    func testApprovalWhileThePaywallIsOpenClosesItAndStartsNothing() {
+        let app = app(extra: ["--paid-access", "locked", "--paid-purchase", "pending"])
+        openStartPaywall(app)
+        let purchase = app.buttons["paywallPurchase"]
+        for _ in 0..<4 where !purchase.isHittable { app.swipeUp() }
+        purchase.tap()
+        XCTAssertTrue(app.staticTexts["paywallMessage"].waitForExistence(timeout: ready))
+        // The fixture's approval arrives 3 seconds after the purchase, through the update listener.
+        XCTAssertTrue(app.buttons["paywallClose"].waitForNonExistence(timeout: ready))
+        XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: ready))
+        XCTAssertFalse(app.buttons["end"].waitForExistence(timeout: 3), "an approval while the sheet is open opens access only")
+    }
+    /// Start entry, restore: the restore opens access, the sheet closes by itself, and no session starts.
+    func testPaywallRestoreClosesItAndStartsNothing() {
+        let app = app(extra: ["--paid-access", "locked", "--paid-restore", "owned"])
+        openStartPaywall(app)
+        let restore = app.buttons["paywallRestore"]
+        for _ in 0..<4 where !restore.isHittable { app.swipeUp() }
+        restore.tap()
+        XCTAssertTrue(app.buttons["paywallClose"].waitForNonExistence(timeout: ready))
+        XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: ready))
+        XCTAssertFalse(app.buttons["end"].waitForExistence(timeout: 3), "a restore starts nothing")
+    }
+    /// The paywall over the scrolled calendar: "나중에" returns to the same scroll position, so the calendar was not built again.
+    /// The largest text size makes the locked calendar taller than the screen.
+    func testCalendarPaywallKeepsTheScrollPosition() {
+        let app = app("history", extra: ["--paid-access", "locked", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"], environment: noonZone())
+        let today = app.buttons["todaySummary"]
+        XCTAssertTrue(today.waitForExistence(timeout: ready))
+        for _ in 0..<8 where !today.isHittable { app.swipeUp() }
+        openToday(app)
+        let purchase = app.buttons["calendarPurchase"]
+        XCTAssertTrue(purchase.waitForExistence(timeout: ready))
+        for _ in 0..<4 where !purchase.isHittable { app.swipeUp() }
+        let atRest = purchase.frame
+        // A short, slow drag that leaves the button on the screen.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75))
+            .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6)), withVelocity: .slow, thenHoldForDuration: 0.3)
+        let scrolled = purchase.frame
+        XCTAssertNotEqual(scrolled.minY, atRest.minY, "the calendar scrolls")
+        XCTAssertTrue(purchase.isHittable)
+        purchase.tap()
+        XCTAssertTrue(app.buttons["paywallClose"].waitForExistence(timeout: ready))
+        app.buttons["paywallClose"].tap()
+        XCTAssertTrue(app.buttons["paywallClose"].waitForNonExistence(timeout: ready))
+        XCTAssertTrue(purchase.waitForExistence(timeout: ready))
+        XCTAssertEqual(purchase.frame.minY, scrolled.minY, accuracy: 1, "the same scroll position")
+        XCTAssertFalse(app.buttons["end"].exists)
+    }
+    /// While the price is not loaded, the trial and the purchase are disabled, and "나중에", the restore and the retry stay enabled.
+    func testPaywallWithoutAPriceDisablesTheBuyButtons() {
+        let app = app(extra: ["--paid-access", "locked", "--paid-price", "loading"])
+        openStartPaywall(app)
+        XCTAssertTrue(app.staticTexts["paywallPriceLoading"].waitForExistence(timeout: ready))
+        XCTAssertFalse(app.buttons["paywallTrial"].isEnabled)
+        XCTAssertFalse(app.buttons["paywallPurchase"].isEnabled)
+        for identifier in ["paywallClose", "paywallRestore", "paywallPriceRetry"] { XCTAssertTrue(app.buttons[identifier].isEnabled, identifier) }
+        captureReport(app, name: "paywall-price-loading")
+    }
+    /// The approval captures: the start entry and the calendar entry before the trial, and the state after the trial,
+    /// in the light and dark appearances and at the largest accessibility text size; the teardown restores the light appearance.
+    func testPaywallApprovalCaptures() {
+        addTeardownBlock { XCUIDevice.shared.appearance = .light }
+        let largest = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        for (variant, extra) in [("light", [String]()), ("dark", []), ("largest", largest)] {
+            XCUIDevice.shared.appearance = variant == "dark" ? .dark : .light
+            let before = app("history", extra: ["--paid-access", "locked"] + extra, environment: noonZone())
+            openStartPaywall(before)
+            capturePaywall(before, name: "paywall-start-entry-\(variant)", scrolls: variant == "largest")
+            before.buttons["paywallClose"].tap()
+            XCTAssertTrue(before.buttons["paywallClose"].waitForNonExistence(timeout: ready))
+            // At the largest text size the "오늘의 집중" card is below the start action.
+            for _ in 0..<6 where !before.buttons["todaySummary"].isHittable { before.swipeUp() }
+            openToday(before)
+            let purchase = before.buttons["calendarPurchase"]
+            XCTAssertTrue(purchase.waitForExistence(timeout: ready))
+            for _ in 0..<4 where !purchase.isHittable { before.swipeUp() }
+            purchase.tap()
+            XCTAssertTrue(before.buttons["paywallClose"].waitForExistence(timeout: ready))
+            capturePaywall(before, name: "paywall-calendar-entry-\(variant)", scrolls: variant == "largest")
+            before.terminate()
+            let after = app(extra: ["--paid-access", "trial-ended"] + extra)
+            openStartPaywall(after)
+            capturePaywall(after, name: "paywall-after-trial-\(variant)", scrolls: variant == "largest")
+            after.terminate()
+        }
+    }
+    /// The top of the sheet, and at the largest text size also its bottom, where the buttons are.
+    private func capturePaywall(_ app: XCUIApplication, name: String, scrolls: Bool) {
+        captureReport(app, name: name)
+        guard scrolls else { return }
+        let restore = app.buttons["paywallRestore"]
+        for _ in 0..<8 where !restore.isHittable { app.swipeUp() }
+        XCTAssertTrue(restore.isHittable, name)
+        captureReport(app, name: "\(name)-bottom")
     }
     func testLockedRefusalShowsInTheGuide() {
         let app = app(extra: ["--focus-filter-refusal", "locked"])
