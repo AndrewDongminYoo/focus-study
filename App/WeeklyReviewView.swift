@@ -227,25 +227,28 @@ struct WeeklyReviewView: View {
     }
 }
 
-/// One bar per day of the period. A day after today is a dimmed bar without a value; a day without a completed session reads "온:공 기록 없음".
+/// One tile per day of the period, all of the same height, so the row shows which days have a record and never compares the days with each other:
+/// a day with a completed session is filled, a day without one reads "온:공 기록 없음" in a light tile, and a day after today is a dashed outline.
 struct ReviewBars: View {
     let summary: ReviewSummary
     let filled: Color
     let empty: Color
     let label: Color
-    @ScaledMetric(relativeTo: .footnote) private var height: CGFloat = 64
+    @ScaledMetric(relativeTo: .footnote) private var height: CGFloat = 24
     private var calendar: Calendar { .current }
     var body: some View {
-        let longest = max(summary.days.compactMap(\.focusDuration).max() ?? 0, 1)
         HStack(alignment: .bottom, spacing: FocusTheme.Layout.inlineSpacing) {
             ForEach(Array(summary.days.enumerated()), id: \.offset) { index, day in
                 VStack(spacing: FocusTheme.Layout.detailSpacing) {
-                    ZStack(alignment: .bottom) {
-                        Color.clear.frame(height: height)
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(day.focusDuration == nil ? empty.opacity(0.12) : (day.focusDuration ?? 0) > 0 ? filled : empty.opacity(0.3))
-                            .frame(height: day.focusDuration.map { $0 > 0 ? max(6, height * $0 / longest) : 4 } ?? height * 0.35)
+                    let tile = RoundedRectangle(cornerRadius: 7)
+                    Group {
+                        if day.focusDuration == nil {
+                            tile.strokeBorder(empty.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                        } else {
+                            tile.fill(day.completedCount > 0 ? filled : empty.opacity(0.15))
+                        }
                     }
+                    .frame(height: height)
                     Text(String(WeeklyReview.weekdayName(day.day, calendar: calendar).prefix(1))).font(.caption2).foregroundStyle(day.focusDuration == nil ? label.opacity(0.5) : label)
                 }
                 .frame(maxWidth: .infinity)

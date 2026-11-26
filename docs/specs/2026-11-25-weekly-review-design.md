@@ -57,7 +57,8 @@ Proposed on 2026-11-25:
 2. **Content, from top to bottom.**
    1. **Last note**: the note that the student wrote in the previous review period, under the label "지난주의 내가 남긴 말".
       It shows only when such a note exists and is not empty.
-   2. **What I did**: one sentence with the number of days and of completed sessions, the total focus time under it, and a row of day bars, one per day of the period, so one to seven bars.
+   2. **What I did**: one sentence with the number of days and of completed sessions, the total focus time under it, and a row of day tiles, one per day of the period, so one to seven tiles.
+      Every tile has the same height, so the row never compares the days: a day with a completed session is filled with the accent, a day without one is a light tile, and a day after today is a dashed outline.
    3. **A moment to use again**: one sentence chosen by the [moment rule](#moment-rule).
       When the rule finds nothing, this part is absent.
    4. **To me next week**: the title "다음 주의 나에게", the prompt "다음엔 어디서 다시 시작할까요?" and a text field.
@@ -102,7 +103,7 @@ Proposed on 2026-11-25:
    - When the student denies the permission, the app does not ask again. The review stays available from the calendar, and the notification row says that notifications are off in Settings (writing session's call).
 7. **Share and save.**
    - Two icon buttons at the top of the review: save the image to Photos, and share the image through the system share sheet.
-   - The image holds only the dates of the period and "what I did": the sentence, the day bars and the colon mark.
+   - The image holds only the dates of the period and "what I did": the sentence, the day tiles and the colon mark.
    - The image never holds the note, the last note or the moment (writing session's call for the moment: start times are personal).
    - The image goes out only by the student's own action (decision 7).
 8. **Note storage.**
@@ -126,7 +127,7 @@ Its focus time is `focusDuration`.
   - otherwise the current period keeps its last day, and the next period runs from the day after it to the first following occurrence of the new weekday, which is one to seven days.
   - So no day falls between two periods, and no day belongs to two periods.
 - When the review opens before the last day of its period, it shows the period up to today.
-  Days after today show as dimmed bars without a value.
+  Days after today show as dashed tiles without a value.
 
 ### What I did
 
@@ -160,7 +161,7 @@ The sentence states only days and actual start times. It never names a part of t
 - The last note is a quiet card above "what I did", in `FocusSecondaryInk`.
 - Save and share are two icon buttons next to the close control, not full-width buttons.
 - Form B shows one part per page, with a page indicator and a "다음" button; the "what I did" sentence is larger than in form A.
-- The share image is a navy card with the dates, the sentence, the day bars and the colon mark.
+- The share image is a navy card with the dates, the sentence, the day tiles and the colon mark.
 - Captures for approval: light, dark and the largest accessibility text size, for form A, form B and the share image.
 
 ## Left to the builder
