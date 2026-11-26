@@ -13,6 +13,8 @@ import SwiftData
                 TodayWidgetPreviewView(mode: ProcessInfo.processInfo.arguments[index + 1])
             } else if ProcessInfo.processInfo.arguments.contains("--review-share-preview") {
                 WeeklyReviewSharePreviewView()
+            } else if let index = ProcessInfo.processInfo.arguments.firstIndex(of: "--calendar-share-preview"), index + 1 < ProcessInfo.processInfo.arguments.count {
+                CalendarSharePreviewView(mode: ProcessInfo.processInfo.arguments[index + 1])
             } else { FocusBootstrap() }
             #else
             FocusBootstrap()

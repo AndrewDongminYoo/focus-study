@@ -12,6 +12,8 @@ struct SungongCalendarView: View {
     /// The paywall of the locked card shows over this sheet, so the month, the selected day and the scroll position stay as they are
     /// in every outcome (docs/specs/2026-11-26-paywall-design.md, contract item 7). It holds no start request.
     @State private var showsPaywall = false
+    /// The share image of the shown month (docs/specs/2026-11-26-share-image-design.md); `nil` while there is nothing to share.
+    @State private var shareImage: UIImage?
     @ScaledMetric(relativeTo: .title2) private var arrowSize: CGFloat = 23
     @ScaledMetric(relativeTo: .subheadline) private var cellHeight: CGFloat = 48
     private var calendar: Calendar { .current }
@@ -49,28 +51,65 @@ struct SungongCalendarView: View {
         // Access that turns `locked` while the sheet is open fixes the selected day on today.
         .onChange(of: locked) { _, locked in if locked { model.showCalendarToday() } }
         .sheet(isPresented: $showsPaywall) { if let paidAccess { PaidAccessSheet(store: paidAccess) } }
+        .onChange(of: shareKey, initial: true) { _, key in renderShareImage(key) }
     }
 
     // MARK: Header
 
     private var header: some View {
         VStack(spacing: FocusTheme.Layout.detailSpacing) {
-            // A hidden copy of "닫기" on the left keeps the title centered at every text size, and the title shrinks on one line instead of running into "닫기".
-            HStack(spacing: FocusTheme.Layout.detailSpacing) {
-                closeLabel.hidden().accessibilityHidden(true)
-                Text("순공시간").font(.title2.bold()).foregroundStyle(FocusTheme.Screen.ink).accessibilityAddTraits(.isHeader)
-                    .lineLimit(1).minimumScaleFactor(0.5).frame(maxWidth: .infinity)
-                Button { dismiss() } label: { closeLabel }
-                    .buttonStyle(.plain).accessibilityIdentifier("historyDone")
+            // A hidden copy of the controls on the right keeps the title centered. When the title does not fit between them at its full
+            // size, as at the largest text sizes on a narrow phone, the controls take their own row and the title goes under them.
+            // The share button is absent with access `locked`, where the month grid is absent too.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: FocusTheme.Layout.detailSpacing) {
+                    controls.hidden().accessibilityHidden(true)
+                    title.fixedSize().frame(maxWidth: .infinity)
+                    controls
+                }
+                VStack(spacing: FocusTheme.Layout.detailSpacing) {
+                    HStack(spacing: 0) { Spacer(minLength: 0); controls }
+                    title.multilineTextAlignment(.center)
+                }
             }
             Text("공부한 시간만, 하루하루 모아봐요.").font(.subheadline).foregroundStyle(FocusTheme.Screen.secondaryInk).multilineTextAlignment(.center)
         }
         .padding(.top, FocusTheme.Layout.relatedSpacing).padding(.bottom, FocusTheme.Layout.inlineSpacing)
     }
 
+    private var title: some View {
+        Text("순공시간").font(.title2.bold()).foregroundStyle(FocusTheme.Screen.ink).accessibilityAddTraits(.isHeader)
+    }
+    private var controls: some View {
+        HStack(spacing: FocusTheme.Layout.detailSpacing) {
+            if !locked { shareButton }
+            Button { dismiss() } label: { closeLabel }
+                .buttonStyle(.plain).accessibilityIdentifier("historyDone")
+        }
+    }
+
     private var closeLabel: some View {
         Text("닫기").font(.subheadline.weight(.medium)).foregroundStyle(FocusTheme.Screen.accentText).fixedSize()
             .frame(minWidth: FocusTheme.Layout.minimumTapTarget, minHeight: FocusTheme.Layout.minimumTapTarget).contentShape(Rectangle())
+    }
+
+    /// The glyph stops growing at the first accessibility size, so the title keeps room between the controls on one row.
+    private var shareLabel: some View {
+        Image(systemName: "square.and.arrow.up").font(.body.weight(.medium)).foregroundStyle(FocusTheme.Screen.accentText)
+            .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+            .frame(minWidth: FocusTheme.Layout.minimumTapTarget, minHeight: FocusTheme.Layout.minimumTapTarget).contentShape(Rectangle())
+    }
+    /// One share button: the system share sheet with the image, whose own "이미지 저장" saves it to Photos.
+    /// It stays a disabled button while the shown month has no recorded day or the history read failed.
+    @ViewBuilder private var shareButton: some View {
+        if let shareImage, let month = model.sungong?.month {
+            let image = Image(uiImage: shareImage)
+            ShareLink(item: image, preview: SharePreview("\(monthNumber(month.start))월 순공 캘린더", image: image)) { shareLabel }
+                .buttonStyle(.plain).accessibilityLabel("공유하기").accessibilityIdentifier("calendarShare")
+        } else {
+            Button {} label: { shareLabel.opacity(0.4) }
+                .buttonStyle(.plain).disabled(true).accessibilityLabel("공유하기").accessibilityIdentifier("calendarShare")
+        }
     }
 
     private func errorCard(_ error: String) -> some View {
@@ -146,13 +185,13 @@ struct SungongCalendarView: View {
                 }
             }
             HStack(spacing: 0) {
-                ForEach(weekdaySymbols, id: \.self) { symbol in
+                ForEach(CalendarShare.weekdaySymbols(calendar), id: \.self) { symbol in
                     Text(symbol).font(.footnote.weight(.medium)).foregroundStyle(FocusTheme.Screen.secondaryInk).frame(maxWidth: .infinity)
                 }
             }
             .accessibilityHidden(true)
             VStack(spacing: FocusTheme.Layout.detailSpacing) {
-                ForEach(Array(weeks(state.month).enumerated()), id: \.offset) { _, week in
+                ForEach(Array(CalendarShare.weeks(state.month, calendar: calendar).enumerated()), id: \.offset) { _, week in
                     HStack(spacing: FocusTheme.Layout.detailSpacing) {
                         ForEach(Array(week.enumerated()), id: \.offset) { _, day in
                             if let day { dayCell(day, state: state, values: values) } else { Color.clear.frame(maxWidth: .infinity, minHeight: cellHeight).accessibilityHidden(true) }
@@ -305,21 +344,32 @@ struct SungongCalendarView: View {
         .padding(.top, FocusTheme.Layout.inlineSpacing)
     }
 
+    // MARK: Share image
+
+    /// What the share image depends on; the image is rendered again only when it changes, never inside `body`.
+    private struct ShareKey: Equatable {
+        var month: DateInterval
+        var today: Date
+        var days: [Date: SessionMonth.Day]
+        /// The calendar settings the image reads, so a change of the first weekday or the time zone renders it again.
+        var firstWeekday: Int
+        var timeZone: TimeZone
+    }
+    /// `nil` when there is nothing to share: access `locked`, a history read failure, no loaded month or no recorded day up to today.
+    /// The stamps, the summary and the button read the same days, also when a clock set back leaves a record on a day after today.
+    private var shareKey: ShareKey? {
+        guard !locked, model.errorMessage == nil, let state = model.sungong, let values = state.values else { return nil }
+        let days = values.days.filter { $0.key <= state.today }
+        return days.isEmpty ? nil : ShareKey(month: state.month, today: state.today, days: days, firstWeekday: calendar.firstWeekday, timeZone: calendar.timeZone)
+    }
+    private func renderShareImage(_ key: ShareKey?) {
+        guard let key else { shareImage = nil; return }
+        shareImage = CalendarShareCard.render(month: key.month, today: key.today, recordedDays: Set(key.days.keys),
+                                              focusDuration: key.days.values.reduce(0) { $0 + $1.focusDuration }, calendar: calendar)
+    }
+
     // MARK: Calendar arithmetic and text
 
-    /// The weeks of the month as rows of seven, with `nil` before the first day and after the last.
-    private func weeks(_ month: DateInterval) -> [[Date?]] {
-        let count = calendar.range(of: .day, in: .month, for: month.start)?.count ?? 30
-        let lead = (calendar.component(.weekday, from: month.start) - calendar.firstWeekday + 7) % 7
-        var cells: [Date?] = Array(repeating: nil, count: lead)
-        for offset in 0..<count { cells.append(calendar.date(byAdding: .day, value: offset, to: month.start).map { calendar.startOfDay(for: $0) }) }
-        while cells.count % 7 != 0 { cells.append(nil) }
-        return stride(from: 0, to: cells.count, by: 7).map { Array(cells[$0..<$0 + 7]) }
-    }
-    private var weekdaySymbols: [String] {
-        let symbols = ["일", "월", "화", "수", "목", "금", "토"], first = calendar.firstWeekday - 1
-        return Array(symbols[first...] + symbols[..<first])
-    }
     private func monthNumber(_ date: Date) -> Int { calendar.component(.month, from: date) }
     private func dayName(_ day: Date) -> String { "\(monthNumber(day))월 \(calendar.component(.day, from: day))일" }
     /// The stored clock time in 24-hour "HH:mm", such as "09:00".

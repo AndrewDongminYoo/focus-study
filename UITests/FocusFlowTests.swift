@@ -408,6 +408,9 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertEqual(app.staticTexts["calendarRecordedDays"].label, "1일")
         XCTAssertFalse(back.isEnabled, "the month of today is shown and today is selected")
         XCTAssertFalse(next.isEnabled, "the next control stops at the month of today")
+        let share = app.buttons["calendarShare"]
+        XCTAssertTrue(share.exists)
+        XCTAssertTrue(share.isEnabled, "a month with a recorded day has an image to share")
         captureReport(app, name: "calendar-today")
         app.buttons["calendarPrevious"].tap()
         let second = app.buttons["calendarDay-2"]
@@ -418,6 +421,7 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertEqual(summary.label, "0분")
         XCTAssertEqual(app.staticTexts["calendarMonthTotal"].label, "0분")
         XCTAssertTrue(back.isEnabled); XCTAssertTrue(next.isEnabled)
+        XCTAssertFalse(share.isEnabled, "the previous month has no recorded day")
         back.tap()
         expectation(for: NSPredicate(format: "isSelected == true"), evaluatedWith: todayCell); waitForExpectations(timeout: 5)
         XCTAssertEqual(summary.label, "1시간 15분")
@@ -439,6 +443,7 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertFalse(app.buttons["calendarPrevious"].exists)
         XCTAssertFalse(app.buttons["calendarDay-1"].exists)
         XCTAssertFalse(app.buttons["calendarReview"].exists, "the weekly review has no entry with access locked")
+        XCTAssertFalse(app.buttons["calendarShare"].exists, "the share image has no button with access locked")
         XCTAssertTrue(app.buttons["report"].exists)
         captureReport(app, name: "calendar-locked")
         app.buttons["calendarPurchase"].tap()
@@ -450,6 +455,7 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(trial.waitForNonExistence(timeout: ready))
         XCTAssertTrue(app.staticTexts["calendarMonthTotal"].waitForExistence(timeout: ready))
         XCTAssertTrue(app.buttons["historyDone"].exists)
+        XCTAssertTrue(app.buttons["calendarShare"].isEnabled, "the unlocked calendar shows the share button")
         XCTAssertFalse(app.staticTexts["calendarLocked"].exists)
         XCTAssertTrue(app.buttons["calendarDay-\(calendar.component(.day, from: Date()))"].isSelected, "the same month with today selected")
         XCTAssertEqual(app.staticTexts["historySummary"].label, "1시간 15분")
@@ -587,6 +593,47 @@ final class FocusFlowTests: XCTestCase {
             captureReport(app, name: size.hasSuffix("XXXL") ? "review-share-largest" : "review-share")
             app.terminate()
         }
+    }
+    /// The calendar header with the share button, beside the light captures of the two tests above: dark and the largest text size,
+    /// with access `granted` and `locked`. The title stays centered and the share button sits at the left of "닫기".
+    func testCalendarShareButtonCaptures() {
+        XCUIDevice.shared.appearance = .dark
+        addTeardownBlock { XCUIDevice.shared.appearance = .light }
+        let zone = noonZone(), korean = ["-AppleLanguages", "(ko)", "-AppleLocale", "ko_KR"]
+        for (access, name) in [([String](), "granted"), (["--paid-access", "locked"], "locked")] {
+            let dark = app("history", extra: access + korean, environment: zone)
+            openToday(dark)
+            XCTAssertEqual(dark.buttons["calendarShare"].exists, name == "granted")
+            captureReport(dark, name: "calendar-share-button-dark-\(name)")
+            dark.terminate()
+        }
+        XCUIDevice.shared.appearance = .light
+        for (access, name) in [([String](), "granted"), (["--paid-access", "locked"], "locked")] {
+            let largest = app("history", extra: access + korean + ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"], environment: zone)
+            // At this size "오늘의 집중" sits below the fold of the idle screen.
+            let summary = largest.buttons["todaySummary"]
+            XCTAssertTrue(summary.waitForExistence(timeout: ready))
+            for _ in 0..<4 where !summary.isHittable { largest.swipeUp() }
+            openToday(largest)
+            XCTAssertTrue(largest.buttons["historyDone"].isHittable)
+            XCTAssertEqual(largest.buttons["calendarShare"].exists, name == "granted")
+            captureReport(largest, name: "calendar-share-button-largest-\(name)")
+            largest.terminate()
+        }
+    }
+    /// The share image of the 순공 calendar (docs/specs/2026-11-26-share-image-design.md) with synthetic months and a fixed today.
+    /// The image is drawn in the light appearance at the default text size, so it is the same at every text size and appearance.
+    func testCalendarShareImagePreview() {
+        for mode in ["current", "four", "six", "one"] {
+            let app = XCUIApplication(); app.launchArguments = ["--calendar-share-preview", mode]; app.launch()
+            XCTAssertTrue(app.images["calendarShareImage"].waitForExistence(timeout: ready))
+            captureReport(app, name: "calendar-share-\(mode)")
+            app.terminate()
+        }
+        let largest = XCUIApplication(); largest.launchArguments = ["--calendar-share-preview", "current", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]; largest.launch()
+        XCTAssertTrue(largest.images["calendarShareImage"].waitForExistence(timeout: ready))
+        captureReport(largest, name: "calendar-share-largest")
+        largest.terminate()
     }
     /// "수요일" for a day `offset` days from today, in the fixed zone of `noonZone()`.
     private func weekdayName(_ offset: Int) -> String {
