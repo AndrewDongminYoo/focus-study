@@ -1,7 +1,7 @@
 # Weekly review design
 
 Date: 2026-11-25.
-Status: approved on 2026-11-25, not yet implemented.
+Status: approved on 2026-11-25, implemented under issue #251.
 Source: [issue #250](https://github.com/AndrewDongminYoo/focus-study/issues/250), under the paid build parent #244.
 Authority: the [paid unlock decision](2026-11-24-paid-unlock-decision.md) (decisions 2, 7 and 8), the [paid access design](2026-11-24-paid-access-design.md) and the [순공 calendar design](2026-11-25-sungong-calendar-design.md) for the data rules.
 Look: the tokens of the [screen redesign](2026-11-23-screen-redesign-design.md); there is no Figma frame yet.
@@ -57,7 +57,8 @@ Proposed on 2026-11-25:
 2. **Content, from top to bottom.**
    1. **Last note**: the note that the student wrote in the previous review period, under the label "지난주의 내가 남긴 말".
       It shows only when such a note exists and is not empty.
-   2. **What I did**: one sentence with the number of days and of completed sessions, the total focus time under it, and a row of day bars, one per day of the period, so one to seven bars.
+   2. **What I did**: one sentence with the number of days and of completed sessions, the total focus time under it, and a row of day tiles, one per day of the period, so one to seven tiles.
+      Every tile has the same height, so the row never compares the days: a day with a completed session is filled with the accent, a day without one is a light tile, and a day after today is a dashed outline.
    3. **A moment to use again**: one sentence chosen by the [moment rule](#moment-rule).
       When the rule finds nothing, this part is absent.
    4. **To me next week**: the title "다음 주의 나에게", the prompt "다음엔 어디서 다시 시작할까요?" and a text field.
@@ -102,7 +103,7 @@ Proposed on 2026-11-25:
    - When the student denies the permission, the app does not ask again. The review stays available from the calendar, and the notification row says that notifications are off in Settings (writing session's call).
 7. **Share and save.**
    - Two icon buttons at the top of the review: save the image to Photos, and share the image through the system share sheet.
-   - The image holds only the dates of the period and "what I did": the sentence, the day bars and the colon mark.
+   - The image holds only the dates of the period and "what I did": the sentence, the day tiles and the colon mark.
    - The image never holds the note, the last note or the moment (writing session's call for the moment: start times are personal).
    - The image goes out only by the student's own action (decision 7).
 8. **Note storage.**
@@ -126,7 +127,7 @@ Its focus time is `focusDuration`.
   - otherwise the current period keeps its last day, and the next period runs from the day after it to the first following occurrence of the new weekday, which is one to seven days.
   - So no day falls between two periods, and no day belongs to two periods.
 - When the review opens before the last day of its period, it shows the period up to today.
-  Days after today show as dimmed bars without a value.
+  Days after today show as dashed tiles without a value.
 
 ### What I did
 
@@ -160,7 +161,7 @@ The sentence states only days and actual start times. It never names a part of t
 - The last note is a quiet card above "what I did", in `FocusSecondaryInk`.
 - Save and share are two icon buttons next to the close control, not full-width buttons.
 - Form B shows one part per page, with a page indicator and a "다음" button; the "what I did" sentence is larger than in form A.
-- The share image is a navy card with the dates, the sentence, the day bars and the colon mark.
+- The share image is a navy card with the dates, the sentence, the day tiles and the colon mark.
 - Captures for approval: light, dark and the largest accessibility text size, for form A, form B and the share image.
 
 ## Left to the builder
@@ -175,3 +176,34 @@ The sentence states only days and actual start times. It never names a part of t
 - The app has no notification code today (no `UNUserNotificationCenter` in `App/`, `Shared/`, `Integration/` or `Monitor/`); the review adds the first one, in the app target only.
   The AGENTS.md project scope gains one sentence for the weekly review and its notification in the same change.
 - The UI test fixtures must keep the permission explanation sheet from showing, so the existing flows of `UITests/FocusFlowTests.swift` do not change.
+
+## Builder decisions of issue #251
+
+- The period, wording, moment and notification-plan rules are in `Shared/WeeklyReview.swift`, with host tests. The form, day 1 and access-kind reads of paid access are in `Shared/PaidAccess.swift`, because the Monitor does not compile that file.
+- The schedule stores day 1, the notification time and switch, and a list of segments: each segment is the last day of a period and the weekday of the periods after it. A weekday change keeps the segments before the current period and adds one, so an ended period never moves.
+- Notes, the schedule, the first run and the explanation flag are in the app's standard user defaults. A note is keyed by the first day of its period.
+- Day 1 of an earlier user, and of every person while the gate is off, is the local day of the first review refresh after launch with a build that has the review.
+- One completed day reads "하루 동안", two to six days read the native day word followed by "에 걸쳐", such as "이틀에 걸쳐", and seven days read "일주일 내내".
+- The moment card is labelled "다시 꺼내 볼 순간". The notification body is "이번 주 회고가 준비됐어요". The explanation asks "주간 회고 알림을 받아 볼까요?" with "알림 받기" and "다음에 할게요". The Photos usage text is "주간 회고 이미지를 사진 앱에 저장할 때만 사용해요."
+- The empty-week message is the sentence of the "what I did" rule, "집중이 기록되지 않았더라도 괜찮아요. 다음엔 온:공과 함께해요.", without a change.
+- The notification row has a switch, a weekday menu and a time picker. Turning the switch on asks for the permission only when it was never asked and the explanation has already shown; before the explanation, the switch only saves, and the explanation stays due.
+- A weekday change during the first period never ends it before day 3, so the trial's day 3 notification always opens the first review; the new weekday applies from the next period.
+  Day 3 keeps its notification at the review time. When the next fire of the new weekday comes after day 3, the app also schedules the repeating notification.
+  When it comes before the end of the first period, the app schedules the end of the first period and the ends of the next 51 periods as single notifications, so they come also when the app does not run; the first refresh after the first period replaces them with the repeating notification.
+- Form A leaves out the notification row while access is `unknown` and day 1 is not fixed yet, because without day 1 there is no weekday or time to show and nothing is scheduled. The row shows from the first review after access reads `granted`.
+- The new accessibility identifiers are `calendarReview` for the calendar's entry; `reviewDone`, `reviewSave`, `reviewShare`, `reviewSaveMessage`, `reviewPeriod` and `reviewError` for the sheet's controls and messages; `reviewLastNote`, `reviewSummary`, `reviewTotal`, `reviewDay-<n>` (0 for the first day of the period, up to 6), `reviewMoment` and `reviewNote` for the parts; `reviewPageIndicator` and `reviewNext` for the pages of form B; `reviewNotificationToggle`, `reviewWeekday`, `reviewTime` and `reviewNotificationsOff` for the notification row; `reviewExplanation`, `reviewExplanationAllow` and `reviewExplanationClose` for the explanation; and `reviewShareImage` for the DEBUG share image preview. Every identifier that `UITests/FocusFlowTests.swift` read before stays.
+- After the first period, a weekday change whose new weekday comes after the current period moves the repeating notification to the new weekday, so the kept last day of the current period gets no notification.
+- A notification tap opens the period whose last day holds the fire date. When a time zone change moved the local day of the fire date to the day after that last day, the tap still opens that period.
+  Known limit: when a weekday change made a one-day period, and the time zone changes by many hours or the notification time moves by many hours between the fire and the tap, the tap can open the period next to the announced one. The notification carries no period, so the fire date is the only input; the other review stays open to the calendar entry or to its own notification.
+- The calendar entry always opens the period that holds today, also on day 4 of a trial. The first period then opens from its day 3 notification.
+- The first run is recorded when the runtime makes the review model at launch, so onboarding on a later day does not move day 1.
+- A single notification, such as the trial's day 3 notification, fires at an absolute time in the time zone of its scheduling, so a move to another time zone cannot push it past the trial end. The repeating notification follows the local time.
+- Every refresh of an open review, such as a return to the foreground, reads its history again.
+- A stored day is a Gregorian year, month and day in the local time zone, also when the device uses the Buddhist or the Japanese calendar.
+- The idle screen refreshes the review, so the onboarding route does not remove a notification after a refund; this is inside the accepted edge of contract item 6.
+- A notification tap with access `locked` opens nothing and shows no paywall. A tap during a session waits for the idle screen, and a tap while a sheet other than the calendar is open waits for that sheet to close.
+  A session that starts while the review or the explanation shows, such as from a Focus filter, closes it; the review and the explanation show again after the session.
+- An open review reads the history again at a foreground refresh and at a day or time zone change, so after its period ends it no longer reads "지금까지" and follows the note's edit window.
+- In the dark appearance the navy note card has an amber border, because the dark canvas is almost the same navy.
+- The share image is rendered at a fixed width and the default text size, so it is the same at every text size of the device.
+- A word joiner inside each word keeps Korean words such as "5번" on one line; the accessibility label keeps the plain text.

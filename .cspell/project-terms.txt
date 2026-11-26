@@ -43,6 +43,7 @@ iphonesimulator
 irfft
 ITMS
 KakaoTalk
+Kiritimati
 keylineTint
 kr.donminzzi.focusStudy.sdktests
 kr.donminzzi.focusStudy.shieldaction

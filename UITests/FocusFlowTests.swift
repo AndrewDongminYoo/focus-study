@@ -435,11 +435,149 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertFalse(app.staticTexts["calendarMonthTotal"].exists)
         XCTAssertFalse(app.buttons["calendarPrevious"].exists)
         XCTAssertFalse(app.buttons["calendarDay-1"].exists)
+        XCTAssertFalse(app.buttons["calendarReview"].exists, "the weekly review has no entry with access locked")
         XCTAssertTrue(app.buttons["report"].exists)
         captureReport(app, name: "calendar-locked")
         app.buttons["calendarPurchase"].tap()
         XCTAssertTrue(app.buttons["paywallTrial"].waitForExistence(timeout: ready))
         XCTAssertFalse(app.buttons["historyDone"].exists)
+    }
+    // MARK: Weekly review (docs/specs/2026-11-25-weekly-review-design.md)
+
+    /// The review opens from the calendar's entry; the idle screen replaces the calendar sheet with it.
+    private func openReview(_ app: XCUIApplication) {
+        openToday(app)
+        let entry = app.buttons["calendarReview"]
+        XCTAssertTrue(entry.waitForExistence(timeout: ready))
+        for _ in 0..<4 where !entry.isHittable { app.swipeUp() }
+        entry.tap()
+        XCTAssertTrue(app.buttons["reviewDone"].waitForExistence(timeout: ready))
+    }
+    private func reviewApp(trial: Bool = false, extra: [String] = []) -> XCUIApplication {
+        app("review", extra: (trial ? ["--paid-access", "trial"] : []) + ["-AppleLanguages", "(ko)", "-AppleLocale", "ko_KR"] + extra, environment: noonZone())
+    }
+    /// Form A: the last note, what I did, the moment, the note and the notification row in one sheet.
+    func testReviewSheetShowsEveryPartWithTheLastNote() {
+        let app = reviewApp()
+        openReview(app)
+        let summary = app.staticTexts["reviewSummary"]
+        XCTAssertTrue(summary.waitForExistence(timeout: ready))
+        XCTAssertEqual(summary.label, "이번 주 지금까지, 나흘에 걸쳐 5번 집중했어요.")
+        XCTAssertEqual(app.staticTexts["reviewLastNote"].label, "월요일 아침, 영어 단어부터 다시 시작하기")
+        XCTAssertEqual(app.staticTexts["reviewTotal"].label, "집중한 시간 2시간 30분")
+        // The period runs from 4 days before today to 2 days after it: the second day has no record, the last two have not come yet.
+        XCTAssertTrue(app.otherElements["reviewDay-1"].label.hasSuffix(", 온:공 기록 없음"), app.otherElements["reviewDay-1"].label)
+        XCTAssertFalse(app.otherElements["reviewDay-5"].label.contains(","), app.otherElements["reviewDay-5"].label)
+        XCTAssertTrue(app.staticTexts["reviewMoment"].label.hasSuffix("오후 7시 10분, \(weekdayName(-2)) 오후 7시 40분에 그날 첫 집중을 시작했어요."), app.staticTexts["reviewMoment"].label)
+        captureReport(app, name: "review-sheet-top")
+        // The note and the notification row at the end of the sheet.
+        let time = app.descendants(matching: .any).matching(identifier: "reviewTime").firstMatch
+        XCTAssertTrue(time.waitForExistence(timeout: 5))
+        for _ in 0..<4 where !time.isHittable { app.swipeUp() }
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "reviewNote").firstMatch.isHittable)
+        XCTAssertTrue(app.switches["reviewNotificationToggle"].exists)
+        captureReport(app, name: "review-sheet-note")
+        app.buttons["reviewDone"].tap()
+        XCTAssertTrue(app.buttons["todaySummary"].waitForExistence(timeout: ready))
+    }
+    /// Form B: pages while the trial grants access; no last note, the moment on its own page, and the note with the notification row last.
+    func testReviewPagesDuringTheTrial() {
+        let app = reviewApp(trial: true)
+        openReview(app)
+        let summary = app.staticTexts["reviewSummary"]
+        XCTAssertTrue(summary.waitForExistence(timeout: ready))
+        XCTAssertEqual(summary.label, "이번 주 지금까지, 사흘에 걸쳐 3번 집중했어요.")
+        XCTAssertFalse(app.staticTexts["reviewLastNote"].exists)
+        captureReport(app, name: "review-pages-1")
+        app.buttons["reviewNext"].tap()
+        let moment = app.staticTexts["reviewMoment"]
+        XCTAssertTrue(moment.waitForExistence(timeout: 5))
+        XCTAssertEqual(moment.label, "\(weekdayName(-1)) 오전 8시, \(weekdayName(0)) 오전 9시에 그날 첫 집중을 시작했어요.")
+        captureReport(app, name: "review-pages-2")
+        app.buttons["reviewNext"].tap()
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "reviewNote").firstMatch.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["reviewNext"].exists, "the last page has no 다음")
+        captureReport(app, name: "review-pages-3")
+    }
+    func testReviewAtLargestTextKeepsTheNoteReachable() {
+        for trial in [false, true] {
+            let app = reviewApp(trial: trial, extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+            // The "오늘의 집중" card is below the fold at this size.
+            let today = app.buttons["todaySummary"]
+            XCTAssertTrue(today.waitForExistence(timeout: ready))
+            for _ in 0..<8 where !today.isHittable { app.swipeUp() }
+            openReview(app)
+            XCTAssertTrue(app.staticTexts["reviewSummary"].waitForExistence(timeout: ready))
+            captureReport(app, name: trial ? "review-pages-largest" : "review-sheet-largest")
+            if trial { for _ in 0..<2 { app.buttons["reviewNext"].tap() } }
+            let note = app.descendants(matching: .any).matching(identifier: "reviewNote").firstMatch
+            XCTAssertTrue(note.waitForExistence(timeout: 5))
+            for _ in 0..<8 where !note.isHittable { app.swipeUp() }
+            XCTAssertTrue(note.isHittable)
+            XCTAssertTrue(app.buttons["reviewDone"].isHittable)
+            captureReport(app, name: trial ? "review-pages-largest-note" : "review-sheet-largest-note")
+            app.terminate()
+        }
+    }
+    /// The explanation before the permission prompt shows once on the idle screen; the fixtures of every other test never show it.
+    func testReviewExplanationShowsOnceAndCloses() {
+        let app = app(extra: ["--review-explanation"])
+        let explanation = app.staticTexts["reviewExplanation"]
+        XCTAssertTrue(explanation.waitForExistence(timeout: ready))
+        captureReport(app, name: "review-explanation")
+        app.buttons["reviewExplanationClose"].tap()
+        XCTAssertFalse(explanation.waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: ready))
+        app.terminate()
+        let largest = self.app(extra: ["--review-explanation", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        XCTAssertTrue(largest.staticTexts["reviewExplanation"].waitForExistence(timeout: ready))
+        captureReport(largest, name: "review-explanation-largest")
+        let close = largest.buttons["reviewExplanationClose"]
+        for _ in 0..<8 where !close.isHittable { largest.swipeUp() }
+        close.tap()
+        XCTAssertFalse(largest.staticTexts["reviewExplanation"].waitForExistence(timeout: 3))
+    }
+    /// The approval captures of form A, form B and the share image in the dark appearance; the teardown restores the light appearance.
+    func testReviewCapturesInTheDarkAppearance() {
+        XCUIDevice.shared.appearance = .dark
+        addTeardownBlock { XCUIDevice.shared.appearance = .light }
+        for trial in [false, true] {
+            let app = reviewApp(trial: trial)
+            openReview(app)
+            XCTAssertTrue(app.staticTexts["reviewSummary"].waitForExistence(timeout: ready))
+            captureReport(app, name: trial ? "review-pages-dark-1" : "review-sheet-dark-top")
+            if trial {
+                for page in 2...3 {
+                    app.buttons["reviewNext"].tap()
+                    XCTAssertTrue((page == 2 ? app.staticTexts["reviewMoment"] : app.descendants(matching: .any).matching(identifier: "reviewNote").firstMatch).waitForExistence(timeout: 5))
+                    captureReport(app, name: "review-pages-dark-\(page)")
+                }
+            } else {
+                let time = app.descendants(matching: .any).matching(identifier: "reviewTime").firstMatch
+                XCTAssertTrue(time.waitForExistence(timeout: 5))
+                for _ in 0..<4 where !time.isHittable { app.swipeUp() }
+                captureReport(app, name: "review-sheet-dark-note")
+            }
+            app.terminate()
+        }
+        let share = XCUIApplication(); share.launchArguments = ["--review-share-preview"]; share.launch()
+        XCTAssertTrue(share.images["reviewShareImage"].waitForExistence(timeout: ready))
+        captureReport(share, name: "review-share-dark")
+        share.terminate()
+    }
+    func testReviewShareImagePreview() {
+        for size in ["UICTContentSizeCategoryL", "UICTContentSizeCategoryAccessibilityXXXL"] {
+            let app = XCUIApplication(); app.launchArguments = ["--review-share-preview", "-UIPreferredContentSizeCategoryName", size]; app.launch()
+            XCTAssertTrue(app.images["reviewShareImage"].waitForExistence(timeout: ready))
+            captureReport(app, name: size.hasSuffix("XXXL") ? "review-share-largest" : "review-share")
+            app.terminate()
+        }
+    }
+    /// "수요일" for a day `offset` days from today, in the fixed zone of `noonZone()`.
+    private func weekdayName(_ offset: Int) -> String {
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: noonZone()["TZ"]!)!
+        let day = calendar.date(byAdding: .day, value: offset, to: Date())!
+        return ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"][calendar.component(.weekday, from: day) - 1]
     }
     func testKoreanSystemTimePicker() {
         let app = app(extra: ["-AppleLanguages", "(ko)", "-AppleLocale", "ko_KR"])

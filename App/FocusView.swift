@@ -14,6 +14,8 @@ struct FocusView: View {
     @State private var sheet: FocusSheet?
     /// `nil` only in a preview without a runtime; the start gate then never asks for the sheet.
     @Environment(PaidAccessStore.self) private var paidAccess: PaidAccessStore?
+    /// `nil` only in a preview without a runtime.
+    @Environment(WeeklyReviewModel.self) private var review: WeeklyReviewModel?
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     var body: some View {
         GeometryReader { geometry in
@@ -34,7 +36,7 @@ struct FocusView: View {
         .background { (isRoom ? FocusTheme.Room.background : FocusTheme.Screen.canvas).ignoresSafeArea().animation(roomAnimation, value: isRoom) }
         // The dark appearance makes the controls, the error text and the status bar read light on navy; sheets presented from the room follow it.
         .preferredColorScheme(isRoom ? .dark : nil)
-        .sheet(item: $sheet, onDismiss: { model.dismissPaywall() }) { item in
+        .sheet(item: $sheet, onDismiss: { model.dismissPaywall(); presentReviewOrExplanation() }) { item in
             switch item {
             case .selection: selectionEditor
             case .settings: SettingsView(model: model)
@@ -42,11 +44,19 @@ struct FocusView: View {
             case .history: SungongCalendarView(model: model)
             case .endConfirmation: FocusEndConfirmation(model: model)
             case .paywall: if let paidAccess { PaidAccessSheet(store: paidAccess) }
+            case .review: if let review, let request = review.presented { WeeklyReviewView(model: model, review: review, day: request.day, requestID: request.id, form: reviewForm) }
+            case .reviewExplanation: if let review { ReviewExplanationView(review: review) }
             }
         }
         .onChange(of: model.paywallRequest) { _, request in if request != nil, paidAccess != nil { sheet = .paywall } }
+        // The calendar entry replaces the calendar sheet with the review; a notification tap waits until no session runs.
+        .onChange(of: review?.request) { _, request in if request != nil { presentReviewOrExplanation() } }
+        .onChange(of: review?.explanationDue) { _, _ in presentReviewOrExplanation() }
+        .onChange(of: paidAccess?.facts) { _, _ in refreshReview() }
         .sensoryFeedback(.success, trigger: model.completedSessionID) { _, new in new != nil }
-        .task { refreshIfIdle() }
+        // The explanation waits for the completion card; closing the card is a retry point.
+        .onChange(of: model.completedSessionID) { _, id in if id == nil { presentReviewOrExplanation() } }
+        .task { refreshIfIdle(); refreshReview() }
         // While the idle screen or the completion card shows, a range or window boundary changes the everyday row with no lock section of the app, and `tick()` does not read it.
         .task(id: model.isInSession ? nil : model.everydayStatus) {
             guard !model.isInSession else { return }
@@ -56,7 +66,7 @@ struct FocusView: View {
         .onChange(of: scenePhase) { _, value in
             // Only the background cancels a wait (spec: background or close); `.inactive` overlays such as Control Center do not.
             switch value {
-            case .active: refreshIfIdle()
+            case .active: refreshIfIdle(); refreshReview()
             case .inactive: model.sceneDidBecomeInactive()
             case .background: model.sceneDidLeaveForeground()
             default: break
@@ -66,10 +76,20 @@ struct FocusView: View {
         .onChange(of: model.access) { _, access in if access != .approved { cancelPendingStart() }; model.refresh() }
         .onChange(of: model.isInSession) { _, inSession in
             if !inSession, sheet == .endConfirmation { sheet = nil }
+            if !inSession { presentReviewOrExplanation() }
+            // A session that starts without the start button, such as from a Focus filter, closes the review and the explanation; both show again after it.
+            if inSession, sheet == .review { review?.suspendOpenReview(); sheet = nil }
+            if inSession, sheet == .reviewExplanation { review?.suspendExplanation(); sheet = nil }
         }
-        .onReceive(timer) { _ in if scenePhase == .active, !model.isStarting, model.pendingBreak == nil { model.tick(defersBreakStart: true) } }
-        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in refreshIfIdle() }
-        .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in refreshIfIdle() }
+        // A start that ends without a session is a retry point; after a successful start `isInSession` is already true and the guard waits.
+        .onChange(of: model.isStarting) { _, starting in if !starting { presentReviewOrExplanation() } }
+        .onReceive(timer) { _ in
+            if scenePhase == .active, !model.isStarting, model.pendingBreak == nil { model.tick(defersBreakStart: true) }
+            // A trial end changes access by time alone; an open review closes within a second when access reads `locked`.
+            if sheet == .review, paidAccess?.state == .locked { sheet = nil }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in refreshIfIdle(); refreshReview() }
+        .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in refreshIfIdle(); refreshReview() }
         .onReceive(NotificationCenter.default.publisher(for: .NSSystemClockDidChange)) { _ in cancelPendingStart(); model.refresh(clockChanged: true) }
     }
 
@@ -330,6 +350,36 @@ struct FocusView: View {
     }
     private var completedMinutes: Int { Int(model.completedLength ?? model.services.settings.lengthSeconds) / 60 }
     private func refreshIfIdle() { if !model.isStarting { model.refresh() } }
+    /// The review's form when it opens: pages while the trial grants access, one sheet otherwise.
+    private var reviewForm: ReviewForm {
+        guard let paidAccess else { return .sheet }
+        return PaidAccess.reviewForm(configuration: paidAccess.configuration, facts: paidAccess.facts, now: Date())
+    }
+    /// Fixes day 1, keeps the pending notification in line with paid access, and shows the explanation when it is due.
+    private func refreshReview() {
+        guard let review, let paidAccess else { return }
+        Task {
+            await review.refresh(state: paidAccess.state, configuration: paidAccess.configuration, facts: paidAccess.facts)
+            presentReviewOrExplanation()
+        }
+    }
+    /// The review and the explanation never show over a running session or a break. The review replaces the calendar sheet, from its entry,
+    /// and waits for any other sheet, such as an editor with a draft, to close; the explanation waits for the idle screen with no sheet.
+    private func presentReviewOrExplanation() {
+        guard let review, !model.isInSession, !model.isStarting else { return }
+        if review.request != nil {
+            // With access `locked` there is no entry to the review, also from a notification that fired before a trial end or a refund,
+            // and a review that is already open closes.
+            if paidAccess?.state == .locked {
+                if sheet == .review { sheet = nil } else { review.close() }
+                return
+            }
+            guard sheet == nil || sheet == .history, review.presentRequest() else { return }
+            sheet = .review
+        } else if review.explanationDue, sheet == nil, model.completedSessionID == nil, review.presentExplanation() {
+            sheet = .reviewExplanation
+        }
+    }
     private func cancelPendingStart() {
         if let request = model.startRequestID { model.cancelPendingStart(request) }
     }
@@ -350,7 +400,7 @@ struct FocusView: View {
         #endif
     }
 }
-private enum FocusSheet: String, Identifiable { case selection, settings, everydaySettings, history, endConfirmation, paywall; var id: String { rawValue } }
+private enum FocusSheet: String, Identifiable { case selection, settings, everydaySettings, history, endConfirmation, paywall, review, reviewExplanation; var id: String { rawValue } }
 
 /// The feedback of a pending break action, in the place of the action on the screen that shows it.
 struct BreakFeedback: View {

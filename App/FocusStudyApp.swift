@@ -2,6 +2,8 @@ import SwiftUI
 import SwiftData
 
 @main struct FocusStudyApp: App {
+    /// Sets the notification delegate at launch, so a tap on the review notification that launches the app opens the review.
+    @UIApplicationDelegateAdaptor(FocusAppDelegate.self) private var appDelegate
     var body: some Scene {
         WindowGroup {
             #if DEBUG
@@ -9,6 +11,8 @@ import SwiftData
                 FocusActivityPreviewView(mode: ProcessInfo.processInfo.arguments[index + 1])
             } else if let index = ProcessInfo.processInfo.arguments.firstIndex(of: "--widget-preview"), index + 1 < ProcessInfo.processInfo.arguments.count {
                 TodayWidgetPreviewView(mode: ProcessInfo.processInfo.arguments[index + 1])
+            } else if ProcessInfo.processInfo.arguments.contains("--review-share-preview") {
+                WeeklyReviewSharePreviewView()
             } else { FocusBootstrap() }
             #else
             FocusBootstrap()
@@ -33,6 +37,7 @@ import SwiftData
                     }
                 }.modelContainer(container)
                 .environment(runtime?.paidAccess)
+                .environment(runtime?.review)
             }
             else if let errorMessage {
                 ContentUnavailableView {
@@ -88,6 +93,8 @@ import SwiftData
             loaded?.services.settings.reloadShared(); loaded?.refresh(); runtime.holder.notifyActivity()
         }
         model = loaded
+        // A tap on the review notification, also one that launched the app, opens the review of the period it announces.
+        ReviewNotificationDelegate.shared.setHandler { [review = runtime.review] date in review.openFromNotification(at: date) }
         // The `Transaction.updates` listener and the first refresh; a gate that is off reads nothing.
         runtime.paidAccess.start()
         Task { await runtime.checkActivation() }

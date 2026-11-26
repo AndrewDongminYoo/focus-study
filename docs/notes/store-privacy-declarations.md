@@ -19,6 +19,7 @@ Apple counts data as collected only when it leaves the device, so the data that 
 - The session control state, the registration marker and the today snapshot in the App Group; none holds an app or website name, a Focus name or usage.
 - Session history in SwiftData on the App Group, with CloudKit sync turned off (`cloudKitDatabase: .none`).
 - Settings in user defaults.
+- The weekly review's notes, review periods and notification settings, in the app's own user defaults and never in the App Group; its share image leaves the device only through the person's own share or save action.
 - Screen Time usage, which only the Report extension reads and renders; it has no App Group access and writes nothing.
 - The shield shows the app name or the website domain that iOS passes to the Shield extension; the extension stores nothing.
 
@@ -35,6 +36,8 @@ Unsigned Release build of `project.yml` at 1.0.0 (2), all 7 executables (`FocusS
 - No Info.plist of the 7 declares a usage description; Family Controls authorization needs none.
 
 Repeat these checks before a release that adds a dependency, an extension, a usage description or a network call.
+
+The weekly review of issue #251 adds the first usage description, `NSPhotoLibraryAddUsageDescription` in the app's Info.plist, for the save of its share image to Photos with add-only access, and the first local notification; the release of issue #255 repeats the checks above with them.
 
 ## Age rating
 
