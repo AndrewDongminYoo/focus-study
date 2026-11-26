@@ -181,3 +181,10 @@ The acceptance items stay separate, as the decision requires; the [paid access a
 1. Rule, store logic and gate in host, SDK and UI tests: see the note for the run.
 2. A pass with the StoreKit test configuration: `[TOOL_FAILED]` on 2026-11-24, see the note.
 3. A real purchase and a real restore: unverified, because they need the App Store Connect products of #254.
+
+## Amendment of 2026-11-26
+
+The [paywall design](2026-11-26-paywall-design.md) (issue #246) changes two rules of this document; the sections above keep their original text as the record of what was approved on 2026-11-24.
+
+- [App gate](#app-gate): with access `locked`, `requestStart()` still reserves no start in the engine, but the screen model keeps the start request for the paywall that the start action opens.
+- [Temporary paywall sheet](#temporary-paywall-sheet): "No session starts by itself after a purchase" no longer holds. A trial or a purchase confirmed inside a paywall opened by the start action continues that start once; a restore, a pending purchase approved later, a closed or cancelled sheet and any access from outside the sheet start nothing. The paywall design owns the full rule.
