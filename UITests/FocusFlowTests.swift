@@ -1221,8 +1221,8 @@ final class FocusFlowTests: XCTestCase {
         let purchase = app.buttons["paywallPurchase"]
         for _ in 0..<4 where !purchase.isHittable { app.swipeUp() }
         purchase.tap()
-        XCTAssertTrue(app.staticTexts["paywallMessage"].waitForExistence(timeout: ready))
-        // The fixture's approval arrives 3 seconds after the purchase, through the update listener.
+        // The fixture's approval arrives 3 seconds after the purchase, through the update listener. The pending message is transient,
+        // so this test does not wait for it; the SDK test checks the pending result and the dropped start.
         XCTAssertTrue(app.buttons["paywallClose"].waitForNonExistence(timeout: ready))
         XCTAssertTrue(app.buttons["start"].waitForExistence(timeout: ready))
         XCTAssertFalse(app.buttons["end"].waitForExistence(timeout: 3), "an approval while the sheet is open opens access only")
