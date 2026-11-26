@@ -1,7 +1,7 @@
 # 순공 calendar share image design
 
 Date: 2026-11-26.
-Status: approved on 2026-11-26.
+Status: approved on 2026-11-26, implemented under issue #253.
 Source: [issue #252](https://github.com/AndrewDongminYoo/focus-study/issues/252), under the paid build parent #244.
 Authority: the [paid unlock decision](2026-11-24-paid-unlock-decision.md) (decisions 2 and 7) and the [순공 calendar design](2026-11-25-sungong-calendar-design.md).
 Look: the approved HTML mockup "도장 달력 시안 v4", option B (horizontal lines only), and for the stamp only, Figma frame node `62:2`.
@@ -149,3 +149,17 @@ The values are in a 44 × 44 unit box that is drawn at 30 pt.
 - The DEBUG preview of the image for captures, like the weekly review's share image preview.
 - The Photos usage text in the app's Info.plist today names only the weekly review image ("주간 회고 이미지를 사진 앱에 저장할 때만 사용해요."). The share sheet's "이미지 저장" also asks for the add-only permission with this text, so it must also cover this image; record the new text for the [store privacy declarations](../notes/store-privacy-declarations.md) under #255.
 - Captures for approval: the image for a current month, a past month, a month of four rows and a month of six rows, and the calendar sheet with the button in light, dark and the largest accessibility text size, with access `granted` and `locked`.
+
+## Builder decisions of issue #253
+
+- The weeks of a month, the summary words and the stamp variation are in `App/CalendarShareRules.swift`, with host tests; the calendar sheet and the image read the same weeks.
+- The stamp variation uses SplitMix64 seeded with `year * 10000 + month * 100 + day`. A host test pins the first value of the generator, so a change that would change every shared image fails.
+- The image is `CalendarShareCard` in `App/CalendarShareCard.swift`. The stamp is drawn with `Canvas` in the 44-unit box; the fractal-noise roughness of the Figma edge has no SwiftUI filter, so the three gaps and the 23 grain dots carry the texture.
+- The colon mark reads the `AccentColor` asset by name, because `Color.accentColor` resolves to the system blue inside `ImageRenderer`.
+- The share button's glyph stops growing at the first accessibility text size. The hidden copy on the left mirrors the share button and "닫기", or "닫기" alone with access `locked`.
+  When "순공시간" does not fit between the controls at its full size, as at the largest text sizes, the controls take their own row at the right and the title goes centered under them.
+- The summary and the button read the same values as the month card (contract item 6), and the stamps stop at today (contract item 5). A clock set back can leave a completed session on a day after today; that day shows its dimmed date with no stamp, and the summary still counts it, as the month card does.
+- The image renders again when the shown month, today or the recorded days change, never inside the view body. While there is nothing to share, the button stays a disabled button with the same identifier.
+- The share preview title is "N월 순공 캘린더". The button's accessibility label is "공유하기" and its identifier is `calendarShare`.
+- The Photos usage text is "주간 회고와 순공 캘린더 이미지를 사진 앱에 저장할 때만 사용해요."
+- `--calendar-share-preview <mode>` shows the image in DEBUG with a fixed today of 2026-11-24, the Asia/Seoul time zone and Sunday first: `current` (November 2026, 20 days, 35 hours), `four` (February 2026), `six` (August 2026) and `one` (one day of 40 minutes).

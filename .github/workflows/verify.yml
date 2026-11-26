@@ -51,8 +51,9 @@ jobs:
             timeout: 20
           - suite: FocusUITests
             shard: ui
-            # About 22 min of tests plus the build, so 40 min.
-            timeout: 40
+            # About 31 min of tests plus the build: on 2026-11-26 (run 45818436110) the 84 tests took 1882 s and the job 39.5 min,
+            # and three more calendar share tests then reached the 40 min limit (run 45828873747), so 50 min.
+            timeout: 50
           - suite: FocusUITests everyday
             shard: everyday
             # About 13 min of tests plus the build, so 30 min.

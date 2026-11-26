@@ -29,7 +29,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>주간 회고 이미지를 사진 앱에 저장할 때만 사용해요.</string>
+	<string>주간 회고와 순공 캘린더 이미지를 사진 앱에 저장할 때만 사용해요.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UILaunchScreen</key>
