@@ -9,6 +9,15 @@ struct PendingBreak: Equatable { let id: UUID; let action: BreakAction; let requ
 enum StartBlocker: Equatable { case access, checking, error, selection }
 enum OnboardingStep: Int, CaseIterable { case intro, permission, selection, length }
 enum LaunchRoute: Equatable { case onboarding(OnboardingStep), timer }
+/// The paywall that the start action opened with paid access `locked` (docs/specs/2026-11-26-paywall-design.md, contract item 5).
+/// It holds the start request of that tap until the sheet closes; the 순공 calendar's paywall holds none and never reaches the model.
+struct PaywallRequest: Equatable, Identifiable {
+    let id = UUID()
+    /// A pending purchase, a cancel or a failure drops the start request: nothing in this sheet continues the start after it.
+    var holdsStart = true
+    /// A trial or purchase confirmed inside this sheet; the close then runs the start path once.
+    var confirmed = false
+}
 /// The open 순공 calendar sheet (docs/specs/2026-11-25-sungong-calendar-design.md): the shown month, the selected day and the month's records.
 struct SungongCalendar {
     /// The start of today at the last read; days after it are dimmed and cannot be selected.
@@ -44,8 +53,8 @@ struct SungongCalendar {
     private(set) var completedLength: TimeInterval?
     /// The everyday layer for the settings row and for the timer screen's everyday status row, which the idle screen and the completion card show.
     private(set) var everydayStatus: EverydayStatus?
-    /// Set when a start found paid access `locked`: the screen opens the temporary paywall sheet instead of a session.
-    private(set) var paywallRequest: UUID?
+    /// Set when a start found paid access `locked`: the screen opens the paywall instead of a session.
+    private(set) var paywallRequest: PaywallRequest?
     /// The time of the last everyday status read; the settings row computes its day word from it, and every read redraws the row.
     private(set) var everydayReadAt: Date?
     /// The session of a thrown `finish`, which can leave the stored phase behind its stopped activities; until one reconcile succeeds, `tick` runs one with no session.
@@ -202,7 +211,7 @@ struct SungongCalendar {
     @discardableResult func requestStart() -> UUID? {
         guard canStart else { return nil }
         // The gate applies only at start; `unknown` starts, so an earlier user never sees the paywall (docs/specs/2026-11-24-paid-access-design.md).
-        guard services.paidAccess() != .locked else { paywallRequest = UUID(); return nil }
+        guard services.paidAccess() != .locked else { paywallRequest = PaywallRequest(); return nil }
         let request = UUID()
         startRequestID = request; isStarting = true
         completedSessionID = nil; completedLength = nil
@@ -229,7 +238,7 @@ struct SungongCalendar {
         refresh()
         guard errorMessage == nil, access == .approved, current == nil else { return }
         // Access can end between the tap and this section, such as a trial that ends; the cached state is read synchronously.
-        guard services.paidAccess() != .locked else { paywallRequest = UUID(); return }
+        guard services.paidAccess() != .locked else { paywallRequest = PaywallRequest(); return }
         do {
             let counts = services.selection.counts
             try SelectionValidator.validate(appCount: counts.apps, webCount: counts.websites, categoryCount: counts.categories)
@@ -263,9 +272,25 @@ struct SungongCalendar {
             failedEndID = id; refresh()
         }
     }
-    func dismissPaywall() { paywallRequest = nil }
-    /// The button of the locked calendar card: the screen replaces the calendar sheet with the paywall sheet, as the start gate does.
-    func requestPaywall() { paywallRequest = UUID() }
+    /// The paywall closed: "나중에", a swipe, or a close after access opened. The start request is used at most once:
+    /// only a trial or purchase confirmed inside the sheet continues it, through the start path and its checks, while access reads `granted`.
+    func dismissPaywall() {
+        guard let request = paywallRequest else { return }
+        paywallRequest = nil
+        guard request.holdsStart, request.confirmed, services.paidAccess() == .granted else { return }
+        requestStart()
+    }
+    /// A trial or purchase that the paywall of request `id` confirmed while access reads `granted`; the close continues the start.
+    /// A result of an earlier sheet does not confirm a later request.
+    func confirmPaywallStart(_ id: PaywallRequest.ID) {
+        guard paywallRequest?.id == id, paywallRequest?.holdsStart == true else { return }
+        paywallRequest?.confirmed = true
+    }
+    /// A pending purchase, a cancel or a failure in the paywall of request `id`: no later result of this sheet continues the start.
+    func dropPaywallStart(_ id: PaywallRequest.ID) {
+        guard paywallRequest?.id == id else { return }
+        paywallRequest?.holdsStart = false
+    }
 
     // MARK: 순공 calendar
 
@@ -381,6 +406,8 @@ struct SungongCalendar {
     func sceneDidLeaveForeground() {
         if let request = startRequestID { cancelPendingStart(request) }
         if accessRecoveryID != nil { accessRecoveryID = nil; isStarting = false }
+        // The open paywall stays, but it no longer holds the start: a trial or purchase confirmed after the return opens access only.
+        if let request = paywallRequest { dropPaywallStart(request.id) }
         if let pending = pendingBreak { cancelPendingBreak(pending.id) }
         if current?.phase == .waiting { cancelWait() }
     }

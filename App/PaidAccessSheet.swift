@@ -1,115 +1,186 @@
 import SwiftUI
 
-/// The temporary paywall that the start action opens while paid access is `locked` (docs/specs/2026-11-24-paid-access-design.md).
-/// It follows the element order and the copy of the Figma draft (node 25:2) with system styles; issue #247 applies the final design.
-/// Before the trial starts it states the trial length, what stops at its end and the unlock price (Guideline 3.1.1).
+/// The paywall and the trial offer (docs/specs/2026-11-26-paywall-design.md): a card sheet like the weekly review form A,
+/// in which the reassurance band is the darkest part. Before the trial starts it states the trial length, the features that need
+/// a purchase after it and the unlock price (Guideline 3.1.1).
 struct PaidAccessSheet: View {
     let store: PaidAccessStore
+    /// The focus length of the start that a confirmed trial or purchase continues; `nil` for an entry that holds no start request,
+    /// and after this sheet dropped it.
+    var startMinutes: Int?
+    /// A trial or purchase confirmed inside this sheet, with access `granted`; the sheet closes right after it.
+    var onConfirmed: () -> Void = {}
+    /// A pending purchase, a cancel or a failure: no later result of this sheet continues the start.
+    var onDropStart: () -> Void = {}
     @Environment(\.dismiss) private var dismiss
-    /// A trial that was used once cannot start again, so its badge, button and notice go away and the purchase becomes the primary action.
-    private var canStartTrial: Bool { store.facts?.trial == nil }
+    @Environment(\.colorScheme) private var scheme
+    /// A fixed size, as on the review explanation: a tile that scales with the text pushes the reassurance band below the fold at an accessibility size.
+    private let markHeight: CGFloat = 40, tileSize: CGFloat = 64
+    /// True while this sheet's own trial, purchase or restore runs. Access that opens during it does not close the sheet by itself,
+    /// so a confirmed result is reported before the close.
+    @State private var acting = false
+    /// The form at the start of this sheet's own trial, purchase or restore, so a result does not change the text while the sheet closes.
+    /// It is cleared when the action ends with the sheet open, so facts that the store confirms later reach the open sheet.
+    @State private var frozenTrialUsed: Bool?
+    /// The trial ended, or a trial purchase exists: the trial cannot start again (contract item 3).
+    private var trialUsed: Bool { frozenTrialUsed ?? (store.facts?.trial != nil || store.facts?.trialStartedAt != nil) }
+    /// The price that the store returns; never a constant in code.
+    private var price: String? { store.unlockPrice }
+
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    introduction
-                    features
-                    conditions
-                    actions
-                    if canStartTrial { trialNotice }
+        ScrollView {
+            VStack(alignment: .leading, spacing: FocusTheme.Layout.controlSpacing) {
+                HStack {
+                    Spacer(minLength: 0)
+                    // "나중에" drops the start request first, so a result that arrives during the close does not confirm it.
+                    Button { onDropStart(); dismiss() } label: {
+                        Text("나중에").font(.subheadline.weight(.medium)).foregroundStyle(FocusTheme.Screen.accentText).fixedSize()
+                            .frame(minWidth: FocusTheme.Layout.minimumTapTarget, minHeight: FocusTheme.Layout.minimumTapTarget).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain).accessibilityIdentifier("paywallClose")
                 }
-                .padding(.horizontal, 20).padding(.bottom, 24)
+                // The mark on a navy tile, as in the app icon and the review explanation: its cream ring does not show on the light canvas.
+                ColonMark(height: markHeight).frame(width: tileSize, height: tileSize)
+                    .background(RoundedRectangle(cornerRadius: 16).fill(FocusTheme.Room.background))
+                introduction
+                band
+                card
+                actions
             }
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("닫기") { dismiss() }.accessibilityIdentifier("paywallClose") } }
+            .padding(.horizontal, FocusTheme.Layout.screenInset).padding(.top, FocusTheme.Layout.relatedSpacing).padding(.bottom, FocusTheme.Layout.sectionSpacing)
         }
+        .background(FocusTheme.Screen.canvas.ignoresSafeArea())
         .accessibilityIdentifier("paywall")
-        .task { if store.unlockPrice == nil { await store.loadPrice() } }
-        // The sheet closes when access is granted, also when a refresh granted it before the first render; the person then taps the start action again.
-        .onChange(of: store.state, initial: true) { _, state in if state == .granted { dismiss() } }
+        .modifier(FocusEditorSheet())
+        // A swipe cannot close the sheet while its own action runs, so its result never lands during a close that kept the start request.
+        .interactiveDismissDisabled(acting)
+        .task { if price == nil { await store.loadPrice() } }
+        // Access that opens outside this sheet's own actions, such as an approved purchase from `Transaction.updates`, closes the sheet
+        // and starts nothing; a restore that opens access closes it the same way.
+        .onChange(of: PaywallOutcome.closesByItself(access: store.state, acting: acting), initial: true) { _, closes in if closes { dismiss() } }
     }
 
     private var introduction: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if canStartTrial {
-                Text("3일 무료 체험").font(.subheadline.bold()).foregroundStyle(.tint)
-                    .padding(.horizontal, 10).padding(.vertical, 4)
-                    .background(.tint.opacity(0.12), in: Capsule())
+        VStack(alignment: .leading, spacing: FocusTheme.Layout.inlineSpacing) {
+            Text(trialUsed ? "3일 체험이 끝났어요" : "집중 타이머를 3일 동안 무료로 써보세요").font(.title2.bold()).foregroundStyle(FocusTheme.Screen.ink)
+                .fixedSize(horizontal: false, vertical: true).accessibilityAddTraits(.isHeader).accessibilityIdentifier("paywallTitle")
+            if let startMinutes {
+                Text(trialUsed ? "평생권을 구매하면, 하려던 \(startMinutes)분 집중이 이어져요." : "무료 체험을 시작하면, 하려던 \(startMinutes)분 집중이 이어져요.")
+                    .font(.subheadline).foregroundStyle(FocusTheme.Screen.secondaryInk).fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("paywallStartLine")
             }
-            Text("순공 시간을\n차곡차곡 쌓아요").font(.largeTitle.bold()).accessibilityAddTraits(.isHeader)
-            Text("집중 세션으로 재고, 캘린더와 회고로 돌아봐요.").foregroundStyle(.secondary)
         }
     }
 
-    private var features: some View {
-        VStack(spacing: 12) {
-            feature("집중 세션", "타이머가 도는 동안 고른 앱을 막아요.")
-            feature("순공 캘린더와 주간 회고", "날마다 쌓인 순공 시간을 보고 한 주를 돌아봐요.")
-        }
-    }
-    private func feature(_ title: String, _ detail: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.headline)
-            Text(detail).font(.subheadline).foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        // A fill, not a background color: the sheet's own background is white in light mode, so a grouped background disappears there.
-        .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 16))
-        .accessibilityElement(children: .combine)
-    }
-
-    private var conditions: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if canStartTrial {
-                Text("시작하면 3일 동안 무료예요.").font(.subheadline.bold())
-                // Guideline 3.1.1: name what stops at the trial end; breaks and the Focus filter start are parts of a focus session.
-                Text("체험이 끝나면 집중 세션, 순공 캘린더, 주간 회고가 잠기고, 자동으로 결제되지 않아요.").font(.subheadline).foregroundStyle(.secondary)
+    /// The reassurance band: the most prominent part after the title. In the dark appearance the canvas is nearly the same navy,
+    /// so an amber border keeps it the most prominent, as on the weekly review's note card.
+    private var band: some View {
+        let lines = trialUsed
+            ? ["구매하지 않아도 평소 앱·웹사이트 제한은 계속 쓸 수 있어요.", "지금까지의 기록은 기기에 그대로 있어요."]
+            : ["체험이 끝나도 자동으로 결제되지 않아요.", "구매하지 않아도 평소 앱·웹사이트 제한은 계속 쓸 수 있어요."]
+        return VStack(alignment: .leading, spacing: FocusTheme.Layout.relatedSpacing) {
+            ForEach(lines, id: \.self) { line in
+                HStack(alignment: .firstTextBaseline, spacing: FocusTheme.Layout.inlineSpacing) {
+                    Image(systemName: "checkmark").font(.subheadline.weight(.bold)).foregroundStyle(FocusTheme.Room.marker).accessibilityHidden(true)
+                    Text(line).font(.subheadline.weight(.medium)).foregroundStyle(FocusTheme.Room.text).fixedSize(horizontal: false, vertical: true)
+                }
             }
-            Text("매일 제한은 3일이 지나도 계속 쓸 수 있어요.").font(.subheadline).foregroundStyle(.secondary)
+        }
+        .padding(16).frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: FocusTheme.Screen.cornerRadius).fill(FocusTheme.Room.background))
+        .overlay(RoundedRectangle(cornerRadius: FocusTheme.Screen.cornerRadius).strokeBorder(FocusTheme.Room.marker, lineWidth: scheme == .dark ? 1.5 : 0))
+    }
+
+    private var card: some View {
+        VStack(alignment: .leading, spacing: FocusTheme.Layout.relatedSpacing) {
+            Text(trialUsed ? "평생권으로 다시 쓸 수 있어요" : "3일이 지나면 구매가 필요해요").font(.footnote.weight(.medium)).foregroundStyle(FocusTheme.Screen.accentText)
+                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: FocusTheme.Layout.inlineSpacing) {
+                ForEach(["집중 타이머와 휴식", "순공 캘린더", "주간 회고와 공유 이미지"], id: \.self) { feature in
+                    HStack(alignment: .firstTextBaseline, spacing: FocusTheme.Layout.inlineSpacing) {
+                        Image(systemName: "checkmark").font(.footnote.weight(.semibold)).foregroundStyle(FocusTheme.Screen.accentText).accessibilityHidden(true)
+                        Text(feature).font(.subheadline).foregroundStyle(FocusTheme.Screen.ink).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            Divider()
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: FocusTheme.Layout.inlineSpacing) {
+                    priceLabel
+                    Spacer(minLength: FocusTheme.Layout.inlineSpacing)
+                    priceValue
+                }
+                VStack(alignment: .leading, spacing: FocusTheme.Layout.detailSpacing) {
+                    priceLabel
+                    priceValue
+                }
+            }
+            if price == nil {
+                Button("가격 다시 불러오기") { Task { await store.loadPrice() } }
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(FocusTheme.Screen.accentText)
+                    .frame(minHeight: FocusTheme.Layout.minimumTapTarget).accessibilityIdentifier("paywallPriceRetry")
+            }
+            Text("구독이 아니에요. 한 번 사면 계속 써요.").font(.footnote).foregroundStyle(FocusTheme.Screen.secondaryInk).fixedSize(horizontal: false, vertical: true)
+        }
+        .modifier(FocusCard())
+    }
+    private var priceLabel: some View {
+        Text("평생권 구매").font(.subheadline.weight(.medium)).foregroundStyle(FocusTheme.Screen.ink).fixedSize()
+    }
+    @ViewBuilder private var priceValue: some View {
+        if let price {
+            Text(price).font(.headline).monospacedDigit().foregroundStyle(FocusTheme.Screen.ink).fixedSize().accessibilityIdentifier("paywallPrice")
+        } else {
+            Text("가격을 불러오고 있어요").font(.subheadline).foregroundStyle(FocusTheme.Screen.secondaryInk).fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("paywallPriceLoading")
         }
     }
 
+    /// The buttons stay at the bottom of the content; at an accessibility text size the sheet scrolls to them.
     private var actions: some View {
-        VStack(spacing: 12) {
-            if canStartTrial {
-                // It starts only after the unlock price is on the sheet (Guideline 3.1.1).
-                Button { Task { await store.startTrial() } } label: { Text("3일 무료 체험 시작하기").frame(maxWidth: .infinity) }
-                    .buttonStyle(.borderedProminent).controlSize(.large)
-                    .disabled(store.unlockPrice == nil)
-                    .accessibilityIdentifier("paywallTrial")
+        VStack(spacing: 11) {
+            if !trialUsed {
+                Button("3일 무료로 써보기") { act { await store.startTrial() } }
+                    .buttonStyle(fill(primary: true)).disabled(price == nil || store.isWorking).accessibilityIdentifier("paywallTrial")
             }
-            purchaseButton
-            if store.unlockPrice == nil {
-                Button("가격 다시 확인") { Task { await store.loadPrice() } }.accessibilityIdentifier("paywallPriceRetry")
-            }
-            Text("한 번 구매하면 계속 쓸 수 있어요. 구독이 아니에요.").font(.footnote).foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            Button("구매 복원하기") { Task { await store.restore() } }.accessibilityIdentifier("paywallRestore")
+            Button(price.map { "평생권 \($0) 구매하기" } ?? "평생권 구매하기") { act { await store.purchaseUnlock() } }
+                .buttonStyle(fill(primary: trialUsed)).disabled(price == nil || store.isWorking).accessibilityIdentifier("paywallPurchase")
+            Button("구매 복원") { restore() }
+                .font(.footnote.weight(.medium)).foregroundStyle(FocusTheme.Screen.accentText)
+                .frame(minHeight: FocusTheme.Layout.minimumTapTarget).disabled(store.isWorking).accessibilityIdentifier("paywallRestore")
             if let message = store.message {
-                Text(message).font(.footnote).foregroundStyle(.secondary).accessibilityIdentifier("paywallMessage")
+                Text(message).font(.footnote).foregroundStyle(FocusTheme.Screen.secondaryInk).multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("paywallMessage")
             }
         }
         .frame(maxWidth: .infinity)
-        .disabled(store.isWorking)
     }
-    /// The price is the one that the store returns, never a constant in code.
-    @ViewBuilder private var purchaseButton: some View {
-        let label = Text(store.unlockPrice.map { "구매하기 · \($0)" } ?? "구매하기 · 가격 확인 중").frame(maxWidth: .infinity)
-        if canStartTrial {
-            Button { Task { await store.purchaseUnlock() } } label: { label }
-                .buttonStyle(.bordered).controlSize(.large).accessibilityIdentifier("paywallPurchase")
-        } else {
-            Button { Task { await store.purchaseUnlock() } } label: { label }
-                .buttonStyle(.borderedProminent).controlSize(.large).accessibilityIdentifier("paywallPurchase")
-        }
+    /// The primary button: `AccentColor` with `AccentLabel` text, white in light and navy in dark; the secondary one: a card with accent text.
+    private func fill(primary: Bool) -> FocusFillButtonStyle {
+        primary ? FocusFillButtonStyle(fill: FocusTheme.Palette.accent, label: FocusTheme.Palette.onAccent)
+            : FocusFillButtonStyle(fill: FocusTheme.Screen.card, label: FocusTheme.Screen.accentText)
     }
 
-    private var trialNotice: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Divider()
-            Text("무료 체험 안내").font(.footnote.bold()).foregroundStyle(.secondary)
-            Text("체험은 0원짜리 앱 내 구입 ‘3-day Trial’로 시작해요. 3일이 지난 뒤에는 구매하면 다시 쓸 수 있어요.")
-                .font(.footnote).foregroundStyle(.secondary)
+    private func act(_ action: @escaping () async -> PaidActionResult) {
+        acting = true; frozenTrialUsed = trialUsed
+        Task {
+            switch PaywallOutcome(await action(), access: store.state) {
+            case .continueStart:
+                onConfirmed(); dismiss(); acting = false
+                return
+            case .dropStart: onDropStart()
+            case .none: break
+            }
+            acting = false; frozenTrialUsed = nil
+        }
+    }
+    /// A restore opens access and closes the sheet, and never continues a start (contract item 6).
+    private func restore() {
+        acting = true; frozenTrialUsed = trialUsed
+        Task {
+            await store.restore()
+            acting = false
+            if store.state != .granted { frozenTrialUsed = nil }
         }
     }
 }

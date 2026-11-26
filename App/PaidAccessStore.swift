@@ -5,6 +5,24 @@ import StoreKit
 /// The result of a purchase or a trial start. `purchased` carries the verified transaction, which the store merges before its refresh.
 /// `pending` (Ask to Buy) grants nothing: an approval arrives later through `Transaction.updates`.
 enum PaidPurchaseOutcome: Equatable { case purchased(PaidPurchase), pending, cancelled }
+/// What one trial start or purchase from the paywall ended in. Only `confirmed` can continue the start that opened the paywall
+/// (docs/specs/2026-11-26-paywall-design.md, contract item 5); `notGranted` is a verified transaction that opens no access by itself,
+/// such as a trial that already ended; `busy` is a tap while another action runs.
+enum PaidActionResult: Equatable { case confirmed, notGranted, pending, cancelled, failed, busy }
+
+/// The paywall's two decisions, outside the view (`PaidAccessSheet`) so that the SDK tests run the same code as the sheet.
+enum PaywallOutcome: Equatable {
+    case continueStart, dropStart, none
+
+    /// The result of the sheet's own trial or purchase. Only a confirmed result with access `granted` continues the start;
+    /// a pending purchase, a cancel or a failure drops it (contract item 5); a busy store changes nothing.
+    init(_ result: PaidActionResult, access: PaidAccessState) {
+        self = result == .confirmed && access == .granted ? .continueStart : result == .busy ? .none : .dropStart
+    }
+    /// Access that opens while none of the sheet's own actions runs, such as an approved purchase from `Transaction.updates`
+    /// or a restore, closes the sheet without a confirmation, so its close starts nothing.
+    static func closesByItself(access: PaidAccessState, acting: Bool) -> Bool { access == .granted && !acting }
+}
 
 /// The StoreKit calls of the store, so that tests and UI fixtures can replace them.
 @MainActor protocol PaidAccessStoreKit {
@@ -91,7 +109,7 @@ struct SystemPaidAccessStoreKit: PaidAccessStoreKit {
     /// The unlock's price as the store returns it; never a constant in code.
     private(set) var unlockPrice: String?
     private(set) var isWorking = false
-    /// The result line of the last action, for the temporary sheet.
+    /// The result line of the last action, for the paywall.
     private(set) var message: String?
 
     init(configuration: PaidAccessConfiguration, cache: PaidAccessCache?, kit: any PaidAccessStoreKit, now: @escaping () -> Date = Date.init) {
@@ -133,8 +151,8 @@ struct SystemPaidAccessStoreKit: PaidAccessStoreKit {
             self.merge(PaidAccess.Read(originalAppVersion: version, unlock: unlock, trial: trial, trialFirstPurchase: trialFirstPurchase))
         }
     }
-    func purchaseUnlock() async { await buy(PaidAccess.unlockProductID, failure: "구매하지 못했어요. 다시 시도해 주세요.") }
-    func startTrial() async { await buy(PaidAccess.trialProductID, failure: "체험을 시작하지 못했어요. 다시 시도해 주세요.") }
+    @discardableResult func purchaseUnlock() async -> PaidActionResult { await buy(PaidAccess.unlockProductID, failure: "구매하지 못했어요. 다시 시도해 주세요.") }
+    @discardableResult func startTrial() async -> PaidActionResult { await buy(PaidAccess.trialProductID, failure: "체험을 시작하지 못했어요. 다시 시도해 주세요.") }
     /// "구매 복원": the only way back to the unlock on a new device, because the app has no account.
     func restore() async {
         guard !isWorking else { return }
@@ -144,8 +162,8 @@ struct SystemPaidAccessStoreKit: PaidAccessStoreKit {
         await refresh()
         if state != .granted { message = "복원할 구매가 없어요." }
     }
-    private func buy(_ productID: String, failure: String) async {
-        guard !isWorking else { return }
+    private func buy(_ productID: String, failure: String) async -> PaidActionResult {
+        guard !isWorking else { return .busy }
         isWorking = true; message = nil
         defer { isWorking = false }
         do {
@@ -154,10 +172,26 @@ struct SystemPaidAccessStoreKit: PaidAccessStoreKit {
                 // The verified transaction applies even when the refresh after it reads nothing.
                 await apply(productID: productID, purchase: purchase)
                 await refresh()
-            case .pending: message = "승인을 기다리고 있어요."
-            case .cancelled: break
+                // Access that another transaction opened meanwhile, such as an approval from `Transaction.updates`, is not this action's confirmation.
+                guard grants(productID: productID, purchase: purchase) else {
+                    message = productID == PaidAccess.trialProductID ? "3일 체험이 이미 끝났어요." : failure
+                    return .notGranted
+                }
+                return .confirmed
+            case .pending: message = "승인을 기다리고 있어요."; return .pending
+            case .cancelled: return .cancelled
             }
-        } catch { message = failure }
+        } catch { message = failure; return .failed }
+    }
+    /// Whether the action's own transaction opens access: an unlock that is not revoked, or a trial that is not revoked and has not ended.
+    /// The trial end uses the merged facts, so a second purchase of the trial product does not count from its own date.
+    private func grants(productID: String, purchase: PaidPurchase) -> Bool {
+        guard !purchase.isRevoked else { return false }
+        switch productID {
+        case PaidAccess.unlockProductID: return true
+        case PaidAccess.trialProductID: return now() < PaidAccess.trialEnd(facts ?? PaidAccessFacts(), trial: purchase)
+        default: return false
+        }
     }
     /// A verified transaction from `Transaction.updates`, such as a refund or an approved Ask to Buy, or the result of a purchase.
     /// It takes its turn in the queue, so a refresh that read before it cannot overwrite it afterwards.

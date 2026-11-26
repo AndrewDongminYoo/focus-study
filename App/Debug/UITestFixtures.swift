@@ -221,32 +221,78 @@ extension FocusServices {
 
 #if DEBUG
 /// Synthetic StoreKit for `--paid-access`: purchases stay in memory and nothing reaches the App Store.
-/// The price is a synthetic string for the temporary sheet; the app's real price always comes from the store.
+/// The price is a synthetic string for the paywall; the app's real price always comes from the store.
 @MainActor final class FixturePaidAccessStoreKit: PaidAccessStoreKit {
     private var bought: [String: PaidPurchase] = [:]
-    func originalAppVersion() async -> String? { "99" }
+    /// `--paid-price loading`: the store returns no price, also on a retry.
+    var priceLoads = true
+    /// `--paid-purchase pending`: every purchase and trial start is pending (Ask to Buy), and its approval arrives 3 seconds later
+    /// through the `Transaction.updates` listener, whether the paywall is still open or not.
+    var purchasesPend = false
+    /// `--paid-purchase pending-later`: every purchase and trial start is pending, and its approval arrives only when the app next returns
+    /// to the foreground (the refresh of `didBecomeActive`), through the `Transaction.updates` listener; no timer races the test's taps.
+    var approvesOnReturn = false
+    private var held: [(String, PaidPurchase)] = []
+    /// `--paid-restore owned`: a restore finds the unlock that the person bought on another device.
+    var restoreFindsUnlock = false
+    private var handle: (@MainActor (String, PaidPurchase) async -> Void)?
+    func originalAppVersion() async -> String? {
+        // Only a refresh reads the version, so a held approval arrives with the first refresh after the purchase.
+        if !held.isEmpty {
+            let approvals = held; held = []
+            Task { @MainActor in
+                for (productID, purchase) in approvals { self.bought[productID] = purchase; await self.handle?(productID, purchase) }
+            }
+        }
+        return "99"
+    }
     func read(_ productID: String) async -> PaidAccess.ProductRead { bought[productID].map { .transaction($0) } ?? .noSignal }
     func firstPurchaseDate(_ productID: String) async -> Date? { bought[productID]?.purchaseDate }
-    func displayPrice(_ productID: String) async -> String? { "₩14,000" }
+    func displayPrice(_ productID: String) async -> String? { priceLoads ? "₩14,000" : nil }
     func purchase(_ productID: String) async throws -> PaidPurchaseOutcome {
         let purchase = bought[productID] ?? PaidPurchase(purchaseDate: Date())
+        if approvesOnReturn { held.append((productID, purchase)); return .pending }
+        guard !purchasesPend else {
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(3))
+                self.bought[productID] = purchase
+                await self.handle?(productID, purchase)
+            }
+            return .pending
+        }
         bought[productID] = purchase
         return .purchased(purchase)
     }
-    func sync() async throws {}
-    func listen(_ handle: @escaping @MainActor (String, PaidPurchase) async -> Void) -> Task<Void, Never> { Task {} }
+    func sync() async throws {
+        if restoreFindsUnlock, bought[PaidAccess.unlockProductID] == nil { bought[PaidAccess.unlockProductID] = PaidPurchase(purchaseDate: Date()) }
+    }
+    func listen(_ handle: @escaping @MainActor (String, PaidPurchase) async -> Void) -> Task<Void, Never> { self.handle = handle; return Task {} }
     /// `--paid-access locked`: a person who downloaded the paid build and bought nothing.
     /// `--paid-access trial`: the same person 48 hours into the 3-day trial, so day 1 of the weekly review is two days before today.
+    /// `--paid-access trial-ended`: the same person whose trial started 4 days ago and ended, with no purchase.
     /// Every other fixture keeps the gate off.
     static func store(arguments: [String]) -> PaidAccessStore {
-        guard let index = arguments.firstIndex(of: "--paid-access"), index + 1 < arguments.count, ["locked", "trial"].contains(arguments[index + 1]) else {
-            return PaidAccessStore(configuration: .disabled, cache: nil, kit: FixturePaidAccessStoreKit())
+        let kit = FixturePaidAccessStoreKit()
+        kit.priceLoads = value(of: "--paid-price", in: arguments) != "loading"
+        kit.purchasesPend = value(of: "--paid-purchase", in: arguments) == "pending"
+        kit.approvesOnReturn = value(of: "--paid-purchase", in: arguments) == "pending-later"
+        kit.restoreFindsUnlock = value(of: "--paid-restore", in: arguments) == "owned"
+        guard let mode = value(of: "--paid-access", in: arguments), ["locked", "trial", "trial-ended"].contains(mode) else {
+            return PaidAccessStore(configuration: .disabled, cache: nil, kit: kit)
         }
         let cache = PaidAccessCache(container: FileManager.default.temporaryDirectory.appendingPathComponent("FocusPaidFixture-\(UUID().uuidString)"))
-        let trialStart = Date().addingTimeInterval(-48 * 3600)
-        let trial = arguments[index + 1] == "trial" ? PaidPurchase(purchaseDate: trialStart) : nil
+        let trialStart: Date? = switch mode {
+        case "trial": Date().addingTimeInterval(-48 * 3600)
+        case "trial-ended": Date().addingTimeInterval(-96 * 3600)
+        default: nil
+        }
+        let trial = trialStart.map { PaidPurchase(purchaseDate: $0) }
         try? cache.save(PaidAccessFacts(originalAppVersion: "99", unlock: nil, trial: trial, trialStartedAt: trial?.purchaseDate, confirmedAt: Date()))
-        return PaidAccessStore(configuration: PaidAccessConfiguration(enabled: true, firstPaidBuild: 3), cache: cache, kit: FixturePaidAccessStoreKit())
+        return PaidAccessStore(configuration: PaidAccessConfiguration(enabled: true, firstPaidBuild: 3), cache: cache, kit: kit)
+    }
+    private static func value(of flag: String, in arguments: [String]) -> String? {
+        guard let index = arguments.firstIndex(of: flag), index + 1 < arguments.count else { return nil }
+        return arguments[index + 1]
     }
 }
 extension FocusRuntime {
