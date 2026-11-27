@@ -30,8 +30,17 @@ public struct TodaySnapshot: Codable, Equatable {
     }
     public static func decode(_ data: Data) -> TodaySnapshot? { try? JSONDecoder().decode(TodaySnapshot.self, from: data) }
     /// The time format of the today summary, `1시간 15분`.
-    public static func durationText(_ seconds: TimeInterval) -> String {
-        Duration.seconds(seconds).formatted(.units(allowed: [.hours, .minutes], width: .wide))
+    public static func durationText(_ seconds: TimeInterval, locale: Locale = .autoupdatingCurrent) -> String {
+        Duration.seconds(seconds).formatted(.units(allowed: [.hours, .minutes], width: .wide).locale(locale))
+    }
+    /// The widget dial's lines of `durationText`, `1시간` and `15분`: whole minutes with the formatter's rounding to the nearest even minute,
+    /// and no line for a unit of 0 except `0분`, so that in Korean the lines joined by a space equal `durationText`.
+    public static func durationLines(_ seconds: TimeInterval, locale: Locale = .autoupdatingCurrent) -> [String] {
+        let minutes = Int((seconds / 60).rounded(.toNearestOrEven)), hours = minutes / 60, rest = minutes % 60
+        var lines: [String] = []
+        if hours > 0 { lines.append(Duration.seconds(hours * 3600).formatted(.units(allowed: [.hours], width: .wide).locale(locale))) }
+        if rest > 0 || hours == 0 { lines.append(Duration.seconds(rest * 60).formatted(.units(allowed: [.minutes], width: .wide).locale(locale))) }
+        return lines
     }
 }
 
