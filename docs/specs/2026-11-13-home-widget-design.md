@@ -274,6 +274,8 @@ The implementation PR shows captures in light, dark, the accented home screen an
   Reconciliation (2026-11-14, #124): the extension has no asset catalog, so `TodayWidgetView.accent` holds the light and dark values of `App/Assets.xcassets/AccentColor` in code; the app's DEBUG preview uses the same constant.
 - The time uses one line with a scale factor, so that the largest text size does not clip the count.
 
+Superseded (2026-11-27, #230): the last two items and the reconciliation between them; the [dial look amendment](#dial-look-amendment-2026-11-27) gives the look, the rendering modes and the time lines.
+
 ### Stored states and failure cases
 
 | Snapshot state                                                       | View    |
@@ -440,3 +442,82 @@ Follow `AGENTS.md` and [README verification](../../README.md#실행과-검증).
 ## Focus filter extension reconciliation: 2026-11-16
 
 No rule of this design changes. The App Intents extension never writes `TodaySnapshot/today.json`; the app stays the only writer, so a session that the extension ends appears in the widget after the next app refresh ([Focus filter extension design](2026-11-16-focus-filter-extension-design.md), decision 26).
+
+## Dial look amendment: 2026-11-27
+
+Source: [issue #230](https://github.com/AndrewDongminYoo/focus-study/issues/230).
+The look was approved on 2026-11-27 from Figma frames `76:663` and `76:664` ("04 입체 다이얼형") and from the board `79:602`, which shows the code rendering in light, dark and the accented mode.
+The data, the states, the copy and the accessibility text of this design do not change.
+`Widget/TodayWidgetView.swift` holds every value below; this section records them so that a later change does not depend on the Figma file.
+
+### Layout
+
+All sizes are in the 170 pt units of the frames, and the view scales them by the widget's side divided by 170.
+The widget uses `contentMarginsDisabled()`, so the frame is the whole widget.
+Text keeps its Dynamic Type style and does not scale with the side.
+
+| Part                              | Center (x, y)       | Size                                                    |
+| --------------------------------- | ------------------- | ------------------------------------------------------- |
+| Title `오늘 집중`                 | leading 14          | `caption2`, medium, top 10                              |
+| 12 ticks                          | radius 59.5         | 1.8 × 5 at 0, 3, 6, 9 o'clock; 1.2 × 3.5 at the others  |
+| Groove                            | 85, 85              | circle 110                                              |
+| Plate                             | 85, 85              | circle 105                                              |
+| Index well and marker             | 85, 45              | 3 × 14 (radius 1.5); marker 1.8 × 12.4                  |
+| Knob bevel                        | 85, 90              | circle 64                                               |
+| Knob, edge highlight              | 85, 85              | circle 62; 0.5 stroke inside circle 60                  |
+| Time on the knob                  | 85, 85              | width 52; `subheadline`, bold, one `Text` for each line |
+| `온:공` on the knob               | 85, 85              | `callout`, bold                                         |
+| Lamp socket and lamp              | 150, 17             | circle 10; lamp circle 6                                |
+| Indicator wells and bars          | 19.5 and 150.5, 155 | 11 × 4 (radius 2); bar 9 × 2 (radius 1)                 |
+| Count, or the Empty or Check line | 85, 155             | width 110; count `caption` bold, line `caption2` medium |
+
+The lamp and both bars are lit when the state is Numbers, and unlit for Empty and Check.
+The marker is always lit.
+No part shows a session state.
+
+### Time lines and truncation
+
+`TodaySnapshot.durationLines` splits the time into an hours line and a minutes line: `1시간` and `15분`, `45분`, `2시간`.
+It rounds to whole minutes like `durationText` (to the nearest, ties to even), and a host test checks that the lines joined by a space equal `durationText` for every second of a day in `ko_KR`.
+The accessibility text keeps the whole `durationText`.
+Every text of the widget has one line, a minimum scale factor of 0.7 and then a tail ellipsis, so that no text wraps or leaves the dial at a large text size.
+The time of one day has at most two digits of hours (`24시간`), so the hours line fits the knob at the default text size.
+The widget limits Dynamic Type to `xxLarge`.
+The dial has a fixed size: in the preview at the largest accessibility size the time showed `1…` on both lines, which reads as another number, and the count covered the bottom tick.
+
+### Colors
+
+Gradients run from the top leading corner to the bottom trailing corner.
+A shadow blur in Figma is twice the SwiftUI radius.
+Light is copied from the frames; dark is the approved proposal on the dark tokens of the [screen redesign](2026-11-23-screen-redesign-design.md) (`#202C46`, `#27334E`, `#48536C`, cream `#FFF4E2`).
+
+| Part            | Light                                                                                     | Dark                                                                 |
+| --------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Background      | `#DED8CE`; sheen white 15% → 0 (0.5) → `#746D5B` 12%                                      | `#202C46`; sheen white 7% → 0 (0.5) → `#05080F` 25%                  |
+| Ink             | `#202C46`                                                                                 | `#FFF4E2`                                                            |
+| Groove          | `#AFA99A` → `#CEC8BA` (0.38) → `#EEEADD`; inner `#6A6352` 26%                             | `#121A2D` → `#1A2339` (0.38) → `#2E3A57`; inner `#05080F` 50%        |
+| Plate           | `#DED8CE`; sheen white 28% → 2% (0.55) → `#6E685B` 10%; drop `#635C4B` 25% (2, 7, blur 7) | `#222E49`; sheen white 8% → 0 (0.55) → black 15%; drop `#05080F` 45% |
+| Ticks           | `#BCBAB5`                                                                                 | `#48536C`                                                            |
+| Index well      | `#B6A16B` → `#F4E7AC`                                                                     | `#1A2339` → `#3A4766`                                                |
+| Indicator wells | `#9F8955` → `#F2E3AD`                                                                     | `#1A2339` → `#3A4766`                                                |
+| Knob bevel      | `#ECE7D8` → `#B5AF9F` (0.6) → `#8E8879`; drop `#554E3E` 33% (3, 8, blur 6)                | `#3A4766` → `#1B243A` (0.6) → `#10172A`; drop `#04070E` 50%          |
+| Knob            | `#DED8CE`; sheen white 34% → 8% (0.62) → `#7C7462` 6%                                     | `#27334E`; sheen white 10% → 2% (0.62) → black 10%                   |
+| Edge highlight  | white 70% → 8% (0.55) → `#817865` 20%                                                     | white 25% → 3% (0.55) → black 30%                                    |
+| Lamp socket     | `#9E8C58` → `#F7EDC7`                                                                     | `#2A3550` → `#56617C`                                                |
+| Unlit lamp      | `#C9C1A8` → `#9A927B`                                                                     | `#4A5570` → `#2C3650`                                                |
+| Unlit bar       | `#ADA58E` → `#C2BAA5`                                                                     | `#33405C` → `#45516C`                                                |
+
+The lit parts are the same in both appearances: the lamp `#FFF7AB` → `#FFD940` (0.4) → `#D59400` with a glow of `#FFC52A` 65% (blur 5), the marker `#FFF7B3` → `#FFCE27` (0.4) → `#E4A900` with `#FFD23B` 45% (blur 3), and the bars `#FFF39A` → `#FFD02D` (0.5) → `#D99C00` with `#FFCC22` 40% (blur 3).
+The smaller highlights and inner shadows of each part are in the code.
+
+### Rendering modes and StandBy
+
+- Full color: the table above, by the color scheme.
+- Accented and vibrant: the view draws a flat dial itself, with no gradient and no shadow, so the result does not depend on what the system removes.
+  The time, the marker, the lit lamp and the lit bars are in the accent group (`widgetAccentable()`); every other part is white with an opacity: plate 12%, groove 8%, knob 16%, bevel 10%, ticks 50%, wells 25%, socket 35%, unlit lamp and bars 30%, edge 30%, text 100%.
+  In the flat look the accent group is `#F4A64A`; the accented mode replaces it with the person's tint.
+- StandBy and every other context without the container background: the text outside the plate (title, count and line) uses the dark ink `#FFF4E2`, because the background under it is gone.
+
+The DEBUG preview `--widget-preview <mode>` draws the background itself, because `containerBackground` draws nothing in an app, and adds a forced flat copy that only approximates the accented mode.
+The mode `long` shows 23시간 59분 and 12회 for the ellipsis check.
+The approval of the accented mode still needs a capture of the real tinted Home Screen.
