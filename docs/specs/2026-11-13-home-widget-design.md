@@ -521,3 +521,4 @@ The smaller highlights and inner shadows of each part are in the code.
 The DEBUG preview `--widget-preview <mode>` draws the background itself, because `containerBackground` draws nothing in an app, and adds a forced flat copy that only approximates the accented mode.
 The mode `long` shows 23시간 59분 and 12회 for the ellipsis check.
 The approval of the accented mode still needs a capture of the real tinted Home Screen.
+Reconciliation (2026-11-27): the [device run of that date](../notes/screen-time-device-matrix.md#widget-dial-look-2026-11-27-230) captured light, dark, StandBy, clear and tinted in the Empty view; the Numbers view is unverified on a device.

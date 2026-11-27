@@ -777,6 +777,22 @@ The body sizes come from the iOS Dynamic Type tables of the [Human Interface Gui
 Above xxxLarge, iOS Settings also clips its own text: at an accessibility size the "손쉬운 사용 설정에서 더 보기" row of the text size screen wraps out of its button.
 Issue #201 therefore stays a P3 known issue of the Screen Time shield rendering, with no change to the label.
 
+## Widget dial look: 2026-11-27 (#230)
+
+The looks of the [dial look amendment](../specs/2026-11-13-home-widget-design.md#dial-look-amendment-2026-11-27).
+On the iPhone 16 Pro with iOS 27.0.1 (24A446), a signed Debug build of `5cd0591`, the head of PR #268 whose merge is `60fd9d3`, was installed over the 1.0.0 (2) build with `devicectl device install app` at 15:17:07, with the existing development profiles.
+The small widget was on the Home Screen, and today had no completed session, so every capture shows the Empty view.
+The results come from captures taken on the device between 16:24 and 16:42.
+
+| Check                                       | Result                                                                                                                                                                |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Light, full color                           | Passed: the light palette of the amendment, with the lamp and both bars unlit and the 12 o'clock marker lit                                                           |
+| Dark, full color                            | Passed: the dark palette; the lamp socket and the indicator wells have low contrast against the plate, as the approved values give                                    |
+| StandBy                                     | Passed: the system removed the background, and the title and the Empty line were drawn in the light ink `#FFF4E2` on black                                            |
+| Clear (투명), light                         | Passed: the flat dial, with the plate, the knob and the ticks told apart by white opacity on the system glass                                                         |
+| Tinted (틴트), light and dark               | Passed: the flat dial on the tinted background; the 12 o'clock marker, the only accent-group part of the Empty view, was drawn in the same color as the primary group |
+| The Numbers view: two time lines, lit lamps | Unverified on the device: no session was completed during the run; the simulator preview showed them in light, dark, the flat look and the largest text size          |
+
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 
 이슈 #17의 검토 결과다.
