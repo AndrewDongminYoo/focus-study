@@ -1,38 +1,44 @@
 import SwiftUI
 import WidgetKit
 
-/// The small home screen widget: a dial plate with today's completed focus time on the knob and the count below it.
+/// The home screen widget: a dial plate with today's completed focus time and count.
+/// The small widget puts the time on the knob and the count below it; the medium widget puts both in a column right of a blank knob.
 /// It does no I/O: the provider, or the app's DEBUG preview, gives it the state.
 /// It shows only completed records of today, never a session state, a time of day or a restriction state; the lamps are lit when today has a completed session.
-/// Geometry is in the 170 pt units of the Figma frames and scales with the widget's size; text keeps its Dynamic Type style.
+/// Geometry is in the units of the Figma frames and scales with the widget's size; text keeps its Dynamic Type style.
 struct TodayWidgetView: View {
     /// The fixed numbers of the widget gallery and the DEBUG preview; never read from the snapshot.
     static let sample = TodayWidgetState.numbers(count: 3, focusSeconds: 4500)
     let state: TodayWidgetState
     /// Only for the DEBUG preview, which cannot enter the accented mode: draws the flat look of that mode.
     var drawsFlat = false
+    /// Only for the DEBUG preview, which has no widget family.
+    var family: WidgetFamily?
+    @Environment(\.widgetFamily) private var widgetFamily
     @Environment(\.widgetRenderingMode) private var renderingMode
     @Environment(\.showsWidgetContainerBackground) private var showsBackground
     @Environment(\.colorScheme) private var colorScheme
     /// The accented and vibrant modes give each group one color, so the view draws them flat: no gradient and no shadow.
     private var flat: Bool { drawsFlat || renderingMode != .fullColor }
+    private var medium: Bool { (family ?? widgetFamily) == .systemMedium }
+    private var layout: DialLayout { medium ? .medium : .small }
     private var palette: TodayDialPalette { colorScheme == .dark ? .dark : .light }
     private var lit: Bool { if case .numbers = state { return true } else { return false } }
     var body: some View {
         GeometryReader { proxy in
-            let side = min(proxy.size.width, proxy.size.height)
+            let size = layout.size, s = min(proxy.size.width / size.width, proxy.size.height / size.height)
             ZStack {
-                dial(side / 170)
-                texts(side / 170)
+                dial(s)
+                if medium { mediumTexts(s) } else { texts(s) }
             }
-            .frame(width: side, height: side)
+            .frame(width: size.width * s, height: size.height * s)
             .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
         }
         // The dial has a fixed size: above xxLarge the time would end in an ellipsis that reads as another number ("1…").
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)
-        .accessibilityIdentifier("todayWidget")
+        .accessibilityIdentifier(medium ? "todayWidgetMedium" : "todayWidget")
         .containerBackground(for: .widget) { TodayWidgetBackground(drawsFlat: flat) }
     }
     private func style(_ full: some ShapeStyle, flat opacity: Double) -> AnyShapeStyle {
@@ -41,7 +47,7 @@ struct TodayWidgetView: View {
     private func gradient(_ stops: [Gradient.Stop]) -> LinearGradient { LinearGradient(stops: stops, startPoint: .topLeading, endPoint: .bottomTrailing) }
     private func shadow(_ color: Color) -> Color { flat ? .clear : color }
     @ViewBuilder private func dial(_ s: CGFloat) -> some View {
-        let p = palette, center = CGPoint(x: 85 * s, y: 85 * s)
+        let p = palette, l = layout, center = CGPoint(x: l.dial.x * s, y: l.dial.y * s)
         ForEach(0..<12, id: \.self) { index in
             let major = index % 3 == 0
             Capsule().fill(style(p.tick.shadow(.inner(color: p.tickInner, radius: 0.25 * s, y: 0.5 * s)), flat: 0.5))
@@ -57,26 +63,26 @@ struct TodayWidgetView: View {
             .shadow(color: shadow(p.plateLift), radius: 1.5 * s, x: -2 * s, y: -2 * s)
             .frame(width: 105 * s, height: 105 * s).position(center)
         RoundedRectangle(cornerRadius: 1.5 * s).fill(style(gradient(p.indexWell).shadow(.inner(color: p.indexInner, radius: 0.5 * s, y: s)), flat: 0.25))
-            .frame(width: 3 * s, height: 14 * s).position(x: 85 * s, y: 45 * s)
+            .frame(width: 3 * s, height: 14 * s).position(x: l.dial.x * s, y: (l.dial.y - 40) * s)
         lamp(TodayDialPalette.marker, glow: TodayDialPalette.markerGlow, blur: 3, s: s, cornerRadius: 0.9)
-            .frame(width: 1.8 * s, height: 12.4 * s).position(x: 85 * s, y: 45 * s)
+            .frame(width: 1.8 * s, height: 12.4 * s).position(x: l.dial.x * s, y: (l.dial.y - 40) * s)
         Circle().fill(style(gradient(p.bevel), flat: 0.1))
             .shadow(color: shadow(p.bevelDrop), radius: 3 * s, x: 3 * s, y: 8 * s)
             .shadow(color: shadow(p.bevelLift), radius: 1.5 * s, x: -2 * s, y: -2 * s)
-            .frame(width: 64 * s, height: 64 * s).position(x: 85 * s, y: 90 * s)
+            .frame(width: 64 * s, height: 64 * s).position(x: l.dial.x * s, y: (l.dial.y + 5) * s)
         Circle().fill(style(p.knob.shadow(.inner(color: p.knobInnerLight, radius: 0.5 * s, y: s)).shadow(.inner(color: p.knobInnerDark, radius: 0.5 * s, y: -s)), flat: 0.16))
             .overlay(Circle().fill(style(gradient(p.knobSheen), flat: 0)))
             .frame(width: 62 * s, height: 62 * s).position(center)
         Circle().strokeBorder(style(gradient(p.edge), flat: 0.3), lineWidth: 0.5 * s)
             .frame(width: 60 * s, height: 60 * s).position(center)
         Circle().fill(style(gradient(p.socket).shadow(.inner(color: p.socketInner, radius: s, y: s)), flat: 0.35))
-            .frame(width: 10 * s, height: 10 * s).position(x: 150 * s, y: 17 * s)
+            .frame(width: 10 * s, height: 10 * s).position(x: l.socket.x * s, y: l.socket.y * s)
         Group {
             if lit { lamp(TodayDialPalette.lamp, glow: TodayDialPalette.lampGlow, blur: 5, s: s, cornerRadius: 3) }
             else { Circle().fill(style(gradient(p.lampOff), flat: 0.3)) }
         }
-        .frame(width: 6 * s, height: 6 * s).position(x: 150 * s, y: 17 * s)
-        ForEach([19.5, 150.5], id: \.self) { x in
+        .frame(width: 6 * s, height: 6 * s).position(x: l.socket.x * s, y: l.socket.y * s)
+        ForEach(l.wells, id: \.self) { x in
             RoundedRectangle(cornerRadius: 2 * s).fill(style(gradient(p.well).shadow(.inner(color: p.wellInner, radius: 0.5 * s, y: s)), flat: 0.25))
                 .frame(width: 11 * s, height: 4 * s).position(x: x * s, y: 155 * s)
             Group {
@@ -123,6 +129,28 @@ struct TodayWidgetView: View {
         .foregroundStyle(outside).fitted()
         .frame(width: 110 * s).position(x: 85 * s, y: 155 * s)
     }
+    /// The medium widget's text: the title at the top leading corner and one column right of the knob, which stays blank.
+    @ViewBuilder private func mediumTexts(_ s: CGFloat) -> some View {
+        // All of this text stands on the widget background, which StandBy removes; there it needs the light inks.
+        let ink: Color = flat ? .white : showsBackground ? palette.ink : TodayDialPalette.dark.ink
+        let secondary: Color = flat ? .white.opacity(0.7) : showsBackground ? palette.secondaryInk : TodayDialPalette.dark.secondaryInk
+        Text("오늘 집중").font(.caption.bold()).foregroundStyle(ink).fitted()
+            .frame(width: 140 * s, alignment: .leading).position(x: 86 * s, y: 20 * s)
+        Group {
+            switch state {
+            case .numbers(let count, let seconds):
+                VStack(alignment: .leading, spacing: 5 * s) {
+                    Text("누적 집중 시간").font(.caption2.weight(.medium)).foregroundStyle(secondary).fitted()
+                    Text(TodaySnapshot.durationText(seconds)).font(.title.bold()).monospacedDigit()
+                        .foregroundStyle(flat ? TodayDialPalette.flatAccent : ink).widgetAccentable().fitted()
+                    Text("\(count)회 완료").font(.caption2.weight(.medium)).monospacedDigit().foregroundStyle(secondary).fitted()
+                }
+            case .empty: Text("앱에서 시작해 보세요").font(.headline.bold()).foregroundStyle(ink).fitted()
+            case .check: Text("앱에서 확인해 주세요").font(.headline.bold()).foregroundStyle(ink).fitted()
+            }
+        }
+        .frame(width: 188 * s, alignment: .leading).position(x: 254 * s, y: 85 * s)
+    }
     private var accessibilityText: String {
         switch state {
         case .numbers(let count, let seconds): return "오늘 집중 \(TodaySnapshot.durationText(seconds)), \(count)회"
@@ -155,7 +183,8 @@ struct TodayWidgetBackground: View {
 /// The dial colors of one appearance: light from Figma frames 76:663 and 76:664, dark from the approved proposal on the screen redesign's dark tokens.
 /// The extension has no asset catalog, so the values are in code. The home widget spec's amendment of 2026-11-27 lists them.
 struct TodayDialPalette {
-    let base, ink: Color, frameSheen: [Gradient.Stop], frameInnerLight, frameInnerDark: Color
+    /// `secondaryInk` colors the medium widget's labels; light is darker than the frame's `#6B6F7B`, which measures 3.54:1 on the base.
+    let base, ink, secondaryInk: Color, frameSheen: [Gradient.Stop], frameInnerLight, frameInnerDark: Color
     let groove: [Gradient.Stop], grooveInner, grooveLip: Color
     let plate: Color, plateSheen: [Gradient.Stop], plateDrop, plateLift: Color
     let tick, tickInner, tickLift: Color
@@ -165,7 +194,7 @@ struct TodayDialPalette {
     let socket: [Gradient.Stop], socketInner: Color, lampOff, barOff: [Gradient.Stop]
 
     static let light = TodayDialPalette(
-        base: Color(hex: 0xDED8CE), ink: Color(hex: 0x202C46),
+        base: Color(hex: 0xDED8CE), ink: Color(hex: 0x202C46), secondaryInk: Color(hex: 0x525866),
         frameSheen: stops((0xFFFFFF, 0.15, 0), (0xFFFFFF, 0, 0.5), (0x746D5B, 0.12, 1)), frameInnerLight: Color(hex: 0xFFFFFF, 0.5), frameInnerDark: Color(hex: 0x79715E, 0.14),
         groove: stops((0xAFA99A, 1, 0), (0xCEC8BA, 1, 0.38), (0xEEEADD, 1, 1)), grooveInner: Color(hex: 0x6A6352, 0.26), grooveLip: Color(hex: 0xFFFFFF, 0.45),
         plate: Color(hex: 0xDED8CE), plateSheen: stops((0xFFFFFF, 0.28, 0), (0xFFFFFF, 0.02, 0.55), (0x6E685B, 0.1, 1)),
@@ -181,7 +210,7 @@ struct TodayDialPalette {
         lampOff: stops((0xC9C1A8, 1, 0), (0x9A927B, 1, 1)), barOff: stops((0xADA58E, 1, 0), (0xC2BAA5, 1, 1)))
 
     static let dark = TodayDialPalette(
-        base: Color(hex: 0x202C46), ink: Color(hex: 0xFFF4E2),
+        base: Color(hex: 0x202C46), ink: Color(hex: 0xFFF4E2), secondaryInk: Color(hex: 0xFFF4E2, 0.7),
         frameSheen: stops((0xFFFFFF, 0.07, 0), (0xFFFFFF, 0, 0.5), (0x05080F, 0.25, 1)), frameInnerLight: Color(hex: 0xFFFFFF, 0.08), frameInnerDark: Color(hex: 0x000000, 0.3),
         groove: stops((0x121A2D, 1, 0), (0x1A2339, 1, 0.38), (0x2E3A57, 1, 1)), grooveInner: Color(hex: 0x05080F, 0.5), grooveLip: Color(hex: 0xFFFFFF, 0.06),
         plate: Color(hex: 0x222E49), plateSheen: stops((0xFFFFFF, 0.08, 0), (0xFFFFFF, 0, 0.55), (0x000000, 0.15, 1)),
@@ -206,6 +235,14 @@ struct TodayDialPalette {
     private static func stops(_ values: (UInt32, Double, CGFloat)...) -> [Gradient.Stop] {
         values.map { Gradient.Stop(color: Color(hex: $0.0, $0.1), location: $0.2) }
     }
+}
+
+/// Positions in the units of the Figma frames: 170 × 170 for the small widget, 364 × 170 (node 87:631) for the medium one.
+/// The index marker sits 40 above the dial center and the knob bevel 5 below it; the indicator wells sit at y 155.
+private struct DialLayout {
+    let size: CGSize, dial: CGPoint, socket: CGPoint, wells: [CGFloat]
+    static let small = DialLayout(size: CGSize(width: 170, height: 170), dial: CGPoint(x: 85, y: 85), socket: CGPoint(x: 150, y: 17), wells: [19.5, 150.5])
+    static let medium = DialLayout(size: CGSize(width: 364, height: 170), dial: CGPoint(x: 78, y: 93), socket: CGPoint(x: 344, y: 17), wells: [21.5, 342.5])
 }
 
 private extension Color {

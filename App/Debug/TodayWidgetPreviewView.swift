@@ -21,16 +21,27 @@ struct TodayWidgetPreviewView: View {
                 Text("홈 화면 위젯 미리보기").font(.headline).accessibilityIdentifier("widgetPreviewReady")
                 Text("작은 위젯").font(.caption)
                 // The widget draws edge to edge (`contentMarginsDisabled`), and its background is drawn here because `containerBackground` draws nothing in an app.
-                TodayWidgetView(state: state).frame(width: 170, height: 170)
+                // Outside a widget `widgetFamily` reads `systemMedium`, so each preview names its family.
+                TodayWidgetView(state: state, family: .systemSmall).frame(width: 170, height: 170)
+                    .background { TodayWidgetBackground() }
+                    .clipShape(RoundedRectangle(cornerRadius: 22))
+                Text("중간 위젯").font(.caption)
+                // 364 × 170, shrunk to fit a narrower screen; the view scales itself to the size it gets.
+                TodayWidgetView(state: state, family: .systemMedium).aspectRatio(364 / 170, contentMode: .fit).frame(maxWidth: 364)
                     .background { TodayWidgetBackground() }
                     .clipShape(RoundedRectangle(cornerRadius: 22))
                 Text("강조 모드 근사(평면)").font(.caption)
-                TodayWidgetView(state: state, drawsFlat: true).frame(width: 170, height: 170)
-                    .background { TodayWidgetBackground(drawsFlat: true) }
-                    .clipShape(RoundedRectangle(cornerRadius: 22))
-                    .padding(20)
-                    .background(LinearGradient(colors: [Color(red: 0.15, green: 0.2, blue: 0.3), Color(red: 0.24, green: 0.2, blue: 0.32)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 16))
-                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 12) {
+                    TodayWidgetView(state: state, drawsFlat: true, family: .systemSmall).frame(width: 170, height: 170)
+                        .background { TodayWidgetBackground(drawsFlat: true) }
+                        .clipShape(RoundedRectangle(cornerRadius: 22))
+                    TodayWidgetView(state: state, drawsFlat: true, family: .systemMedium).aspectRatio(364 / 170, contentMode: .fit).frame(maxWidth: 364)
+                        .background { TodayWidgetBackground(drawsFlat: true) }
+                        .clipShape(RoundedRectangle(cornerRadius: 22))
+                }
+                .padding(3)
+                .background(LinearGradient(colors: [Color(red: 0.15, green: 0.2, blue: 0.3), Color(red: 0.24, green: 0.2, blue: 0.32)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 24))
+                .accessibilityHidden(true)
             }.padding()
         }.background(Color(uiColor: .systemGroupedBackground))
     }
