@@ -1,6 +1,7 @@
 # App Store listing
 
-The listing of the first App Store submission, 1.0.0 (2), for the Korea storefront only.
+The listing of the paid build, version 1.1.0, for the Korea storefront only; its build number is fixed when the paid build is uploaded (issue #255).
+The listing of the first submission, 1.0.0 (2), is in the git history of this file.
 It is typed into App Store Connect by hand; this note is the source, so change it first and copy the change.
 Privacy answers come from [store privacy declarations](store-privacy-declarations.md); the copy follows the landing site `https://focus.donminzzi.kr`.
 Field limits are App Store Connect's: name and subtitle 30 characters, promotional text 170, keywords 100, description 4000; the field counter is the authority.
@@ -16,7 +17,7 @@ Field limits are App Store Connect's: name and subtitle 30 characters, promotion
 | Privacy policy URL | `https://focus.donminzzi.kr/privacy`                         |
 | Support URL        | `https://focus.donminzzi.kr/`                                |
 | Marketing URL      | `https://focus.donminzzi.kr/`                                |
-| Price              | Free                                                         |
+| Price              | Free, with the in-app purchases below                        |
 | Availability       | Korea only                                                   |
 | Release            | Automatically release this version after App Review approval |
 | Copyright          | 2026 donminzzi lab                                           |
@@ -49,14 +50,45 @@ The name in App Store Connect may differ if the app record was created with anot
 ■ 집중 모드와 함께
 iOS에서 "공부" 같은 집중 모드를 켜면 집중이 시작되고, 끄면 끝나요. 알림은 그 집중 모드에 설정한 대로 iOS가 걸러 줘요.
 
+■ 순공 캘린더
+끝까지 마친 집중 시간만 날짜별로 모아, 한 달 동안 공부한 시간을 달력으로 보여 줘요. 쉬는 시간과 일반 스크린타임은 더하지 않아요.
+
+■ 주간 회고
+한 주 동안 해낸 것을 돌아보고, 다음 주의 나에게 한마디를 남겨요. 회고 알림을 받을 요일과 시간은 직접 정할 수 있어요.
+
+■ 한 달을 이미지로
+기록한 날마다 도장을 찍은 한 달 달력을 이미지로 만들어 공유하거나 사진에 저장해요.
+
 ■ 오늘의 기록
 오늘 한 집중과 끝난 이유, 며칠째 이어서 집중했는지를 보여 줘요. 오늘의 사용량은 스크린 타임 보고서로 확인하고, 홈 화면 위젯으로 오늘의 집중 시간을 볼 수 있어요.
 
+■ 3일 무료 체험, 평생권은 한 번만 구매
+집중 타이머와 쉬는 시간, 집중 모드로 시작하기, 순공 캘린더, 주간 회고, 공유 이미지는 3일 동안 무료로 써 볼 수 있어요. 그다음에는 평생권을 한 번 구매하면 계속 쓸 수 있어요. 구독이 아니고, 체험이 끝나도 자동으로 결제되지 않아요.
+매일 제한은 구매하지 않아도 계속 무료예요. 이 버전보다 먼저 온:공을 내려받았다면 모든 기능을 계속 무료로 쓸 수 있어요.
+
 ■ 데이터는 기기에만 저장돼요
-계정이 없고, 고른 앱 목록과 사용량을 서버로 보내지 않아요. 점수나 비교 대신, 나의 하루를 기록해요.
+계정이 없고, 고른 앱 목록과 사용량을 서버로 보내지 않아요. 공유 이미지는 직접 공유하거나 저장할 때만 기기 밖으로 나가요. 점수나 비교 대신, 나의 하루를 기록해요.
 
 온:공은 본인이 본인의 iPhone에서 쓰는 앱이에요. 부모님이 관리하는 기능은 없어요. iPhone만 지원해요.
 ```
+
+## What's New
+
+```plaintext
+• "오늘의 집중"을 누르면 순공 캘린더가 열려요. 한 달 동안 끝까지 마친 집중 시간을 날짜별로 볼 수 있어요.
+• 주간 회고로 한 주 동안 해낸 것을 돌아보고, 다음 주의 나에게 한마디를 남길 수 있어요. 정한 요일과 시간에 알림으로 알려 드려요.
+• 기록한 날마다 도장을 찍은 한 달 달력을 이미지로 공유할 수 있어요.
+• 대기, 집중, 쉬는 화면과 매일 제한 설정 화면을 새로 디자인했어요. 매일 제한이 걸려 있는 동안 느슨하게 바꿀 수 없는 항목은 미리 잠겨 보여요.
+• 집중 타이머와 새 기능은 3일 동안 무료로 써 보고, 평생권을 한 번 구매하면 계속 쓸 수 있어요. 구독이 아니고 자동으로 결제되지 않아요. 이미 온:공을 쓰고 있었다면 모든 기능을 계속 무료로 쓸 수 있어요.
+```
+
+The facts are the user-visible changes after 1.0.0 (2): issues #238 and #242 (screens), #256 and #263 (purchase and trial), #259 (순공 calendar), #261 (weekly review) and #265 (share image).
+The store-image change of PR #234 is not in the app and is left out.
+
+## In-app purchases
+
+The two items, their product IDs, prices and review notes are recorded in the [paid access design](../specs/2026-11-24-paid-access-design.md#products).
+App Store Connect submits them together with this version.
 
 ## Keywords
 
@@ -122,11 +154,11 @@ Contact name, email and phone: entered in App Store Connect only, never in this 
 Notes:
 
 ```plaintext
-온:공 is a focus timer for students. It uses the Family Controls framework with individual authorization: the person who installs it blocks apps and websites on their own iPhone. It is not a parental control app, and there is no account, server or network access.
+온:공 is a focus timer for students. It uses the Family Controls framework with individual authorization: the person who installs it blocks apps and websites on their own iPhone. It is not a parental control app, and there is no account and no server of ours, and the app sends nothing off the device.
 
 How to review (a physical iPhone is needed; Screen Time shields do not appear in Simulator):
 1. Open the app and allow Screen Time access in the onboarding.
-2. Choose one or more apps or websites to block, then choose a focus length and tap Start.
+2. Choose one or more apps or websites to block, then choose a focus length and tap Start (집중 시작하기). The first start shows the 3-day trial offer; start the trial to continue that focus session.
 3. Open a chosen app: the 온:공 shield appears. On iOS 26.5 and later its primary button "온:공 열기" opens 온:공; "닫기" closes the app.
 4. In the timer screen, take a break (up to 3 breaks of 3 minutes): the apps are unblocked during the break and blocked again after it.
 5. Settings > 매일 제한 blocks a separate selection on chosen weekdays and hours without opening the app.
@@ -140,5 +172,10 @@ Why each extension exists:
 - App Intents: runs the Focus filter while the app is not running.
 - Widget and Live Activity: show today's focus time and the running session's planned times.
 
-The Screen Time features are free. The app has no in-app purchase in this version.
+In-app purchases, new in this version:
+- The everyday blocking layer (Settings > 매일 제한), which uses the Screen Time APIs, stays free for every user.
+- A one-time non-consumable purchase, "평생권" (kr.donminzzi.focusStudy.unlock), opens the focus sessions, the 순공 calendar, the weekly review and the share image, which the app builds itself. There is no subscription.
+- The 3-day trial (kr.donminzzi.focusStudy.trial3d) is a price-0 non-consumable item named "3-day Trial" (Guideline 3.1.1). It starts only by an explicit tap, and nothing is charged when it ends. Before it starts, the screen shows the trial length, what stops at its end and the price of the full unlock.
+- Users who downloaded a build before this version keep every feature free. The sandbox reports an original app version of "1.0", so a review account sees the trial offer.
+- The app asks for notification permission only after the person chooses to receive the weekly review reminder, and for add-only Photos access only when the person saves a share image.
 ```

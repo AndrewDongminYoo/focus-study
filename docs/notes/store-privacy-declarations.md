@@ -39,6 +39,29 @@ Repeat these checks before a release that adds a dependency, an extension, a usa
 
 The weekly review of issue #251 adds the first usage description, `NSPhotoLibraryAddUsageDescription` in the app's Info.plist, for the save of its share image to Photos with add-only access (the 순공 calendar share image of issue #253 uses the same text, through the share sheet's "이미지 저장"), and the first local notification; the release of issue #255 repeats the checks above with them.
 
+## Evidence for the paid build, 2026-11-27
+
+Issue #255 repeats the checks above at `5316ad7`, which holds every paid-build feature; the paid build changes only its version, build number and the gate setting after this commit.
+
+The App Privacy answers do not change: still **Data Not Collected** and no tracking.
+Apple's [App Privacy details](https://developer.apple.com/app-store/app-privacy-details/) (read 2026-11-27) says that "Data that is processed only on device is not “collected” and does not need to be disclosed in your answers", and that "You are not responsible for disclosing data collected by Apple."
+The app reads its StoreKit 2 transactions and `AppTransaction` on the device and sends nothing from them anywhere; the page does not mention in-app purchases directly, so this answer applies its general rule.
+If a later build sends a transaction value off the device, Purchase History has to be declared.
+
+Source search over the 80 Swift files of the same 11 directories, with the patterns of 1.0.0 plus `UNUserNotificationCenter` and `UIImageWriteToSavedPhotosAlbum`:
+
+- `cloudKitDatabase: .none` in the same three configurations, and no URL in the source.
+- `import StoreKit` only in `App/PaidAccessStore.swift`, the StoreKit 2 adapter of the [paid access design](../specs/2026-11-24-paid-access-design.md).
+- `UNUserNotificationCenter` only in `App/WeeklyReviewNotifications.swift`: local notifications, scheduled on the device.
+- `UIImageWriteToSavedPhotosAlbum` only in `App/WeeklyReviewView.swift`: the add-only save of a share image.
+- No match for the network, tracking, location, contacts, health, camera, pasteboard, mail or `openURL` patterns.
+
+Unsigned Release build at `5316ad7`, the same 7 executables (`FocusReport` and `FocusStudyIntents` are under `Extensions/`, the other extensions under `PlugIns/`):
+
+- `nm -u` finds none of the network, tracking, CloudKit or location symbols of the 1.0.0 check in any executable; as a control, the app lists 1529 Swift symbols.
+- `otool -L`: only the app links `StoreKit.framework` and `UserNotifications.framework`; no executable links Network, AdSupport, AppTrackingTransparency, CloudKit, CoreLocation, WebKit or Photos. The app still links the weak overlay `libswiftCoreLocation.dylib`.
+- The app's Info.plist declares one usage description, `NSPhotoLibraryAddUsageDescription`; no extension declares one. A local notification needs no usage description.
+
 ## Age rating
 
 `[UNCERTAIN]` The questionnaire was not read for this note; answer it in App Store Connect from these facts: no violence, sexual content, profanity, drugs, gambling, horror or medical content; no user-generated content, messaging, web browsing or advertising.
