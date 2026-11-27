@@ -26,7 +26,19 @@ Consequence for this design: the first launch without a network connection can h
 | `kr.donminzzi.focusStudy.unlock`  | Non-consumable | Store | Full unlock   |
 
 Issue #254 creates both items in App Store Connect with these IDs, with Family Sharing off (decision 9).
-`Configuration/FocusStudy.storekit` holds the same two products for local StoreKit testing; the scheme's Run action uses it.
+They were created on 2026-11-27, both with the status "제출 준비 중" (Prepare for Submission) until the paid build is submitted with them:
+
+| Product ID                        | Apple ID     | Reference name | Price (base: Korea) | Availability | Korean display name | Korean description                               |
+| --------------------------------- | ------------ | -------------- | ------------------- | ------------ | ------------------- | ------------------------------------------------ |
+| `kr.donminzzi.focusStudy.unlock`  | `6839828932` | Full Unlock    | KRW 14,000          | Korea only   | 평생권              | 집중 타이머와 순공 기록을 한 번 구매로 계속 써요 |
+| `kr.donminzzi.focusStudy.trial3d` | `6839829686` | 3-day Trial    | KRW 0               | Korea only   | 3-day Trial         | 3일 동안 모든 유료 기능을 무료로 써요            |
+
+- Family Sharing is off for both, and new storefronts are not added automatically.
+- The tax category matches the app.
+- Each item has an App Review note: the everyday layer stays free, what the unlock opens, the trial as a price-0 "3-day Trial" item started by an explicit tap, no subscription and no automatic charge, earlier users keep every feature free, and the path to the paywall.
+- Each item has an App Review screenshot from the approval captures of issue #247: the paywall after the trial for the unlock, and the trial offer from the start action for the trial.
+- App Store Connect submits the first non-consumable items together with a new app version, so both go with the paid build.
+  `Configuration/FocusStudy.storekit` holds the same two products for local StoreKit testing; the scheme's Run action uses it.
 
 ## Flag and threshold
 

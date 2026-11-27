@@ -28,6 +28,7 @@ Decided on 2026-11-24:
 3. **No subscription.** The purchase opens the paid features fully and for good.
 4. **Price**: KRW 14,000 on the Korea storefront.
    If App Store Connect has no price point of exactly KRW 14,000, use the nearest price point and record it in this document.
+   Recorded on 2026-11-27 (issue #254): the full unlock item uses the KRW 14,000 price point, with Korea as its base storefront.
 5. **Trial**: a free 3-day trial, as App Review Guideline 3.1.1 permits for non-subscription apps.
    - The trial is a separate non-consumable in-app purchase at price 0, named "3-day Trial" by the 3.1.1 naming convention.
    - The person starts the trial with an explicit action.
