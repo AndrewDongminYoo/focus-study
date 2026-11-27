@@ -41,7 +41,7 @@ struct TodayFocusWidget: Widget {
         }
         .configurationDisplayName("오늘 집중")
         .description("오늘 완료한 집중 시간과 횟수를 보여 줘요.")
-        .supportedFamilies([.systemSmall])
+        .supportedFamilies([.systemSmall, .systemMedium])
         // The dial is laid out on the whole widget, as in the Figma frames.
         .contentMarginsDisabled()
     }

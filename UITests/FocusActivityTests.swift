@@ -65,9 +65,12 @@ final class FocusActivityTests: XCTestCase {
             app.launchArguments = ["--ui-testing", "approved", "--selected", "--widget-preview", mode, "-AppleLanguages", "(ko)", "-AppleLocale", "ko_KR"]
             app.launch()
             XCTAssertTrue(app.staticTexts["widgetPreviewReady"].waitForExistence(timeout: 10), mode)
-            let widget = app.descendants(matching: .any)["todayWidget"]
-            XCTAssertTrue(widget.exists, mode)
-            XCTAssertEqual(widget.label, label)
+            // The small and the medium widget say the same.
+            for identifier in ["todayWidget", "todayWidgetMedium"] {
+                let widget = app.descendants(matching: .any)[identifier]
+                XCTAssertTrue(widget.exists, "\(mode) \(identifier)")
+                XCTAssertEqual(widget.label, label, identifier)
+            }
             capture(app, name: "widget-\(mode)")
             app.terminate()
         }
