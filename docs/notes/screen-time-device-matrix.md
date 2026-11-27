@@ -793,6 +793,23 @@ The results come from captures taken on the device between 16:24 and 16:42.
 | Tinted (틴트), light and dark               | Passed: the flat dial on the tinted background; the 12 o'clock marker, the only accent-group part of the Empty view, was drawn in the same color as the primary group |
 | The Numbers view: two time lines, lit lamps | Unverified on the device: no session was completed during the run; the simulator preview showed them in light, dark, the flat look and the largest text size          |
 
+## Medium widget: 2026-11-27 (#231)
+
+The looks of the [medium size amendment](../specs/2026-11-13-home-widget-design.md#medium-size-amendment-2026-11-27).
+On the iPhone 16 Pro with iOS 27.0.1 (24A446), a signed Debug build of `d3e3dc1`, the head of PR #271 whose merge is `dea1f0f`, was installed over the `5cd0591` build with `devicectl device install app` at 21:07:06, with the existing development profiles.
+The medium widget was on the Home Screen, and today had one completed session, so every capture shows the Numbers view: "누적 집중 시간", "25분" and "1회 완료", with the lamp and both bars lit.
+The results come from captures taken on the device at 23:10.
+
+| Check                | Result                                                                                                                                     |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Light, full color    | Passed: the light palette with the blank knob and the text column, as on the board `99:602`                                                |
+| Dark, full color     | Passed: the dark palette; the cream labels can be read                                                                                     |
+| Clear (투명), light  | Passed: the flat dial on the system glass; the time, the marker and the lit lamps can be read                                              |
+| Tinted (틴트), light | Passed: the flat dial on a pink tint; the accent group (the time, the marker and the lit lamps) was drawn in white, like the primary group |
+| StandBy              | Not applicable: StandBy offers only square widgets, so the medium family does not appear there                                             |
+
+The small widget's Numbers view (two time lines on the knob) is still unverified on the device.
+
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 
 이슈 #17의 검토 결과다.

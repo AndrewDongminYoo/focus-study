@@ -554,3 +554,4 @@ In the accented mode the time is in the accent group, as on the small widget.
 The labels `누적 집중 시간` and `N회 완료` use a secondary ink: `#525866` in the light appearance and `#FFF4E2` at 70% in the dark one, white at 70% in the flat look.
 The frame's `#6B6F7B` measures 3.54:1 on `#DED8CE`, below 4.5:1 for 11 pt text; `#525866` measures 5.03:1.
 Without the container background both inks become the dark ones.
+Reconciliation (2026-11-27): the [device run of that date](../notes/screen-time-device-matrix.md#medium-widget-2026-11-27-231) showed the medium widget in light, dark, clear and tinted in the Numbers view; StandBy offers only square widgets.
