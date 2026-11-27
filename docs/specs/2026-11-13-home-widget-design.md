@@ -127,6 +127,8 @@ The Lock Screen accessory families are left for a later change.
 They need the vibrant look, an Always-On check and their own captures, and the Lock Screen is where the Live Activity already is.
 The medium and large families have no more content to show.
 
+Superseded (2026-11-27, #231): the widget also supports `systemMedium`; the [medium size amendment](#medium-size-amendment-2026-11-27) gives its look. The large and accessory families stay out.
+
 ### Data path
 
 Recommended: one small JSON file in the App Group container that the app writes and the widget reads.
@@ -522,3 +524,33 @@ The DEBUG preview `--widget-preview <mode>` draws the background itself, because
 The mode `long` shows 23시간 59분 and 12회 for the ellipsis check.
 The approval of the accented mode still needs a capture of the real tinted Home Screen.
 Reconciliation (2026-11-27): the [device run of that date](../notes/screen-time-device-matrix.md#widget-dial-look-2026-11-27-230) captured light, dark, StandBy, clear and tinted in the Empty view; the Numbers view is unverified on a device.
+
+## Medium size amendment: 2026-11-27
+
+Source: [issue #231](https://github.com/AndrewDongminYoo/focus-study/issues/231).
+The look was approved on 2026-11-27 from Figma frame `87:631` ("2×4 · 오늘 집중") and from the board `99:602`, which shows the code rendering in light, dark and the accented mode for each state.
+The same `TodayFocusWidget` supports `systemMedium`, with the same data, states and accessibility text as the small widget.
+The rules of the [dial look amendment](#dial-look-amendment-2026-11-27) apply unless this section says otherwise: colors, the rendering modes, the light ink without the container background, the one-line text that shrinks to 70% and then ends in an ellipsis, and the Dynamic Type limit of `xxLarge`.
+
+### Medium layout
+
+All sizes are in the 364 × 170 units of the frame, and the view scales them by the smaller ratio of the widget's width to 364 and height to 170.
+
+| Part                     | Position                            | Size and text                                                                                                      |
+| ------------------------ | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Title `오늘 집중`        | leading 16, center y 20             | `caption`, bold                                                                                                    |
+| Dial (ticks to knob)     | center 78, 93                       | the small widget's dial; the index marker at y 53, the bevel at y 98                                               |
+| Knob                     | center 78, 93                       | no text in any state                                                                                               |
+| Lamp socket and lamp     | 344, 17                             | as in the small widget                                                                                             |
+| Indicator wells and bars | 21.5 and 342.5, 155                 | as in the small widget                                                                                             |
+| Text column              | leading 160, width 188, center y 85 | Numbers: `누적 집중 시간` (`caption2`, medium), the time (`title`, bold), `N회 완료` (`caption2`, medium), 5 apart |
+| Empty and Check line     | the text column                     | `앱에서 시작해 보세요` or `앱에서 확인해 주세요`, `headline`, bold                                                 |
+
+The time is one line of `durationText`, not the two knob lines of the small widget.
+In the accented mode the time is in the accent group, as on the small widget.
+
+### Medium colors
+
+The labels `누적 집중 시간` and `N회 완료` use a secondary ink: `#525866` in the light appearance and `#FFF4E2` at 70% in the dark one, white at 70% in the flat look.
+The frame's `#6B6F7B` measures 3.54:1 on `#DED8CE`, below 4.5:1 for 11 pt text; `#525866` measures 5.03:1.
+Without the container background both inks become the dark ones.
