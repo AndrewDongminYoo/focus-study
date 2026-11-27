@@ -101,4 +101,16 @@ final class TodaySnapshotTests: XCTestCase {
     func testDurationTextUsesTheTodaySummaryFormat() {
         XCTAssertEqual(TodaySnapshot.durationText(4500), Duration.seconds(4500).formatted(.units(allowed: [.hours, .minutes], width: .wide)))
     }
+    func testDurationLinesSplitTheTodaySummaryFormat() {
+        let ko = Locale(identifier: "ko_KR")
+        let cases: [(TimeInterval, [String])] = [
+            (0, ["0분"]), (30, ["0분"]), (59, ["1분"]), (2700, ["45분"]), (4500, ["1시간", "15분"]), (4530, ["1시간", "16분"]),
+            (7230, ["2시간"]), (45000, ["12시간", "30분"]), (86399, ["24시간"]),
+        ]
+        for (seconds, lines) in cases { XCTAssertEqual(TodaySnapshot.durationLines(seconds, locale: ko), lines, "\(seconds)") }
+        // Every second of a day, including each rounding edge, gives the same words as the spoken label.
+        for seconds in stride(from: 0.0, through: 86_400, by: 1) {
+            XCTAssertEqual(TodaySnapshot.durationLines(seconds, locale: ko).joined(separator: " "), TodaySnapshot.durationText(seconds, locale: ko), "\(seconds)")
+        }
+    }
 }
