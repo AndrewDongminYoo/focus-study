@@ -15,6 +15,7 @@ Decided on 2026-11-13:
 1. The app gets a home screen widget.
 2. The main screen of the app stays the focus-start screen. The widget is a glance and an entry into the app, not a second control surface.
 3. The widget shows no selection token, app name, domain or usage data, and it never states that restrictions are on or off. Like the Live Activity, it shows only what the app confirmed, as planned times or completed records.
+   Reconciliation (2026-11-28, #270): this item does not apply to the everyday plan widget, which shows the everyday layer's plan as planned times from its own App Group file; the [everyday plan widget design](2026-11-28-everyday-plan-widget-design.md) owns that widget's contract and data path.
 4. Rewards stay out of scope: points, badges, unlocks, rankings, comparison with friends, and a "streak about to break" message. The display-only streak may appear only if this spec decides so and says why it is not a reward surface.
 
 Out of scope: the implementation, any signing or profile change, any device install, and the streak itself (issue #125).
