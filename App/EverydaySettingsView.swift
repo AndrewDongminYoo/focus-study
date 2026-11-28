@@ -12,6 +12,7 @@ struct EverydaySettingsView: View {
     @State private var confirmingSave = false
     @State private var editingRange = false
     @State private var saveFeedback = 0
+    @State private var windowStartWidth: CGFloat = 0
     @ScaledMetric(relativeTo: .footnote) private var saveStatusHeight = FocusTheme.Layout.minimumTapTarget
     @ScaledMetric(relativeTo: .title2) private var headingSize: CGFloat = 25
     @ScaledMetric(relativeTo: .largeTitle) private var rangeSize: CGFloat = 29
@@ -111,8 +112,15 @@ struct EverydaySettingsView: View {
             HStack(spacing: FocusTheme.Layout.inlineSpacing) {
                 Text("매일 제한").font(.system(size: headingSize, weight: .bold)).foregroundStyle(EverydayPalette.ink).accessibilityAddTraits(.isHeader)
                 Spacer(minLength: FocusTheme.Layout.inlineSpacing)
+                if !settings.canToggleEnabled { EverydayLockMark() }
                 Toggle("매일 제한 켜기", isOn: $settings.draft.enabled).labelsHidden().tint(EverydayPalette.accent)
                     .disabled(!settings.canToggleEnabled).accessibilityIdentifier("everydayToggle")
+            }
+            if settings.isLocked {
+                // The lock marks say what is locked; this line says why, and that the lock ends with the range.
+                Text("제한 시간에는 \(Image(systemName: "lock.fill")) 표시한 항목을 바꿀 수 없어요.")
+                    .font(.footnote).foregroundStyle(EverydayPalette.secondary).fixedSize(horizontal: false, vertical: true)
+                    .accessibilityLabel("제한 시간에는 잠긴 항목을 바꿀 수 없어요.").accessibilityIdentifier("everydayLockNote")
             }
             if EverydaySettingsModel.showsStatusLine(settings.status) {
                 Text(EverydaySettingsModel.statusLine(settings.status, at: settings.statusReadAt ?? settings.clock(), calendar: calendar))
@@ -200,10 +208,16 @@ struct EverydaySettingsView: View {
             }
             EverydayDivider()
             Button { choosingWindow = true } label: {
-                Text("+  시간 추가하기").font(.subheadline.weight(.medium)).frame(maxWidth: .infinity, minHeight: FocusTheme.Layout.minimumTapTarget, alignment: .leading)
-                    .contentShape(Rectangle())
+                HStack(spacing: FocusTheme.Layout.inlineSpacing) {
+                    if settings.isLocked { EverydayLockMark() } else { Text("+").accessibilityHidden(true) }
+                    Text("시간 추가하기")
+                }
+                .font(.subheadline.weight(.medium)).frame(maxWidth: .infinity, minHeight: FocusTheme.Layout.minimumTapTarget, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain).foregroundStyle(EverydayPalette.accent).opacity(settings.canAddWindow ? 1 : 0.45)
+            // A locked button shows the lock mark in the secondary color; a button with three windows is dimmed, because nothing locks it.
+            .buttonStyle(EverydayLockableButtonStyle()).foregroundStyle(settings.isLocked ? EverydayPalette.secondary : EverydayPalette.accent)
+            .opacity(settings.canAddWindow || settings.isLocked ? 1 : 0.45)
             .disabled(!settings.canAddWindow).accessibilityIdentifier("everydayAddWindow")
             .confirmationDialog("시간 추가하기", isPresented: $choosingWindow, titleVisibility: .visible) {
                 ForEach(EverydayWindowKind.allCases, id: \.self) { kind in
@@ -215,6 +229,7 @@ struct EverydaySettingsView: View {
             Text("점심이나 등하교처럼 제한을 풀어 둘 시간을 3개까지 정할 수 있어요. 한 번에 15분에서 2시간까지예요.")
                 .font(.caption).foregroundStyle(EverydayPalette.secondary).fixedSize(horizontal: false, vertical: true)
         }
+        .onPreferenceChange(WindowStartWidthKey.self) { windowStartWidth = $0 }
         .modifier(EverydayCard())
     }
     private var appCard: some View {
@@ -225,14 +240,18 @@ struct EverydaySettingsView: View {
                     Spacer(minLength: FocusTheme.Layout.inlineSpacing)
                     Text("앱 \(settings.counts.apps)개 · 웹사이트 \(settings.counts.websites)개").font(.footnote.weight(.medium))
                         .foregroundStyle(EverydayPalette.accent).monospacedDigit().multilineTextAlignment(.trailing)
-                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(EverydayPalette.secondary).accessibilityHidden(true)
+                    if settings.canEditSelection {
+                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(EverydayPalette.secondary).accessibilityHidden(true)
+                    } else {
+                        EverydayLockMark()
+                    }
                 }
                 Text("집중 시간에 제한할 앱과 따로 골라요.").font(.footnote).foregroundStyle(EverydayPalette.secondary).fixedSize(horizontal: false, vertical: true)
                 if let issue = settings.selectionIssue { issueLabel(issue, identifier: "everydaySelectionIssue") }
             }
             .modifier(EverydayCard()).contentShape(Rectangle())
         }
-        .buttonStyle(.plain).opacity(settings.canEditSelection ? 1 : 0.45)
+        .buttonStyle(EverydayLockableButtonStyle())
         .disabled(!settings.canEditSelection).accessibilityIdentifier("everydaySelection")
     }
     private var previewCard: some View {
@@ -404,8 +423,18 @@ struct EverydaySettingsView: View {
             .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier(identifier)
     }
     @ViewBuilder private func windowTimes(_ index: Int, separator: Bool) -> some View {
-        TimeField(title: "시작", minutes: windowBinding(index, \.start)).labelsHidden()
-        if separator { Text("–").foregroundStyle(EverydayPalette.secondary).accessibilityHidden(true) }
+        // Every start takes the width of the widest one, so that the dash and the end line up from row to row
+        // ("오후 12:00" is wider than "오전 8:00"); a stacked row has no dash to line up.
+        // The lock mark is inside each layout, so that the stacked layout still fits at the largest text size.
+        if !settings.canEditWindowTimes { EverydayLockMark() }
+        let start = TimeField(title: "시작", minutes: windowBinding(index, \.start)).labelsHidden()
+        if separator {
+            start.background(GeometryReader { proxy in Color.clear.preference(key: WindowStartWidthKey.self, value: proxy.size.width) })
+                .frame(minWidth: windowStartWidth, alignment: .leading)
+            Text("–").foregroundStyle(EverydayPalette.secondary).accessibilityHidden(true)
+        } else {
+            start
+        }
         TimeField(title: "끝", minutes: windowBinding(index, \.end)).labelsHidden()
     }
     @ViewBuilder private var selectionEditor: some View {
@@ -455,6 +484,23 @@ private struct EverydayCard: ViewModifier {
     }
 }
 
+/// The width of the widest window start, measured before the shared minimum width applies.
+private struct WindowStartWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat { 0 }
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
+/// A plain button that a disabled state does not dim, because a locked element shows the lock mark instead.
+private struct EverydayLockableButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View { configuration.label.opacity(configuration.isPressed ? 0.6 : 1) }
+}
+
+/// The lock mark of an element that the locked screen keeps; the lock note of the status card says it in words.
+private struct EverydayLockMark: View {
+    var color: Color = EverydayPalette.secondary
+    var body: some View { Image(systemName: "lock.fill").font(.caption2).foregroundStyle(color).accessibilityHidden(true) }
+}
+
 private struct EverydayDivider: View {
     var body: some View { Rectangle().fill(EverydayPalette.divider).frame(height: 1).accessibilityHidden(true) }
 }
@@ -502,7 +548,8 @@ private struct EverydayProportionBar: View {
 }
 
 /// Seven day chips in the order of the first weekday. A chosen day is the accent tint with bold accent text, a day that is not
-/// chosen is the neutral tint, so that the two differ by more than color; a chip that the locked screen keeps is disabled.
+/// chosen is the neutral tint, so that the two differ by more than color; a chip that the locked screen keeps is disabled and
+/// keeps its chosen look with a lock mark, so that the day still reads as chosen.
 private struct EverydayWeekdayChips: View {
     let order: [Int]
     let chosen: Set<Int>
@@ -525,17 +572,19 @@ private struct EverydayWeekdayChips: View {
     private func chip(_ day: Int) -> some View {
         let isChosen = chosen.contains(day), enabled = canToggle(day)
         return Button { toggle(day) } label: {
-            Text(EverydaySettingsModel.shortWeekdayName(day))
-                .font(.subheadline.weight(isChosen ? .bold : .regular))
-                .foregroundStyle(isChosen ? EverydayPalette.accent : EverydayPalette.secondary)
-                .lineLimit(1).minimumScaleFactor(0.5)
-                .frame(maxWidth: .infinity).frame(height: 32)
-                .background(RoundedRectangle(cornerRadius: 9).fill(isChosen ? EverydayPalette.accentTint : EverydayPalette.neutralTint))
-                .padding(.horizontal, 3)
-                .frame(minWidth: FocusTheme.Layout.minimumTapTarget, minHeight: FocusTheme.Layout.minimumTapTarget)
-                .contentShape(Rectangle())
+            HStack(spacing: 2) {
+                Text(EverydaySettingsModel.shortWeekdayName(day)).font(.subheadline.weight(isChosen ? .bold : .regular))
+                if !enabled { EverydayLockMark(color: EverydayPalette.accent) }
+            }
+            .foregroundStyle(isChosen ? EverydayPalette.accent : EverydayPalette.secondary)
+            .lineLimit(1).minimumScaleFactor(0.5)
+            .frame(maxWidth: .infinity).frame(height: 32)
+            .background(RoundedRectangle(cornerRadius: 9).fill(isChosen ? EverydayPalette.accentTint : EverydayPalette.neutralTint))
+            .padding(.horizontal, 3)
+            .frame(minWidth: FocusTheme.Layout.minimumTapTarget, minHeight: FocusTheme.Layout.minimumTapTarget)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain).opacity(enabled ? 1 : 0.45).disabled(!enabled)
+        .buttonStyle(EverydayLockableButtonStyle()).disabled(!enabled)
         .accessibilityLabel(EverydaySettingsModel.weekdayName(day))
         .accessibilityAddTraits(isChosen ? .isSelected : [])
         .accessibilityIdentifier("everydayWeekday.\(day)")

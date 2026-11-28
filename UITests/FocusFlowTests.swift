@@ -891,6 +891,7 @@ final class FocusFlowTests: XCTestCase {
         let status = openEveryday(app)
         XCTAssertFalse(status.exists, "the layer blocks now, which the switch says")
         XCTAssertFalse(app.switches["everydayToggle"].isEnabled)
+        XCTAssertEqual(app.staticTexts["everydayLockNote"].label, "제한 시간에는 잠긴 항목을 바꿀 수 없어요.", "the note says why the elements are locked")
         XCTAssertTrue(app.buttons["everydayOffToday"].exists)
         let add = app.buttons["everydayAddWindow"], selection = app.buttons["everydaySelection"]
         scrollEveryday(app, to: add)
@@ -1026,6 +1027,7 @@ final class FocusFlowTests: XCTestCase {
         let status = openEveryday(app)
         XCTAssertEqual(status.label, line)
         XCTAssertTrue(app.switches["everydayToggle"].isEnabled, "a day that is off locks nothing")
+        XCTAssertFalse(app.staticTexts["everydayLockNote"].exists, "nothing is locked, so no lock note")
         XCTAssertFalse(app.buttons["everydayOffToday"].exists)
         captureReport(app, name: "everyday-weekday-off-status")
         app.navigationBars.buttons.element(boundBy: 0).tap()
@@ -1063,6 +1065,7 @@ final class FocusFlowTests: XCTestCase {
         for _ in 0..<4 where !add.exists { app.swipeUp() }
         XCTAssertTrue(add.exists)
         XCTAssertFalse(add.isEnabled)
+        captureReport(app, name: "everyday-three-windows")
     }
     func testTimerScreenShowsTheEverydayStatusRowWhileTheLayerBlocks() {
         let app = app(extra: ["--everyday-fixture", "blocking"])
