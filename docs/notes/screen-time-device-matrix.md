@@ -810,6 +810,47 @@ The results come from captures taken on the device at 23:10.
 
 The small widget's Numbers view (two time lines on the knob) is still unverified on the device.
 
+## Everyday plan widget and locked everyday screen: 2026-11-28 (#270, #277)
+
+On the iPhone 16 Pro with iOS 27.0.1 (24A446), a signed Debug build of `28c16f2`, the merge of PR #277, was installed over the `1f44f98` build with `devicectl device install app` at 21:45:40, with the existing development profiles.
+The stored everyday layer was 08:00–18:00 on every day with the windows 08:00–08:30, 12:00–13:00 and 16:00–16:30, and it was off for today.
+Today had one completed 25-minute session.
+
+### Everyday plan widget (#270)
+
+The [everyday plan widget](../specs/2026-11-28-everyday-plan-widget-design.md) was on the Home Screen with the small and the medium focus widgets.
+The results come from captures taken on the device at 21:49 and 21:50, so the widget showed only the state of a day that is off.
+
+| Check                                                    | Result                                                                                                                                                          |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Off for today                                            | Passed: "오늘의 제한 계획" with "매일" on the trailing side, an empty timeline and `오늘은 매일 제한을 꺼 두었어요`, as the state table says for `offDay` today |
+| Light, full color                                        | Passed: the light plate, and the empty groove reads as a track                                                                                                  |
+| Dark, full color                                         | Passed: the dark plate; the title, the summary and the line can be read                                                                                         |
+| Tinted (틴트), light                                     | Passed: the flat look on a pink tint; the text is white and the empty track is a lighter band                                                                   |
+| Clear (투명)                                             | Passed by a report from the same run, without a capture                                                                                                         |
+| Restricted and unblocked spans, now and the next change  | Unverified: the day was off for today                                                                                                                           |
+| The 5-minute entries and the change at the next midnight | Unverified                                                                                                                                                      |
+
+### Small widget Numbers view (#230)
+
+The same captures show the small widget's Numbers view in light, dark and tinted: "25분" on the knob, "1회" below the dial, and the lamp and both bars lit; the tinted look draws the accent group in white.
+A time of an hour or more, which the knob shows on two lines, is still unverified on the device.
+
+### Locked everyday screen (#277)
+
+The [lock mark amendment](../specs/2026-11-23-everyday-screen-redesign-design.md#lock-mark-amendment-2026-11-28) on the everyday settings screen.
+The device clock was set by hand to 1:51 PM, inside the stored range, so that the screen read the stored layer as locked; the layer was also off for today.
+The results come from two captures taken at that clock time.
+
+| Check           | Result                                                                                                                                       |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status card     | Passed: the lock mark beside the disabled switch, the lock note, and the status line `오늘은 꺼 두었어요 · 내일 08:30부터 다시 제한해요`     |
+| Weekday chips   | Passed: the seven chosen chips keep the accent tint and text, each with a lock mark, and the summary reads "매일"                            |
+| Window rows     | Passed: a lock mark before each row; the dash and the end line up in all three rows, also with "오후 12:00"; "삭제" stays in the error color |
+| "시간 추가하기" | Passed: the lock mark in place of "+", in the secondary color                                                                                |
+| App card        | Passed: full opacity, with the lock mark in place of the chevron                                                                             |
+| Preview         | Passed: the bar and the six rows of the stored plan, from 08:00–08:30 해제 to 16:30–18:00 제한                                               |
+
 ## 개인정보 경계와 배포 entitlement 검토: 2026-11-13
 
 이슈 #17의 검토 결과다.
