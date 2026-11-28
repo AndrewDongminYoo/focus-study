@@ -1,7 +1,7 @@
 # Everyday plan widget
 
 Date: 2026-11-28.
-Status: implemented under issue #270; not yet run on a device.
+Status: implemented under issue #270; run on a device on 2026-11-28 in the off-for-today state only ([device matrix](../notes/screen-time-device-matrix.md#everyday-plan-widget-and-locked-everyday-screen-2026-11-28-270-277)).
 Source: [issue #270](https://github.com/AndrewDongminYoo/focus-study/issues/270), with its open points decided on 2026-11-28, and Figma frame `93:602`.
 This document amends the [home screen widget design](2026-11-13-home-widget-design.md) only where [Contract](#contract) and [Data path](#data-path) say so, and that design carries a dated reconciliation line that points here.
 Current code was read at `116ffd4`.
