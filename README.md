@@ -22,7 +22,7 @@ iOS 테스트와 Release 빌드는 CI와 같은 Xcode 26.6과 iOS 26.5 시뮬레
 
 ```sh
 swift test
-xcrun swiftc Shared/ControlTypes.swift Shared/SharedControlStore.swift Shared/SessionControl.swift Shared/DeferredStopMonitoring.swift Shared/FocusLength.swift Shared/BreakTiming.swift Shared/EverydaySchedule.swift Shared/RegistrationMarker.swift Tests/Fixtures/ControlRaceHelper.swift -o /tmp/focus-control-race
+xcrun swiftc Shared/ControlTypes.swift Shared/SharedControlStore.swift Shared/SessionControl.swift Shared/DeferredStopMonitoring.swift Shared/FocusLength.swift Shared/BreakTiming.swift Shared/EverydaySchedule.swift Shared/EverydayPlan.swift Shared/TodaySnapshot.swift Shared/RegistrationMarker.swift Tests/Fixtures/ControlRaceHelper.swift -o /tmp/focus-control-race
 /tmp/focus-control-race --verify
 ```
 

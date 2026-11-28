@@ -189,9 +189,12 @@ import Observation
     }
     /// Reads the status again and keeps the draft. The screen calls it after the app's lock sections and when a boundary passes.
     func refreshStatus() {
-        let now = clock()
-        do { status = try services.engine.everydayStatus(now: now, authorized: services.authorization.accessState()) }
-        catch {
+        let now = clock(), access = services.authorization.accessState()
+        do {
+            let read = try services.engine.everydayStatus(now: now, authorized: access)
+            status = read
+            if let file = EverydayPlanFile.written(for: read, access: access) { try? services.writeEverydayPlan(file) }
+        } catch {
             var kept = status ?? EverydayStatus(schedule: nil, blocksNow: false, nextChange: nil, issue: nil)
             kept.issue = .unchecked; status = kept
         }
@@ -417,19 +420,9 @@ import Observation
         schedule.issue == .noWeekdays ? "요일을 고르면 미리보기를 볼 수 있어요." : "시간을 확인하면 미리보기를 볼 수 있어요."
     }
     /// Weekday numbers from the calendar's first weekday, 1 for Sunday.
-    static func weekdayOrder(calendar: Calendar) -> [Int] { (0..<7).map { (calendar.firstWeekday - 1 + $0) % 7 + 1 } }
-    static func shortWeekdayName(_ day: Int) -> String { ["일", "월", "화", "수", "목", "금", "토"][(day - 1) % 7] }
-    static func weekdayName(_ day: Int) -> String { shortWeekdayName(day) + "요일" }
-    /// The summary of the chosen days: 매일, 평일, 주말, the short names in the order of the first weekday, or 요일 없음.
-    static func weekdaySummary(_ days: Set<Int>, calendar: Calendar) -> String {
-        switch days {
-        case EverydaySchedule.allWeekdays: "매일"
-        case Set(2...6): "평일"
-        case [1, 7]: "주말"
-        case []: "요일 없음"
-        default: weekdayOrder(calendar: calendar).filter(days.contains).map(shortWeekdayName).joined(separator: ", ")
-        }
-    }
+    static func weekdayOrder(calendar: Calendar) -> [Int] { EverydayPlan.weekdayOrder(calendar: calendar) }
+    static func shortWeekdayName(_ day: Int) -> String { EverydayPlan.shortWeekdayName(day) }
+    static func weekdayName(_ day: Int) -> String { EverydayPlan.weekdayName(day) }
     static func time(_ minutes: Int) -> String { String(format: "%02d:%02d", minutes / 60, minutes % 60) }
     private static func clock(_ date: Date, calendar: Calendar) -> String {
         let parts = calendar.dateComponents([.hour, .minute], from: date)

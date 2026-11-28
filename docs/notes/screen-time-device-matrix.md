@@ -839,6 +839,7 @@ entitlement 신청이나 스토어 제출은 이 검토에 포함하지 않았�
 `control.json`과 `registration-marker.json`에는 토큰이 없다.
 Report와 Activity 확장은 App Group entitlement가 없어 이 파일들을 읽지 못한다.
 조정(2026-11-14, #124): Activity 확장은 이제 홈 화면 위젯을 위해 App Group entitlement(`Configuration/Activity.entitlements`)를 가진다. 시스템은 확장 프로세스에 컨테이너 전체를 열어 주므로 경계는 타깃의 코드다: 위젯 코드는 `TodaySnapshot/today.json`만 읽고, 제어 파일·선택 파일·등록 표시·기록 저장소를 열 수 있는 파일은 컴파일하지 않는다(`CoreTests/WidgetSourceListTests.swift`, [홈 화면 위젯 설계](../specs/2026-11-13-home-widget-design.md#data-path)). Report는 그대로 App Group entitlement가 없다. 기록 저장소의 위치는 아직 관측하지 못했다: 서명하지 않은 시뮬레이터 Debug 빌드는 entitlement가 없어(`codesign -d --entitlements -`가 빈 결과) `simctl get_app_container … groups`가 아무 그룹도 보여 주지 않았고, 실제 런타임은 App Group 디렉터리를 얻지 못해 저장소를 만들지 않았다. 서명한 기기 빌드에서 관측한다.
+조정(2026-11-28, #270): 위젯 코드는 이제 `TodaySnapshot/everyday-plan.json`(매일 제한 계획 위젯의 토큰 없는 계획 파일)도 읽는다. 제어 파일·선택 파일·등록 표시·기록 저장소를 열 수 있는 파일은 여전히 컴파일하지 않는다([매일 제한 계획 위젯 설계](../specs/2026-11-28-everyday-plan-widget-design.md#data-path)).
 토큰이 기기 밖으로 나가는 경로는 찾지 못했다: 네트워크 호출이 없고, 앱의 `NSLog` 호출은 모두 `#if DEBUG` 안의 진단 줄이다.
 그중 `SCREEN_TIME_TIMING`, `SCREEN_TIME_PROBE`, `START_LATENCY`, `BREAK_LATENCY`, `END_LATENCY`는 작업 이름, 시간, 오류 설명만 기록한다.
 `LIVE_ACTIVITY_PROBE`가 받는 메시지의 내용은 이 검토에서 줄 단위로 확인하지 않았다.

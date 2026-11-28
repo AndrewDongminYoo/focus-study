@@ -33,6 +33,7 @@ targets:
         Integration,
         Presentation,
         Activity,
+        Widget/EverydayPlanWidgetView.swift,
         Widget/TodayWidgetView.swift,
       ]
     settings:
@@ -116,6 +117,7 @@ targets:
       - Widget
       - Activity/FocusActivityAttributes.swift
       - Activity/FocusActivityViews.swift
+      - Shared/EverydayPlan.swift
       - Shared/FocusActivityContent.swift
       - Shared/TodaySnapshot.swift
     settings:
@@ -172,6 +174,7 @@ targets:
         App/FocusRuntimeHolder.swift,
         App/StartupAttempts.swift,
         App/TodaySnapshotWriter.swift,
+        App/EverydayPlanWriter.swift,
         App/PaidAccessStore.swift,
         App/WeeklyReviewModel.swift,
         App/CalendarShareCard.swift,

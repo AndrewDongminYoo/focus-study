@@ -11,6 +11,8 @@ import SwiftData
                 FocusActivityPreviewView(mode: ProcessInfo.processInfo.arguments[index + 1])
             } else if let index = ProcessInfo.processInfo.arguments.firstIndex(of: "--widget-preview"), index + 1 < ProcessInfo.processInfo.arguments.count {
                 TodayWidgetPreviewView(mode: ProcessInfo.processInfo.arguments[index + 1])
+            } else if let index = ProcessInfo.processInfo.arguments.firstIndex(of: "--plan-widget-preview"), index + 1 < ProcessInfo.processInfo.arguments.count {
+                EverydayPlanWidgetPreviewView(mode: ProcessInfo.processInfo.arguments[index + 1])
             } else if ProcessInfo.processInfo.arguments.contains("--review-share-preview") {
                 WeeklyReviewSharePreviewView()
             } else if let index = ProcessInfo.processInfo.arguments.firstIndex(of: "--calendar-share-preview"), index + 1 < ProcessInfo.processInfo.arguments.count {
