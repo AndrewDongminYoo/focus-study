@@ -156,9 +156,10 @@ final class FocusFlowTests: XCTestCase {
     func testEverydayUnsavedChangesCanBeKeptOrDiscardedFromSettings() {
         let app = app()
         _ = openEveryday(app)
-        let add = app.buttons["everydayAddWindow"]
+        let add = app.buttons["everydayAddWindow"], custom = app.buttons["직접 정하기"]
+        // The dialog can take more than the tap's own retries to appear on the CI runner (#278).
         waitHittable(add); add.tap()
-        app.buttons["직접 정하기"].tap()
+        XCTAssertTrue(custom.waitForExistence(timeout: ready)); custom.tap()
         XCTAssertTrue(app.otherElements["everydayWindow.1"].waitForExistence(timeout: 5))
         captureReport(app, name: "everyday-unsaved-footer")
         // The everyday screen has no "완료" of its own; its back button asks before the changes go.
@@ -181,7 +182,6 @@ final class FocusFlowTests: XCTestCase {
         _ = openEveryday(app)
         XCTAssertFalse(app.otherElements["everydayWindow.1"].exists)
         // The weekday row pushes the button down, where it can sit behind the save area, which takes the tap.
-        let custom = app.buttons["직접 정하기"]
         scrollEveryday(app, to: add); add.tap()
         XCTAssertTrue(custom.waitForExistence(timeout: ready)); custom.tap()
         XCTAssertTrue(app.buttons["everydayBack"].waitForExistence(timeout: 5))
