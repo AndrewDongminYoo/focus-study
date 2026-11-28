@@ -1065,6 +1065,7 @@ final class FocusFlowTests: XCTestCase {
         for _ in 0..<4 where !add.exists { app.swipeUp() }
         XCTAssertTrue(add.exists)
         XCTAssertFalse(add.isEnabled)
+        captureReport(app, name: "everyday-three-windows")
     }
     func testTimerScreenShowsTheEverydayStatusRowWhileTheLayerBlocks() {
         let app = app(extra: ["--everyday-fixture", "blocking"])

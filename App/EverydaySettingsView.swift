@@ -12,6 +12,7 @@ struct EverydaySettingsView: View {
     @State private var confirmingSave = false
     @State private var editingRange = false
     @State private var saveFeedback = 0
+    @State private var windowStartWidth: CGFloat = 0
     @ScaledMetric(relativeTo: .footnote) private var saveStatusHeight = FocusTheme.Layout.minimumTapTarget
     @ScaledMetric(relativeTo: .title2) private var headingSize: CGFloat = 25
     @ScaledMetric(relativeTo: .largeTitle) private var rangeSize: CGFloat = 29
@@ -229,6 +230,7 @@ struct EverydaySettingsView: View {
             Text("점심이나 등하교처럼 제한을 풀어 둘 시간을 3개까지 정할 수 있어요. 한 번에 15분에서 2시간까지예요.")
                 .font(.caption).foregroundStyle(EverydayPalette.secondary).fixedSize(horizontal: false, vertical: true)
         }
+        .onPreferenceChange(WindowStartWidthKey.self) { windowStartWidth = $0 }
         .modifier(EverydayCard())
     }
     private var appCard: some View {
@@ -422,7 +424,11 @@ struct EverydaySettingsView: View {
             .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier(identifier)
     }
     @ViewBuilder private func windowTimes(_ index: Int, separator: Bool) -> some View {
+        // Every start takes the width of the widest one, so that the dash and the end line up from row to row
+        // ("오후 12:00" is wider than "오전 8:00").
         TimeField(title: "시작", minutes: windowBinding(index, \.start)).labelsHidden()
+            .background(GeometryReader { proxy in Color.clear.preference(key: WindowStartWidthKey.self, value: proxy.size.width) })
+            .frame(minWidth: windowStartWidth, alignment: .leading)
         if separator { Text("–").foregroundStyle(EverydayPalette.secondary).accessibilityHidden(true) }
         TimeField(title: "끝", minutes: windowBinding(index, \.end)).labelsHidden()
     }
@@ -471,6 +477,12 @@ private struct EverydayCard: ViewModifier {
         content.padding(.horizontal, 16).padding(.vertical, 13).frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: FocusTheme.Screen.cornerRadius).fill(FocusTheme.Screen.card))
     }
+}
+
+/// The width of the widest window start, measured before the shared minimum width applies.
+private struct WindowStartWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat { 0 }
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }
 
 /// A plain button that a disabled state does not dim, because a locked element shows the lock mark instead.

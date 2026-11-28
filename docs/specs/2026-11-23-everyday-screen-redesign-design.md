@@ -119,6 +119,9 @@ While the layer is locked:
 - The marks are hidden from VoiceOver; the elements stay disabled, so VoiceOver reads them as dimmed.
 - "+ 시간 추가하기" with three windows on an unlocked screen still draws at 45 % opacity, because nothing locks it.
 
+The same run showed the window rows out of line: a wider start ("오후 12:00") moved the dash and the end of its row.
+Every window start takes the width of the widest start, so the dash and the end line up from row to row.
+
 ## Save confirmation
 
 - Every tap on an enabled save button first shows an alert: title "매일 제한을 저장할까요?", message "저장하면 제한 시간(HH:MM–HH:MM)에는 매일 제한을 끄거나 느슨하게 바꿀 수 없어요.", with the draft's range, and the buttons "저장" and "취소".
