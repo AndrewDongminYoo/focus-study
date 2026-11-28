@@ -658,17 +658,8 @@ import ManagedSettings
         _ = try? settings.focus.services.engine.reconcile(now: now, authorized: .approved)
         settings.clock = { now }; settings.refresh()
     }
-    func testWeekdaySummaryInEachFirstWeekday() {
-        for first in [1, 2] {
-            let calendar = gregorian(firstWeekday: first)
-            XCTAssertEqual(EverydaySettingsModel.weekdaySummary(EverydaySchedule.allWeekdays, calendar: calendar), "매일")
-            XCTAssertEqual(EverydaySettingsModel.weekdaySummary(Set(2...6), calendar: calendar), "평일")
-            XCTAssertEqual(EverydaySettingsModel.weekdaySummary([1, 7], calendar: calendar), "주말")
-            XCTAssertEqual(EverydaySettingsModel.weekdaySummary([], calendar: calendar), "요일 없음")
-            XCTAssertEqual(EverydaySettingsModel.weekdaySummary([2, 4, 6], calendar: calendar), "월, 수, 금")
-        }
-        XCTAssertEqual(EverydaySettingsModel.weekdaySummary([1, 2, 7], calendar: gregorian(firstWeekday: 1)), "일, 월, 토")
-        XCTAssertEqual(EverydaySettingsModel.weekdaySummary([1, 2, 7], calendar: gregorian(firstWeekday: 2)), "월, 토, 일")
+    /// The weekday summary moved to `Shared/EverydayPlan.swift`; `CoreTests/EverydayPlanTests.swift` covers it.
+    func testWeekdayOrderInEachFirstWeekday() {
         XCTAssertEqual(EverydaySettingsModel.weekdayOrder(calendar: gregorian(firstWeekday: 1)), [1, 2, 3, 4, 5, 6, 7])
         XCTAssertEqual(EverydaySettingsModel.weekdayOrder(calendar: gregorian(firstWeekday: 2)), [2, 3, 4, 5, 6, 7, 1])
         XCTAssertEqual((1...7).map(EverydaySettingsModel.weekdayName), ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"])

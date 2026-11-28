@@ -14,10 +14,13 @@
 		05B490A92A62E0FBCD85FF62 /* ScreenTimeAdapters.swift in Sources */ = {isa = PBXBuildFile; fileRef = B94BBE9964A108AA74EA8684 /* ScreenTimeAdapters.swift */; };
 		070A192BC45533DB940D4D2C /* FocusFilterHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8BA417ED4A44DC1B5F572AE /* FocusFilterHandler.swift */; };
 		0C983F8B9EBF890EF7086C43 /* EverydayLayerFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFB96C17C0497CA180C9EE3B /* EverydayLayerFile.swift */; };
+		0D6239AC3B589152387F46F6 /* EverydayPlanWidgetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F89FE01281CCD8B2853F0FBB /* EverydayPlanWidgetView.swift */; };
 		0E7F034BC65129A8E8D98542 /* FocusActivityProjection.swift in Sources */ = {isa = PBXBuildFile; fileRef = D609D440D69531A0193ACC6D /* FocusActivityProjection.swift */; };
 		10B3290CEEB4A5141D2901C2 /* BreakSelectionFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC72D61582B2685F95396645 /* BreakSelectionFile.swift */; };
+		13DAC255E2D647B643F87C07 /* EverydayPlanWidgetPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B6A73A95D8D98D5EC330C01 /* EverydayPlanWidgetPreviewView.swift */; };
 		1507D0C5764DC9B6B7F6DF73 /* FocusSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B731670DFB36A4517DB2AFB /* FocusSettingsTests.swift */; };
 		164596A73A898BD3C5CA2EF5 /* TodayWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CB5D459C213B64E534E77DD /* TodayWidget.swift */; };
+		184A82993414863E6435F343 /* EverydayPlanWidgetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F89FE01281CCD8B2853F0FBB /* EverydayPlanWidgetView.swift */; };
 		189BD9F6D2970E8EB3F5CDE7 /* SessionRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = C319BE9A1C80D0D864BC6263 /* SessionRecord.swift */; };
 		19583FC1AA977480AA3A7E4E /* PaidAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2C808F7658ACA020D54E627 /* PaidAccess.swift */; };
 		1A221B0797D93792D7697FA3 /* FocusShieldAction.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 1FF3CCF16A409E9BF16F750A /* FocusShieldAction.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -26,6 +29,7 @@
 		1E4D7C7989DE3C003A640CC3 /* SharedControlStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9124EDD32B42B6B7DC563AC8 /* SharedControlStore.swift */; };
 		21E33EEE42C54C58C39FB8CE /* FocusGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BE36FC578F5BE7554D484FD /* FocusGuideView.swift */; };
 		2223AD7702556469FD055BA5 /* SessionRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = C319BE9A1C80D0D864BC6263 /* SessionRecord.swift */; };
+		22B581B152C5E1E7920A010B /* EverydayPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06082FFCF17D6D9F13F40735 /* EverydayPlan.swift */; };
 		22EDE51A6072E2F9064C4A82 /* WeeklyReview.swift in Sources */ = {isa = PBXBuildFile; fileRef = C06F39B7F37CCECB1BBF1EF7 /* WeeklyReview.swift */; };
 		2364D36A284307BF97D90516 /* EverydaySettingsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33C23E014FD02FF57A213162 /* EverydaySettingsModel.swift */; };
 		2432ECBDCC5153BC169BD61B /* StartLatencyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12D6AC995C58C331D7D32953 /* StartLatencyTests.swift */; };
@@ -37,6 +41,7 @@
 		297118490F6E579348F3E665 /* SelectionFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8BD3DEDFDB2421AD65430A2 /* SelectionFeedback.swift */; };
 		2A0DD712451E0CF9C3963934 /* MonitorTiming.swift in Sources */ = {isa = PBXBuildFile; fileRef = 637DC9448A9069BD6ECEF0A5 /* MonitorTiming.swift */; };
 		2CD4D28D11B69B82668F0122 /* PaidAccessStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7FCD693E9EB3633AC57295F /* PaidAccessStore.swift */; };
+		2D19663966679FB60F3E8BD9 /* EverydayPlanSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 419D0CE7E03786FD3DB795D0 /* EverydayPlanSource.swift */; };
 		2EA7B55A6538D6453A8B7ACC /* EverydaySchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72B855890EB8AC4858EACDCD /* EverydaySchedule.swift */; };
 		300F1F9D86E3C58CFDC21750 /* StartupAttemptsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22E988BD66ABB709A80F8208 /* StartupAttemptsTests.swift */; };
 		30123EEA50CBD95FDBBE2F9E /* MonitorTiming.swift in Sources */ = {isa = PBXBuildFile; fileRef = 637DC9448A9069BD6ECEF0A5 /* MonitorTiming.swift */; };
@@ -101,15 +106,18 @@
 		672393146F2C65038C81C2AA /* SharedControlStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9124EDD32B42B6B7DC563AC8 /* SharedControlStore.swift */; };
 		6736C5AD544003CEC13E5FEA /* ShieldContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E15D0D26CC809A376CEC66A2 /* ShieldContent.swift */; };
 		674D21FCCD020DB5F8D71243 /* SelectionValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACC55D005E82218CABB3BFED /* SelectionValidator.swift */; };
+		67851D2733CDE093B82AC57F /* EverydayPlanSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 419D0CE7E03786FD3DB795D0 /* EverydayPlanSource.swift */; };
 		6917F0FAB30DD3E91F93B704 /* SungongCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A3E00C68F5CCB5C9D3790DF /* SungongCalendarView.swift */; };
 		69568524CD868EEF67A6BBD8 /* FocusRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F43D719BF3A630EB9119C4D /* FocusRuntime.swift */; };
 		6998714F799B4974077A5061 /* ControlTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66F1973C38BC3E67F3196742 /* ControlTypes.swift */; };
 		69D5500E5F0FC79EA8FB9516 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C7EB2D8D4B70BA8AE3DCF7BD /* PrivacyInfo.xcprivacy */; };
 		6A9E4BAC28434EF890D723DA /* TodaySnapshotWriterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3B270433CA32A5056040AAC /* TodaySnapshotWriterTests.swift */; };
+		6AB008E8B71AF832DAD485CE /* EverydayPlanSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 419D0CE7E03786FD3DB795D0 /* EverydayPlanSource.swift */; };
 		6F6248AF139CB573B7185F9F /* FocusActivityPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19CBEBF12953D4884BDDD3CE /* FocusActivityPreviewView.swift */; };
 		6F86D4C33254E29A8E8E9B1C /* WeeklyReviewNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4B9E16F6C87494E13781A6C /* WeeklyReviewNotifications.swift */; };
 		70BCF9631B84FBE37EEEBDB2 /* FocusLength.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8213BBBA6746F32A00EF1C4 /* FocusLength.swift */; };
 		718558F1D967AA3BA22744E8 /* FocusFilterHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8BA417ED4A44DC1B5F572AE /* FocusFilterHandler.swift */; };
+		718D99D57AD16E29F9B4DC3A /* EverydayPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06082FFCF17D6D9F13F40735 /* EverydayPlan.swift */; };
 		76EEB47E8173D29ECB7987E3 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 467159D4C65093EAE5BF4945 /* PrivacyInfo.xcprivacy */; };
 		78E4B67F80CFC9EC5189828F /* FocusActivityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E597FC90C2CEA9FC77B061E3 /* FocusActivityTests.swift */; };
 		7C186E82B01570112A523C1B /* FocusStudy.storekit in Resources */ = {isa = PBXBuildFile; fileRef = 69863185C72ADEEEC7556423 /* FocusStudy.storekit */; };
@@ -124,6 +132,7 @@
 		88BF09A39CBF3CBF57974A54 /* SelectionFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8BD3DEDFDB2421AD65430A2 /* SelectionFeedback.swift */; };
 		8B8F695A0DB1ED2FE2736A49 /* TodaySnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D7840B14C1D1A5A2F95D652 /* TodaySnapshot.swift */; };
 		8FBE7719B22269F863E37011 /* BreakSelectionFileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DF75E644930B74EDFA7A51B /* BreakSelectionFileTests.swift */; };
+		90196AF5B055B7496BF92DF0 /* EverydayPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06082FFCF17D6D9F13F40735 /* EverydayPlan.swift */; };
 		902A83354CBED37E8B7E707A /* ShieldContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E15D0D26CC809A376CEC66A2 /* ShieldContent.swift */; };
 		91066BCCBDB9AFF33114BFC2 /* FocusModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AA7539225348E6C7D4E48A4 /* FocusModelTests.swift */; };
 		92CB7EFAFF1062029BA04A47 /* FocusActivityCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1FE23CEBD57983863FD2AA3 /* FocusActivityCoordinator.swift */; };
@@ -144,6 +153,7 @@
 		A51041EA4B9F7F92C989AA67 /* UsageSummarySection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87CD2C5E91E4DA078DA6E8F6 /* UsageSummarySection.swift */; };
 		A5643261BFD1831B2CC1C7C8 /* EverydaySchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72B855890EB8AC4858EACDCD /* EverydaySchedule.swift */; };
 		A61E5234815A1609E41CED4F /* FocusRuntimeHolder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19F3D8987BD6C6691060C1F9 /* FocusRuntimeHolder.swift */; };
+		A87B94817309E212986C65A7 /* EverydayPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06082FFCF17D6D9F13F40735 /* EverydayPlan.swift */; };
 		A8E847CD7929233F91E03C50 /* TodaySnapshotWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D34696816FC648D91984B87 /* TodaySnapshotWriter.swift */; };
 		A924E6B6E15A20CB51052D6E /* FocusActivityContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ABE1355AC4277D3CA7F9C00 /* FocusActivityContent.swift */; };
 		AB613795E42495014092B795 /* ControlTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66F1973C38BC3E67F3196742 /* ControlTypes.swift */; };
@@ -168,16 +178,20 @@
 		BF51CD57A52473A5B3AE0AFC /* UsageReportHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = D82C12E3AAAB889FC7623746 /* UsageReportHost.swift */; };
 		C375368AA0D68653612BB4C5 /* SelectionValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACC55D005E82218CABB3BFED /* SelectionValidator.swift */; };
 		C6091F30E2B9D8852B67B349 /* StartupAttempts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0462052071C1260CBCF057A5 /* StartupAttempts.swift */; };
+		C7AB3C3AF582377655637255 /* EverydayPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06082FFCF17D6D9F13F40735 /* EverydayPlan.swift */; };
 		C8D2A66389908DCF21EA6AA7 /* StartupRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC5423DA7A71AB76ABD3FC97 /* StartupRecovery.swift */; };
 		C9BBED2FC2BFFD09820498B7 /* FocusActivityProjection.swift in Sources */ = {isa = PBXBuildFile; fileRef = D609D440D69531A0193ACC6D /* FocusActivityProjection.swift */; };
 		CACBCCDC1825103362F29A6A /* FocusActivityCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1FE23CEBD57983863FD2AA3 /* FocusActivityCoordinator.swift */; };
 		CAE2F3F3315674B0AFB8F547 /* FocusActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56B00E94EFA94E5692DA2E47 /* FocusActivityWidget.swift */; };
 		CC4ABA9BAF8B6EF988705C13 /* MonitorTiming.swift in Sources */ = {isa = PBXBuildFile; fileRef = 637DC9448A9069BD6ECEF0A5 /* MonitorTiming.swift */; };
 		CDBB19EC88D48256F7475AAC /* FocusServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0F5116F02900FF3E85CD6CB /* FocusServices.swift */; };
+		CE192C41D9C22FC57069C23E /* EverydayPlanSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 419D0CE7E03786FD3DB795D0 /* EverydayPlanSource.swift */; };
 		CE4492D22A576705821189D4 /* ShieldConfigurationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B208FB37084D60A8DFF6573 /* ShieldConfigurationTests.swift */; };
+		CE6CEA8D98953CCF15658E79 /* EverydayPlanWriterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CAF9DA5379C1C5273736407 /* EverydayPlanWriterTests.swift */; };
 		D0271DA6A2153AE4CFB7A189 /* EverydaySettingsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33C23E014FD02FF57A213162 /* EverydaySettingsModel.swift */; };
 		D0C8057B9315594170827ED9 /* TodaySnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D7840B14C1D1A5A2F95D652 /* TodaySnapshot.swift */; };
 		D3D8875284C159757D0B9E6E /* DeviceDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48AB9C8FAE727BB9401D212F /* DeviceDiagnostics.swift */; };
+		D43187B9B78A6D10415DD2D4 /* EverydayPlanWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD959E4D8B6E785BB00A914 /* EverydayPlanWriter.swift */; };
 		D4F772AD693F58D9151BD6CF /* FocusActivityHookTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70291B8088EDAD8F58988AD6 /* FocusActivityHookTests.swift */; };
 		D5993D9284DFCBA5E3034DAB /* ScreenTimeAdapterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AF1F08069A8EBE3F00C1594 /* ScreenTimeAdapterTests.swift */; };
 		D5FEF7557EA384D1C9DB8D7E /* WeeklyReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5F2D0F9A36BCD82DE43A91E /* WeeklyReviewView.swift */; };
@@ -199,6 +213,7 @@
 		E103E656EFD11973A171249F /* TodayWidgetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C9E14AD6883791879259D28 /* TodayWidgetView.swift */; };
 		E194D4C62020E84D8AA9B93D /* FocusActivityContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ABE1355AC4277D3CA7F9C00 /* FocusActivityContent.swift */; };
 		E4B6B528F6E1A160C69FE606 /* AuthorizationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6376EBDFD30119EBB7E9E78F /* AuthorizationService.swift */; };
+		E4CD366FF340018D636FD49B /* EverydayPlanWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A0B7B2C3F7B5882CAD40FB /* EverydayPlanWidget.swift */; };
 		E4F2F5621AAB7D4E3E3BB048 /* EverydaySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6197AA8AF62D75441E008EA /* EverydaySettingsView.swift */; };
 		E5058AD97DAA9DE49AD3FF00 /* FocusShieldConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83D95C5185F5458DB8BC61FC /* FocusShieldConfiguration.swift */; };
 		E62812D1DE59EEDC24D4987A /* FocusActivityRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE2A974EDA75AE2BF6AE50C9 /* FocusActivityRuntime.swift */; };
@@ -222,6 +237,7 @@
 		F494C7348F4B8C88F24E1467 /* DeferredStopMonitoring.swift in Sources */ = {isa = PBXBuildFile; fileRef = 648D54A99728B554E7463D6D /* DeferredStopMonitoring.swift */; };
 		F65258395AEFC581CF3466E8 /* FocusLength.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8213BBBA6746F32A00EF1C4 /* FocusLength.swift */; };
 		F6A518FC815BB1D0433199C1 /* BreakTiming.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93BDFF04E90FE4D669AD4D68 /* BreakTiming.swift */; };
+		F9379B823359EE2347F244FB /* EverydayPlanWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD959E4D8B6E785BB00A914 /* EverydayPlanWriter.swift */; };
 		FCCEE9A1A84CC7DDD7558073 /* FocusSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88E58134E88B2D579D8CE944 /* FocusSettings.swift */; };
 		FF670A33591AD4EDF75EEDFE /* SelectionEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D56CC59E7444BE42868BC82 /* SelectionEditor.swift */; };
 		FF6805B2C55746275C5BC28F /* FocusActivityContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ABE1355AC4277D3CA7F9C00 /* FocusActivityContent.swift */; };
@@ -314,6 +330,7 @@
 		0057E95E8555F6085B85D681 /* FocusFilterEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusFilterEntry.swift; sourceTree = "<group>"; };
 		01B86071B8354EA5F2690C42 /* FocusActivityViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusActivityViews.swift; sourceTree = "<group>"; };
 		0462052071C1260CBCF057A5 /* StartupAttempts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartupAttempts.swift; sourceTree = "<group>"; };
+		06082FFCF17D6D9F13F40735 /* EverydayPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EverydayPlan.swift; sourceTree = "<group>"; };
 		07513FB5693ED4F37C65C469 /* CalendarShareCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarShareCard.swift; sourceTree = "<group>"; };
 		075F44517A7B663FB87D2B46 /* EverydaySettingsModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EverydaySettingsModelTests.swift; sourceTree = "<group>"; };
 		0A458766C7C3F49D3EC0BDC5 /* FocusMonitor.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = FocusMonitor.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -335,6 +352,7 @@
 		37E336A1178D9EFA0544D247 /* UsageSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageSummary.swift; sourceTree = "<group>"; };
 		3B731670DFB36A4517DB2AFB /* FocusSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusSettingsTests.swift; sourceTree = "<group>"; };
 		3F42EE001D54D96DCA1BE8E3 /* DeviceDiagnosticsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceDiagnosticsSection.swift; sourceTree = "<group>"; };
+		419D0CE7E03786FD3DB795D0 /* EverydayPlanSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EverydayPlanSource.swift; sourceTree = "<group>"; };
 		467159D4C65093EAE5BF4945 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		48AB9C8FAE727BB9401D212F /* DeviceDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceDiagnostics.swift; sourceTree = "<group>"; };
 		49E1A6DCAF77384E5894DE37 /* AppGroupMigrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGroupMigrationTests.swift; sourceTree = "<group>"; };
@@ -357,6 +375,7 @@
 		69863185C72ADEEEC7556423 /* FocusStudy.storekit */ = {isa = PBXFileReference; path = FocusStudy.storekit; sourceTree = "<group>"; };
 		6ACC6B4E653F11D028A80CDA /* FocusReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusReport.swift; sourceTree = "<group>"; };
 		6B208FB37084D60A8DFF6573 /* ShieldConfigurationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShieldConfigurationTests.swift; sourceTree = "<group>"; };
+		6DD959E4D8B6E785BB00A914 /* EverydayPlanWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EverydayPlanWriter.swift; sourceTree = "<group>"; };
 		6FDD189C2508864D4112C77F /* FocusStudyIntents.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.extensionkit-extension"; includeInIndex = 0; path = FocusStudyIntents.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		70291B8088EDAD8F58988AD6 /* FocusActivityHookTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusActivityHookTests.swift; sourceTree = "<group>"; };
 		72B855890EB8AC4858EACDCD /* EverydaySchedule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EverydaySchedule.swift; sourceTree = "<group>"; };
@@ -368,6 +387,7 @@
 		7AA7539225348E6C7D4E48A4 /* FocusModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusModelTests.swift; sourceTree = "<group>"; };
 		7AB2277732A936E72EA05588 /* CalendarShareCardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarShareCardTests.swift; sourceTree = "<group>"; };
 		7ABE1355AC4277D3CA7F9C00 /* FocusActivityContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusActivityContent.swift; sourceTree = "<group>"; };
+		7B6A73A95D8D98D5EC330C01 /* EverydayPlanWidgetPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EverydayPlanWidgetPreviewView.swift; sourceTree = "<group>"; };
 		806CE558F8FED4EDFA9BBA50 /* WeeklyReviewSharePreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeeklyReviewSharePreviewView.swift; sourceTree = "<group>"; };
 		83D95C5185F5458DB8BC61FC /* FocusShieldConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusShieldConfiguration.swift; sourceTree = "<group>"; };
 		87CD2C5E91E4DA078DA6E8F6 /* UsageSummarySection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageSummarySection.swift; sourceTree = "<group>"; };
@@ -381,8 +401,10 @@
 		93BDFF04E90FE4D669AD4D68 /* BreakTiming.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreakTiming.swift; sourceTree = "<group>"; };
 		95873492DDB7154F389BBFB4 /* FocusFilterEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusFilterEntry.swift; sourceTree = "<group>"; };
 		9AF1F08069A8EBE3F00C1594 /* ScreenTimeAdapterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenTimeAdapterTests.swift; sourceTree = "<group>"; };
+		9CAF9DA5379C1C5273736407 /* EverydayPlanWriterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EverydayPlanWriterTests.swift; sourceTree = "<group>"; };
 		9CB5D459C213B64E534E77DD /* TodayWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayWidget.swift; sourceTree = "<group>"; };
 		9F2A8D2AB4DE7F5037838367 /* SelectionFeedbackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionFeedbackTests.swift; sourceTree = "<group>"; };
+		A1A0B7B2C3F7B5882CAD40FB /* EverydayPlanWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EverydayPlanWidget.swift; sourceTree = "<group>"; };
 		A5F2D0F9A36BCD82DE43A91E /* WeeklyReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeeklyReviewView.swift; sourceTree = "<group>"; };
 		A79936C6EE2CD49F1C577E32 /* FocusModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusModel.swift; sourceTree = "<group>"; };
 		A7AB42BEFCACDE0E353D0071 /* SelectionRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionRepository.swift; sourceTree = "<group>"; };
@@ -428,6 +450,7 @@
 		F6197AA8AF62D75441E008EA /* EverydaySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EverydaySettingsView.swift; sourceTree = "<group>"; };
 		F7FCD693E9EB3633AC57295F /* PaidAccessStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaidAccessStore.swift; sourceTree = "<group>"; };
 		F8213BBBA6746F32A00EF1C4 /* FocusLength.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusLength.swift; sourceTree = "<group>"; };
+		F89FE01281CCD8B2853F0FBB /* EverydayPlanWidgetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EverydayPlanWidgetView.swift; sourceTree = "<group>"; };
 		FA1B0ADB4DF8E3ACE1F83DF8 /* FocusStudyFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusStudyFilter.swift; sourceTree = "<group>"; };
 		FE2A974EDA75AE2BF6AE50C9 /* FocusActivityRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusActivityRuntime.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -515,6 +538,7 @@
 				C3A08B2A2B5A673549A6D57E /* BreakSessionView.swift */,
 				07513FB5693ED4F37C65C469 /* CalendarShareCard.swift */,
 				26C5678E646EEAD5DA8E0520 /* CalendarShareRules.swift */,
+				6DD959E4D8B6E785BB00A914 /* EverydayPlanWriter.swift */,
 				33C23E014FD02FF57A213162 /* EverydaySettingsModel.swift */,
 				F6197AA8AF62D75441E008EA /* EverydaySettingsView.swift */,
 				FE2A974EDA75AE2BF6AE50C9 /* FocusActivityRuntime.swift */,
@@ -558,6 +582,7 @@
 			children = (
 				29F5395D81790722649FE444 /* CalendarSharePreviewView.swift */,
 				3F42EE001D54D96DCA1BE8E3 /* DeviceDiagnosticsSection.swift */,
+				7B6A73A95D8D98D5EC330C01 /* EverydayPlanWidgetPreviewView.swift */,
 				19CBEBF12953D4884BDDD3CE /* FocusActivityPreviewView.swift */,
 				1F796C23723FD2A8759E8F03 /* TodayWidgetPreviewView.swift */,
 				BE52C8706C6D532DF83AB565 /* UITestFixtures.swift */,
@@ -569,6 +594,8 @@
 		AC86354A7C8C22DB27B996E5 /* Widget */ = {
 			isa = PBXGroup;
 			children = (
+				A1A0B7B2C3F7B5882CAD40FB /* EverydayPlanWidget.swift */,
+				F89FE01281CCD8B2853F0FBB /* EverydayPlanWidgetView.swift */,
 				56B00E94EFA94E5692DA2E47 /* FocusActivityWidget.swift */,
 				910E9E89C58A0DB5A8B5CB79 /* FocusWidgets.swift */,
 				C7EB2D8D4B70BA8AE3DCF7BD /* PrivacyInfo.xcprivacy */,
@@ -612,6 +639,8 @@
 				93BDFF04E90FE4D669AD4D68 /* BreakTiming.swift */,
 				66F1973C38BC3E67F3196742 /* ControlTypes.swift */,
 				648D54A99728B554E7463D6D /* DeferredStopMonitoring.swift */,
+				06082FFCF17D6D9F13F40735 /* EverydayPlan.swift */,
+				419D0CE7E03786FD3DB795D0 /* EverydayPlanSource.swift */,
 				72B855890EB8AC4858EACDCD /* EverydaySchedule.swift */,
 				7ABE1355AC4277D3CA7F9C00 /* FocusActivityContent.swift */,
 				B1FE23CEBD57983863FD2AA3 /* FocusActivityCoordinator.swift */,
@@ -646,6 +675,7 @@
 				7AB2277732A936E72EA05588 /* CalendarShareCardTests.swift */,
 				B6F6207DF784D1729E873080 /* DeviceDiagnosticsTests.swift */,
 				BC64A13EBA38AE48756A0698 /* EverydayLayerFileTests.swift */,
+				9CAF9DA5379C1C5273736407 /* EverydayPlanWriterTests.swift */,
 				075F44517A7B663FB87D2B46 /* EverydaySettingsModelTests.swift */,
 				70291B8088EDAD8F58988AD6 /* FocusActivityHookTests.swift */,
 				DFF2157F2BD63BC87E6BF80D /* FocusActivityRuntimeTests.swift */,
@@ -981,6 +1011,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A87B94817309E212986C65A7 /* EverydayPlan.swift in Sources */,
+				E4CD366FF340018D636FD49B /* EverydayPlanWidget.swift in Sources */,
+				184A82993414863E6435F343 /* EverydayPlanWidgetView.swift in Sources */,
 				81B25F7B820E9F0AE58F051A /* FocusActivityAttributes.swift in Sources */,
 				AD53E862889A6C9B4E982E76 /* FocusActivityContent.swift in Sources */,
 				600029B1F89895E01388E37E /* FocusActivityViews.swift in Sources */,
@@ -1010,6 +1043,10 @@
 				ABCF68754EE86A291C6C84B9 /* DeviceDiagnosticsTests.swift in Sources */,
 				B02C2F069249DF68D4263EC8 /* EverydayLayerFile.swift in Sources */,
 				5DF1E21B9E3B54A89DDC940F /* EverydayLayerFileTests.swift in Sources */,
+				C7AB3C3AF582377655637255 /* EverydayPlan.swift in Sources */,
+				CE192C41D9C22FC57069C23E /* EverydayPlanSource.swift in Sources */,
+				D43187B9B78A6D10415DD2D4 /* EverydayPlanWriter.swift in Sources */,
+				CE6CEA8D98953CCF15658E79 /* EverydayPlanWriterTests.swift in Sources */,
 				2EA7B55A6538D6453A8B7ACC /* EverydaySchedule.swift in Sources */,
 				2364D36A284307BF97D90516 /* EverydaySettingsModel.swift in Sources */,
 				BD0509CAEE1DBA0DE24111C4 /* EverydaySettingsModelTests.swift in Sources */,
@@ -1076,6 +1113,8 @@
 				F036DA19CA38C5D2A0A1F3A8 /* DeferredStopMonitoring.swift in Sources */,
 				320BF834880639DE363C4C5E /* DeviceDiagnostics.swift in Sources */,
 				0C983F8B9EBF890EF7086C43 /* EverydayLayerFile.swift in Sources */,
+				718D99D57AD16E29F9B4DC3A /* EverydayPlan.swift in Sources */,
+				67851D2733CDE093B82AC57F /* EverydayPlanSource.swift in Sources */,
 				65047D939004D1007341FAAA /* EverydaySchedule.swift in Sources */,
 				47E1C70065981111B01157B7 /* FocusActivityAttributes.swift in Sources */,
 				E194D4C62020E84D8AA9B93D /* FocusActivityContent.swift in Sources */,
@@ -1112,6 +1151,11 @@
 				EFB35A4E1D71C6C507BDB887 /* DeviceDiagnostics.swift in Sources */,
 				D7A9FF32E3F70116D876BC3B /* DeviceDiagnosticsSection.swift in Sources */,
 				5057ED76CF80A4C4F5609241 /* EverydayLayerFile.swift in Sources */,
+				22B581B152C5E1E7920A010B /* EverydayPlan.swift in Sources */,
+				6AB008E8B71AF832DAD485CE /* EverydayPlanSource.swift in Sources */,
+				13DAC255E2D647B643F87C07 /* EverydayPlanWidgetPreviewView.swift in Sources */,
+				0D6239AC3B589152387F46F6 /* EverydayPlanWidgetView.swift in Sources */,
+				F9379B823359EE2347F244FB /* EverydayPlanWriter.swift in Sources */,
 				9DE391FD9E9A17EF95BBA6BE /* EverydaySchedule.swift in Sources */,
 				D0271DA6A2153AE4CFB7A189 /* EverydaySettingsModel.swift in Sources */,
 				E4F2F5621AAB7D4E3E3BB048 /* EverydaySettingsView.swift in Sources */,
@@ -1201,6 +1245,8 @@
 				F494C7348F4B8C88F24E1467 /* DeferredStopMonitoring.swift in Sources */,
 				D3D8875284C159757D0B9E6E /* DeviceDiagnostics.swift in Sources */,
 				F0CF0D3A493058054A26324F /* EverydayLayerFile.swift in Sources */,
+				90196AF5B055B7496BF92DF0 /* EverydayPlan.swift in Sources */,
+				2D19663966679FB60F3E8BD9 /* EverydayPlanSource.swift in Sources */,
 				A5643261BFD1831B2CC1C7C8 /* EverydaySchedule.swift in Sources */,
 				FF6805B2C55746275C5BC28F /* FocusActivityContent.swift in Sources */,
 				855BACFAE49801A2B75AEC58 /* FocusActivityCoordinator.swift in Sources */,

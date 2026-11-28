@@ -139,7 +139,7 @@ struct EverydaySettingsView: View {
                         Text("설정 시간").font(.subheadline.weight(.medium)).foregroundStyle(EverydayPalette.rangeSecondary)
                         Spacer(minLength: FocusTheme.Layout.inlineSpacing)
                         // The weekday card says the same days, so VoiceOver reads them there.
-                        Text("\(EverydaySettingsModel.weekdaySummary(settings.draft.chosenWeekdays, calendar: calendar)) 반복")
+                        Text("\(EverydayPlan.weekdaySummary(settings.draft.chosenWeekdays, calendar: calendar)) 반복")
                             .font(.footnote.weight(.medium)).foregroundStyle(EverydayPalette.rangeSummary).accessibilityHidden(true)
                     }
                     Text("\(start)–\(end)").font(.system(size: rangeSize, weight: .semibold)).monospacedDigit()
@@ -163,7 +163,7 @@ struct EverydaySettingsView: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("제한 요일").font(.subheadline.weight(.bold)).foregroundStyle(EverydayPalette.ink)
                 Spacer(minLength: FocusTheme.Layout.inlineSpacing)
-                Text(EverydaySettingsModel.weekdaySummary(settings.draft.chosenWeekdays, calendar: calendar))
+                Text(EverydayPlan.weekdaySummary(settings.draft.chosenWeekdays, calendar: calendar))
                     .font(.footnote.weight(.bold)).foregroundStyle(EverydayPalette.accent).multilineTextAlignment(.trailing)
                     .accessibilityIdentifier("everydayWeekdaysSummary")
             }
@@ -269,7 +269,7 @@ struct EverydaySettingsView: View {
             if !schedule.enabled {
                 Text("매일 제한이 꺼져 있어요.").font(.footnote).foregroundStyle(EverydayPalette.secondary).accessibilityIdentifier("\(prefix)Off")
             } else {
-                Text("제한 요일 · \(EverydaySettingsModel.weekdaySummary(schedule.chosenWeekdays, calendar: calendar))")
+                Text("제한 요일 · \(EverydayPlan.weekdaySummary(schedule.chosenWeekdays, calendar: calendar))")
                     .font(.footnote).foregroundStyle(EverydayPalette.secondary).accessibilityIdentifier("\(prefix)Weekdays")
                 // The rows below carry every state in text, so the legend and the bar are hidden from VoiceOver.
                 HStack(spacing: FocusTheme.Layout.inlineSpacing) {

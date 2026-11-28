@@ -176,9 +176,13 @@ struct SungongCalendar {
     }
     /// Its own `do`/`catch`: a lock timeout against a Monitor everyday callback never changes `current` or `errorMessage`.
     func refreshEveryday() {
-        let now = Date()
-        do { everydayStatus = try services.engine.everydayStatus(now: now, authorized: services.authorization.accessState()) }
-        catch {
+        let now = Date(), access = services.authorization.accessState()
+        do {
+            let status = try services.engine.everydayStatus(now: now, authorized: access)
+            everydayStatus = status
+            // Only a confirmed read reaches the widget; a failed plan write keeps the last file, which the next read writes again.
+            if let file = EverydayPlanFile.written(for: status, access: access) { try? services.writeEverydayPlan(file) }
+        } catch {
             var kept = everydayStatus ?? EverydayStatus(schedule: nil, blocksNow: false, nextChange: nil, issue: nil)
             kept.issue = .unchecked; everydayStatus = kept
         }

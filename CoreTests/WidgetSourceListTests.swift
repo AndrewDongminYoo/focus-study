@@ -5,7 +5,7 @@ import XCTest
 final class WidgetSourceListTests: XCTestCase {
     private static let approved = [
         "Widget", "Activity/FocusActivityAttributes.swift", "Activity/FocusActivityViews.swift",
-        "Shared/FocusActivityContent.swift", "Shared/TodaySnapshot.swift",
+        "Shared/EverydayPlan.swift", "Shared/FocusActivityContent.swift", "Shared/TodaySnapshot.swift",
     ]
     private static let forbiddenImports = ["FamilyControls", "ManagedSettings", "DeviceActivity", "SwiftData"]
     private let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
@@ -38,7 +38,10 @@ final class WidgetSourceListTests: XCTestCase {
                 XCTAssertFalse(text.contains("import \(framework)"), "\(file) imports \(framework)")
             }
         }
-        let snapshot = try String(contentsOf: root.appendingPathComponent("Shared/TodaySnapshot.swift"), encoding: .utf8)
-        XCTAssertEqual(snapshot.components(separatedBy: "\n").filter { $0.hasPrefix("import ") }, ["import Foundation"])
+        XCTAssertTrue(widget.contains("Widget/EverydayPlanWidget.swift"))
+        for file in ["Shared/TodaySnapshot.swift", "Shared/EverydayPlan.swift"] {
+            let text = try String(contentsOf: root.appendingPathComponent(file), encoding: .utf8)
+            XCTAssertEqual(text.components(separatedBy: "\n").filter { $0.hasPrefix("import ") }, ["import Foundation"], file)
+        }
     }
 }

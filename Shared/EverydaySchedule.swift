@@ -1,14 +1,5 @@
 import Foundation
 
-/// The label of an unblocked window. `custom` is a window that the person names by time only.
-public enum EverydayWindowKind: String, Codable, CaseIterable { case lunch, toSchool, fromSchool, custom }
-/// An unblocked window, in minutes after midnight, half-open (`[start, end)`).
-public struct EverydayWindow: Codable, Equatable {
-    public var kind: EverydayWindowKind
-    public var start: Int
-    public var end: Int
-    public init(kind: EverydayWindowKind, start: Int, end: Int) { self.kind = kind; self.start = start; self.end = end }
-}
 /// A broken rule of the spec section "Times", in the order that `EverydaySchedule.issue` checks them.
 public enum EverydayScheduleIssue: CaseIterable, Equatable {
     /// A time is not on the 5-minute grid.
@@ -82,10 +73,7 @@ public struct EverydaySchedule: Codable, Equatable {
     /// The local day of `now` is one of the chosen weekdays: a day that is on.
     public func applies(on now: Date, calendar: Calendar) -> Bool { chosenWeekdays.contains(Self.weekday(of: now, calendar: calendar)) }
     /// The local calendar day of `date` in `calendar`, as `yyyy-MM-dd`, independent of the locale.
-    public static func dayKey(of date: Date, calendar: Calendar) -> String {
-        let parts = calendar.dateComponents([.year, .month, .day], from: date)
-        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
-    }
+    public static func dayKey(of date: Date, calendar: Calendar) -> String { EverydayPlan.dayKey(of: date, calendar: calendar) }
     /// The layer is off for the local day of `now`. A malformed `offDay` matches no day.
     public func isOff(at now: Date, calendar: Calendar) -> Bool { offDay == Self.dayKey(of: now, calendar: calendar) }
     /// A new layer: off, 08:00-18:00, no windows.

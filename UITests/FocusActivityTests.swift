@@ -88,6 +88,28 @@ final class FocusActivityTests: XCTestCase {
             app.terminate()
         }
     }
+    /// The production everyday plan widget view for fixed plans; the preview reads no file and makes no WidgetKit request.
+    func testPlanWidgetPreviewShowsEachState() {
+        let expected = [
+            ("restricted", "오늘의 제한 계획, 지금 14:20 제한, 13:00부터 16:00까지, 다음 해제 16:00부터 30분, 그다음 제한 16:30부터 18:00까지"),
+            ("unblocked", "오늘의 제한 계획, 지금 12:30 해제, 12:00부터 13:00까지, 다음 제한 13:00부터 16:00까지"),
+            ("after", "오늘의 제한 계획, 지금 19:00 제한 끝, 18:00에 끝났어요, 다음 제한 내일 08:00"),
+            ("none", "오늘의 제한 계획, 앱에서 매일 제한을 정해 보세요"),
+            ("check", "오늘의 제한 계획, 앱에서 확인해 주세요"),
+            ("day-off", "오늘의 제한 계획, 오늘은 제한하지 않는 요일이에요"),
+        ]
+        let app = XCUIApplication()
+        for (mode, label) in expected {
+            app.launchArguments = ["--ui-testing", "approved", "--selected", "--plan-widget-preview", mode, "-AppleLanguages", "(ko)", "-AppleLocale", "ko_KR"]
+            app.launch()
+            XCTAssertTrue(app.staticTexts["planWidgetPreviewReady"].waitForExistence(timeout: 10), mode)
+            let widget = app.descendants(matching: .any)["everydayPlanWidget"].firstMatch
+            XCTAssertTrue(widget.exists, mode)
+            XCTAssertEqual(widget.label, label, mode)
+            capture(app, name: "plan-widget-\(mode)")
+            app.terminate()
+        }
+    }
     private func capture(_ app: XCUIApplication, name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)

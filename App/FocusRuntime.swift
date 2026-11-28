@@ -85,6 +85,7 @@ import os
         let settings = FocusSettings.app()
         // One writer per process, so its first write check asks for one reload; `group` is `SessionControl/` inside the container.
         let todaySnapshot = TodaySnapshotWriter(container: group.deletingLastPathComponent()) { WidgetCenter.shared.reloadTimelines(ofKind: TodaySnapshot.widgetKind) }
+        let everydayPlan = EverydayPlanWriter(container: container) { WidgetCenter.shared.reloadTimelines(ofKind: EverydayPlanFile.widgetKind) }
         // The app is the only writer of the paid-access cache; the App Intents extension reads it.
         let paidAccess = PaidAccessStore(configuration: PaidAccessConfiguration(info: Bundle.main.infoDictionary), cache: PaidAccessCache(container: container),
                                          kit: SystemPaidAccessStoreKit())
@@ -109,6 +110,7 @@ import os
             services.writeEveryday = { try everyday.write($0, selection: $1) }
             services.writeEverydayOffDay = { try everyday.writeOffDay($0) }
             services.writeTodaySnapshot = { try todaySnapshot.write($0) }
+            services.writeEverydayPlan = { try everydayPlan.write($0) }
             services.paidAccess = { paidAccess.state }
             #if DEBUG
             services.diagnostics = diagnostics
