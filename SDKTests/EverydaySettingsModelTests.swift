@@ -765,6 +765,18 @@ import ManagedSettings
         weekdayLayer(layer, settings, [2, 3, 4, 5, 6], now: tenAM)
         XCTAssertTrue(settings.offersOffForToday); XCTAssertTrue(settings.isLocked)
     }
+    /// The locked screen keeps the stored weekdays, but a weekday that is not stored stays open and its save is accepted.
+    func testLockedScreenAddsAWeekdayThatIsNotStored() {
+        let (settings, layer, _, _) = fixture()
+        weekdayLayer(layer, settings, [2, 3, 4, 5], now: tenAM)
+        XCTAssertTrue(settings.isLocked)
+        for day in [2, 3, 4, 5] { XCTAssertFalse(settings.canToggleWeekday(day), "stored day \(day)") }
+        XCTAssertTrue(settings.canToggleWeekday(6), "Friday is not stored")
+        settings.toggleWeekday(6)
+        settings.save()
+        XCTAssertNil(settings.refusalMessage)
+        XCTAssertEqual(layer.schedule?.chosenWeekdays, [2, 3, 4, 5, 6])
+    }
     func testRemovingAWeekdayInsideTheRangeShowsTheWeekdayRefusal() {
         let (settings, layer, _, _) = fixture()
         storedLayer(layer, settings); settings.refresh()
