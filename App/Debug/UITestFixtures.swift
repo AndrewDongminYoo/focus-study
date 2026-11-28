@@ -151,10 +151,11 @@ extension FocusServices {
             default: break
             }
         }
-        // `--everyday-off-wait <seconds>` shortens the off-for-today wait, bounded to 1-30 seconds; the grace stays as the timing gives it.
+        // `--everyday-off-wait <seconds>` sets the off-for-today wait, bounded to 1-600 seconds; the grace stays as the timing gives it.
+        // A wait above 30 seconds lets a UI test press home without the wait ending first (#281).
         if let index = arguments.firstIndex(of: "--everyday-off-wait"), index + 1 < arguments.count,
            let requested = TimeInterval(arguments[index + 1]), requested.isFinite {
-            timing.everydayOffWait = min(max(requested, 1), 30)
+            timing.everydayOffWait = min(max(requested, 1), 600)
         }
         let breakSelection = FixtureBreakSelection()
         var everyday = FixtureEverydayLayer()
