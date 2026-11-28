@@ -102,6 +102,22 @@ While it is locked:
 - A lock that starts on a later day is read only at that day's next status read (`statusReadDelay` reads at today's range edges, the next change and midnight); until then a loosening save is refused by the engine with its reason.
 - A window has no identity, so the draft keeps only the stored windows that it still has: a window that the draft added or changed goes away, and a stored window that the draft removed stays removed.
 - The disabled switch and time pickers use the system disabled appearance; the disabled chips, the app card and "+ 시간 추가하기" draw at 45 % opacity. All keep their accessibility labels, and VoiceOver reads them as dimmed.
+  The [lock mark amendment of 2026-11-28](#lock-mark-amendment-2026-11-28) replaces the 45 % opacity.
+
+### Lock mark amendment (2026-11-28)
+
+On a device run on 2026-11-28, the locked screen did not say whether a dimmed weekday chip was chosen, or whether an element was locked only now: the chosen chips at 45 % opacity measure 1.90:1 (`#A84F05` on `#FFF0E1` over white), and no line said why the elements were disabled.
+While the layer is locked:
+
+- Each element that the table above disables shows a lock mark (`lock.fill`, `.caption2`) and draws at full opacity:
+  - A chosen weekday chip keeps its chosen look, with the mark after the day in the accent.
+  - The switch has the mark on its leading side, in the secondary text color; the switch keeps the system disabled appearance.
+  - Each window row has the mark before its times; the time pickers keep the system disabled appearance, and "삭제" stays enabled.
+  - "시간 추가하기" shows the mark in place of "+", in the secondary text color.
+  - The app card shows the mark in place of its chevron.
+- The status card shows the lock note (`everydayLockNote`) below the switch: "제한 시간에는 (lock mark) 표시한 항목을 바꿀 수 없어요.", read by VoiceOver as "제한 시간에는 잠긴 항목을 바꿀 수 없어요."
+- The marks are hidden from VoiceOver; the elements stay disabled, so VoiceOver reads them as dimmed.
+- "+ 시간 추가하기" with three windows on an unlocked screen still draws at 45 % opacity, because nothing locks it.
 
 ## Save confirmation
 
