@@ -1,10 +1,9 @@
 # Everyday plan widget
 
 Date: 2026-11-28.
-Status: design for approval.
+Status: implemented under issue #270; not yet run on a device.
 Source: [issue #270](https://github.com/AndrewDongminYoo/focus-study/issues/270), with its open points decided on 2026-11-28, and Figma frame `93:602`.
 This document amends the [home screen widget design](2026-11-13-home-widget-design.md) only where [Contract](#contract) and [Data path](#data-path) say so, and that design carries a dated reconciliation line that points here.
-It changes no code, and the implementation needs its approval first.
 Current code was read at `116ffd4`.
 
 ## Contract
@@ -89,6 +88,8 @@ Every secondary text, the axis and the weekdays included, uses `#525866` in the 
 | Left block (now)   | leading 18, tops 96, 112, 137                                             | `지금 HH:MM` (`caption2`); `제한` in `#AE5519` or `해제` in ink (`headline` bold); the span (`caption2`) |
 | Right block (next) | leading 198, tops 96, 112, 137                                            | the same three styles, with the content of the next table                                                |
 
+A span narrower than 2.8 gives up a quarter of its width at each inner edge instead of 0.7, so that it keeps half of its width; a 5-minute span in a range of almost 24 hours is about 1.1 wide.
+
 ### Now and next
 
 | Now                                             | Left block                                   | Right block                                                        |
@@ -140,3 +141,13 @@ The title in the accessibility text says "계획" in every case.
 - The names of the plan type, the writer and the widget kind.
 - Whether the plan value reuses `EverydaySchedule` or copies its fields, within the source-list rule.
 - The day-key function shared with `offDay`.
+
+## Implementation notes (2026-11-28)
+
+- Names: the plan value is `EverydayPlan`, the file is `EverydayPlanFile` with the widget kind `EverydayPlanWidget`, the writer is `EverydayPlanWriter`, and the widget is `EverydayPlanWidget`.
+- The plan value copies the plan fields of `EverydaySchedule`. `EverydayWindow`, `EverydayWindowKind` and the day-key function moved to `Shared/EverydayPlan.swift`, which the widget compiles; `EverydaySchedule.dayKey` calls that function.
+- The mapping from an everyday status read to the plan file is in `Shared/EverydayPlanSource.swift`, which the widget does not compile. A status with the issue `unchecked` (the app could not take the lock) writes nothing, as a read error does.
+- A decoded plan that breaks the time rules of the spans shows the check state.
+- After the range end, the right block names the start of the first restricted span of the next restriction day: `내일` for the next day, and the weekday name for a later day, as the app's status line does.
+- In the dark appearance, `제한` of the left block uses `#F4A64A`, the color of the restricted spans, because `#AE5519` is for the light canvas.
+- The DEBUG preview is `--plan-widget-preview <mode>` ([development launch arguments](../notes/development-launch-arguments.md)).
