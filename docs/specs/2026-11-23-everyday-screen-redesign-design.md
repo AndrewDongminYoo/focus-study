@@ -112,7 +112,7 @@ While the layer is locked:
 - Each element that the table above disables shows a lock mark (`lock.fill`, `.caption2`) and draws at full opacity:
   - A chosen weekday chip keeps its chosen look, with the mark after the day in the accent.
   - The switch has the mark on its leading side, in the secondary text color; the switch keeps the system disabled appearance.
-  - Each window row has the mark before its times; the time pickers keep the system disabled appearance, and "삭제" stays enabled.
+  - Each window row has the mark before its times on one line, or above them when the times stack at a large text size, so that the stacked row still fits the screen; the time pickers keep the system disabled appearance, and "삭제" stays enabled.
   - "시간 추가하기" shows the mark in place of "+", in the secondary text color.
   - The app card shows the mark in place of its chevron.
 - The status card shows the lock note (`everydayLockNote`) below the switch: "제한 시간에는 (lock mark) 표시한 항목을 바꿀 수 없어요.", read by VoiceOver as "제한 시간에는 잠긴 항목을 바꿀 수 없어요."

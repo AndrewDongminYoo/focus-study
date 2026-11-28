@@ -190,7 +190,6 @@ struct EverydaySettingsView: View {
             }
             ForEach(Array(settings.draft.windows.enumerated()), id: \.offset) { index, _ in
                 HStack(spacing: FocusTheme.Layout.inlineSpacing) {
-                    if !settings.canEditWindowTimes { EverydayLockMark() }
                     // One line reads as a range, "오후 12:00 – 오후 1:00"; the pickers keep "시작" and "끝" as accessibility labels.
                     ViewThatFits(in: .horizontal) {
                         HStack(spacing: FocusTheme.Layout.inlineSpacing) { windowTimes(index, separator: true) }
@@ -425,11 +424,17 @@ struct EverydaySettingsView: View {
     }
     @ViewBuilder private func windowTimes(_ index: Int, separator: Bool) -> some View {
         // Every start takes the width of the widest one, so that the dash and the end line up from row to row
-        // ("오후 12:00" is wider than "오전 8:00").
-        TimeField(title: "시작", minutes: windowBinding(index, \.start)).labelsHidden()
-            .background(GeometryReader { proxy in Color.clear.preference(key: WindowStartWidthKey.self, value: proxy.size.width) })
-            .frame(minWidth: windowStartWidth, alignment: .leading)
-        if separator { Text("–").foregroundStyle(EverydayPalette.secondary).accessibilityHidden(true) }
+        // ("오후 12:00" is wider than "오전 8:00"); a stacked row has no dash to line up.
+        // The lock mark is inside each layout, so that the stacked layout still fits at the largest text size.
+        if !settings.canEditWindowTimes { EverydayLockMark() }
+        let start = TimeField(title: "시작", minutes: windowBinding(index, \.start)).labelsHidden()
+        if separator {
+            start.background(GeometryReader { proxy in Color.clear.preference(key: WindowStartWidthKey.self, value: proxy.size.width) })
+                .frame(minWidth: windowStartWidth, alignment: .leading)
+            Text("–").foregroundStyle(EverydayPalette.secondary).accessibilityHidden(true)
+        } else {
+            start
+        }
         TimeField(title: "끝", minutes: windowBinding(index, \.end)).labelsHidden()
     }
     @ViewBuilder private var selectionEditor: some View {
