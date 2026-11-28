@@ -899,9 +899,12 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertFalse(selection.isEnabled)
         captureReport(app, name: "everyday-locked")
     }
+    /// The shortened off-for-today wait of the UI tests. On the CI runner one home press took 11.5 s and one capture about 7 s,
+    /// so an 8 s wait ended in the foreground before the test could cancel it (#239, #274).
+    private let offWait: TimeInterval = 20
     func testEverydayOffForTodayWaitsCanBeCancelledAndThenTurnsTheLayerOff() {
         // A shortened synthetic wait; nothing reaches real restrictions.
-        let app = app(extra: ["--everyday-fixture", "blocking", "--everyday-off-wait", "8"])
+        let app = app(extra: ["--everyday-fixture", "blocking", "--everyday-off-wait", "\(Int(offWait))"])
         let status = openEveryday(app)
         XCTAssertFalse(status.exists, "the layer blocks now")
         let action = app.buttons["everydayOffToday"], wait = app.descendants(matching: .any)["everydayOffWait"], cancel = app.buttons["everydayOffCancel"]
@@ -918,14 +921,14 @@ final class FocusFlowTests: XCTestCase {
         action.tap()
         XCTAssertTrue(wait.waitForExistence(timeout: ready))
         expectation(for: NSPredicate(format: "label BEGINSWITH '오늘은 꺼 두었어요 · 내일 ' AND label ENDSWITH '부터 다시 제한해요'"), evaluatedWith: status)
-        waitForExpectations(timeout: ready)
+        waitForExpectations(timeout: offWait + ready)
         XCTAssertFalse(action.exists, "once a day")
         XCTAssertFalse(app.staticTexts["everydayRefusal"].exists)
         captureReport(app, name: "everyday-off-today")
     }
     func testEverydayOffForTodayWaitStopsInTheBackgroundAndWhenSettingsClose() {
-        // The same 8-second synthetic wait; nothing reaches real restrictions.
-        let app = app(extra: ["--everyday-fixture", "blocking", "--everyday-off-wait", "8"])
+        // The same synthetic wait; nothing reaches real restrictions.
+        let app = app(extra: ["--everyday-fixture", "blocking", "--everyday-off-wait", "\(Int(offWait))"])
         var status = openEveryday(app)
         let action = app.buttons["everydayOffToday"], wait = app.descendants(matching: .any)["everydayOffWait"]
         XCTAssertTrue(action.waitForExistence(timeout: ready)); waitHittable(action)
@@ -946,7 +949,7 @@ final class FocusFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["everydayRow"].waitForExistence(timeout: ready))
         app.buttons["settingsDone"].tap()
         XCTAssertTrue(app.buttons["settingsButton"].waitForExistence(timeout: ready))
-        _ = XCTWaiter.wait(for: [XCTestExpectation(description: "past the wait end")], timeout: 10)
+        _ = XCTWaiter.wait(for: [XCTestExpectation(description: "past the wait end")], timeout: offWait + 2)
         status = openEveryday(app)
         XCTAssertFalse(status.exists, "the layer still blocks")
         XCTAssertTrue(action.waitForExistence(timeout: ready))
